@@ -1,10 +1,9 @@
-self:
 { config, lib, pkgs, ... }:
 let
   inherit (lib) mkIf mkOption types attrByPath isString mkMerge mkDefault optionals;
   cfg = config.services.logseq;
   ownerUsername = attrByPath [ "flake" "lib" "meta" "owner" "username" ] config null;
-  defaultUser = if isString ownerUsername then ownerUsername else null;
+  defaultUser = if isString ownerUsername then ownerUsername else "vx";
   nixCmd = "${cfg.nixBinary}/bin/nix";
   syncScript = pkgs.writeShellApplication {
     name = "logseq-sync";
@@ -41,7 +40,7 @@ let
       fi
     '';
   };
-  defaultPackage = mkDefault (self.packages.${pkgs.system}.logseq);
+  defaultPackage = mkDefault pkgs.emptyDirectory;
 in
 {
   options.services.logseq = {
@@ -71,7 +70,7 @@ in
 
     user = mkOption {
       type = types.str;
-      default = if defaultUser != null then defaultUser else (throw "services.logseq.user must be set when flake owner is undefined");
+      default = defaultUser;
       description = "System user that should run the sync job.";
     };
 

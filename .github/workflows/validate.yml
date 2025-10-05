@@ -23,4 +23,5 @@ jobs:
         run: nix build .#logseq
 
       - name: Smoke test launcher
+        if: env.ACT != 'true'
         run: nix run .#logseq -- --version

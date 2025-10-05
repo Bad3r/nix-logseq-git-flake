@@ -181,17 +181,16 @@ jobs:
         run: |
           tag="nightly-${{ needs.prepare-sources.outputs.datestring }}"
           published=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          cat > manifest.json <<JSON
-{
-  "tag": "${tag}",
-  "publishedAt": "${published}",
-  "assetUrl": "https://github.com/${{ github.repository }}/releases/download/${tag}/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz",
-  "assetSha256": "${{ steps.hash.outputs.sri }}",
-  "logseqRev": "${{ needs.prepare-sources.outputs.revision }}",
-  "logseqVersion": "${{ needs.prepare-sources.outputs.version }}"
-}
-JSON
-
+          asset_url="https://github.com/${{ github.repository }}/releases/download/${tag}/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz"
+          printf '%s\n' \
+            '{' \
+            "  \"tag\": \"$tag\"," \
+            "  \"publishedAt\": \"$published\"," \
+            "  \"assetUrl\": \"$asset_url\"," \
+            "  \"assetSha256\": \"${{ steps.hash.outputs.sri }}\"," \
+            "  \"logseqRev\": \"${{ needs.prepare-sources.outputs.revision }}\"," \
+            "  \"logseqVersion\": \"${{ needs.prepare-sources.outputs.version }}\"" \
+            '}' > manifest.json
       - name: Update manifest file
         run: |
           mv manifest.json data/logseq-nightly.json

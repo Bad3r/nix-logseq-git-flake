@@ -94,6 +94,6 @@
         formatter = pkgs.nixpkgs-fmt;
       }
     ) // {
-      nixosModules.logseq = import ./modules/logseq-module.nix self;
+      nixosModules.logseq = import ./modules/logseq-module.nix;
     };
 }
