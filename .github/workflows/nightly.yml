@@ -1,0 +1,221 @@
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '22'
+  JAVA_VERSION: '11'
+  CLOJURE_VERSION: '1.11.1.1413'
+
+jobs:
+  prepare-sources:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+      revision: ${{ steps.revision.outputs.rev }}
+      datestring: ${{ steps.metadata.outputs.date }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone Logseq source
+        run: git clone --depth 1 --branch master https://github.com/logseq/logseq.git logseq-src
+
+      - name: Set nightly metadata
+        id: metadata
+        run: echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Get yarn cache directory
+        id: yarn-cache
+        run: echo "dir=$(yarn cache dir)" >> "$GITHUB_OUTPUT"
+        working-directory: logseq-src
+
+      - name: Cache yarn dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.yarn-cache.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('logseq-src/**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Cache Clojure deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: ${{ runner.os }}-clojure-${{ hashFiles('logseq-src/**/deps.edn') }}
+
+      - name: Setup Clojure CLI
+        uses: DeLaGuardo/setup-clojure@10.1
+        with:
+          cli: ${{ env.CLOJURE_VERSION }}
+
+      - name: Determine nightly version
+        id: version
+        run: echo "value=$(node ./scripts/get-pkg-version.js nightly)" >> "$GITHUB_OUTPUT"
+        working-directory: logseq-src
+
+      - name: Record source revision
+        id: revision
+        run: echo "rev=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        working-directory: logseq-src
+
+      - name: Compile Logseq assets
+        working-directory: logseq-src
+        env:
+          LOGSEQ_SENTRY_DSN: ""
+          LOGSEQ_POSTHOG_TOKEN: ""
+        run: |
+          yarn install
+          npx gulp build
+          yarn cljs:release-electron
+          yarn webpack-app-build
+
+      - name: Update package metadata
+        working-directory: logseq-src
+        run: |
+          sed -i "s/\"version\": \"0.0.1\"/\"version\": \"${{ steps.version.outputs.value }}\"/" ./static/package.json
+          echo "${{ steps.version.outputs.value }}" > ./static/VERSION
+
+      - name: Upload static bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-bundle
+          path: logseq-src/static
+
+  build-linux-x64:
+    runs-on: ubuntu-24.04
+    needs: prepare-sources
+    steps:
+      - name: Download static bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: static-bundle
+          path: static
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build Electron application
+        working-directory: static
+        env:
+          LOGSEQ_SENTRY_DSN: ""
+          LOGSEQ_POSTHOG_TOKEN: ""
+        run: |
+          yarn install
+          yarn electron:make
+
+      - name: Create tarball artifact
+        working-directory: static
+        run: |
+          mkdir -p builds/unpacked
+          zip_file=$(echo out/make/zip/linux/x64/*-linux-x64-*.zip)
+          unzip -q "$zip_file" -d builds/unpacked
+          inner=$(find builds/unpacked -maxdepth 1 -type d -name 'Logseq-linux-x64*' | head -n1)
+          if [ -z "$inner" ]; then
+            echo "Could not locate unpacked Logseq bundle" >&2
+            exit 1
+          fi
+          tar -C "$inner" -czf builds/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz .
+          cp VERSION builds/VERSION
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: static/builds
+
+  publish-release:
+    runs-on: ubuntu-24.04
+    needs:
+      - prepare-sources
+      - build-linux-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download packaged build
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-build
+          path: builds
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v26
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+
+      - name: Compute artifact hash
+        id: hash
+        run: |
+          echo "sri=$(nix hash file --type sha256 --to sri builds/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="nightly-${{ needs.prepare-sources.outputs.datestring }}"
+          gh release delete "$tag" -y || true
+          gh release create "$tag" builds/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz \
+            --title "Nightly $tag" \
+            --notes "Automated nightly build for commit ${{ needs.prepare-sources.outputs.revision }}" \
+            --target main
+
+      - name: Render manifest
+        run: |
+          tag="nightly-${{ needs.prepare-sources.outputs.datestring }}"
+          published=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          cat > manifest.json <<JSON
+{
+  "tag": "${tag}",
+  "publishedAt": "${published}",
+  "assetUrl": "https://github.com/${{ github.repository }}/releases/download/${tag}/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz",
+  "assetSha256": "${{ steps.hash.outputs.sri }}",
+  "logseqRev": "${{ needs.prepare-sources.outputs.revision }}",
+  "logseqVersion": "${{ needs.prepare-sources.outputs.version }}"
+}
+JSON
+
+      - name: Update manifest file
+        run: |
+          mv manifest.json data/logseq-nightly.json
+
+      - name: Configure git
+        run: |
+          git config user.name "logseq-nightly-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Format repository
+        run: nix fmt
+
+      - name: Commit manifest update
+        run: |
+          if git status --short | grep -q data/logseq-nightly.json; then
+            git add data/logseq-nightly.json
+            git commit -m "chore: bump nightly manifest"
+            git push
+          else
+            echo "Manifest unchanged"
+          fi
+
+      - name: Validate flake
+        run: |
+          nix flake check
+          nix build .#logseq
+          nix run .#logseq -- --version
