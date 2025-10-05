@@ -130,26 +130,21 @@ jobs:
       - name: Create tarball artifact
         working-directory: static
         run: |
-          mkdir -p builds/unpacked
           package_dir="out/logseq-linux-x64"
           if [ ! -d "$package_dir" ]; then
             echo "Could not locate packaged Logseq bundle at $package_dir" >&2
             exit 1
           fi
-          cp -R "$package_dir" builds/unpacked/
-          inner=$(find builds/unpacked -maxdepth 1 -type d -name 'Logseq-linux-x64*' | head -n1)
-          if [ -z "$inner" ]; then
-            echo "Could not locate unpacked Logseq bundle" >&2
-            exit 1
-          fi
-          tar -C "$inner" -czf builds/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz .
-          cp VERSION builds/VERSION
+          tar -C "$package_dir" -czf out/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz .
+          cp VERSION out/VERSION
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
-          path: static/builds
+          path: |
+            static/out/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz
+            static/out/VERSION
 
   publish-release:
     runs-on: ubuntu-24.04
@@ -173,7 +168,7 @@ jobs:
 
       - name: Compute artifact hash
         run: |
-          hash=$(nix hash path --type sha256 --sri builds/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz)
+          hash=$(nix hash path --type sha256 --sri static/out/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz)
           echo "sri=$hash" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub release
@@ -182,7 +177,7 @@ jobs:
         run: |
           tag="nightly-${{ needs.prepare-sources.outputs.datestring }}"
           gh release delete "$tag" -y || true
-          gh release create "$tag" builds/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz \
+          gh release create "$tag" static/out/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz \
             --title "Nightly $tag" \
             --notes "Automated nightly build for commit ${{ needs.prepare-sources.outputs.revision }}" \
             --target main
