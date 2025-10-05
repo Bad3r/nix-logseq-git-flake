@@ -1,6 +1,6 @@
 {
   "tag": "nightly-20251005",
-  "publishedAt": "2025-10-05T10:22:16Z",
+  "publishedAt": "2025-10-05T10:38:39Z",
   "assetUrl": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20251005/logseq-linux-x64-0.11.0-alpha+nightly.20251005.tar.gz",
   "assetSha256": "",
   "logseqRev": "14c240dd5c9e61c70ee660ef2928ff40aa700ba5",
