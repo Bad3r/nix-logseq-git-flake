@@ -23,6 +23,7 @@ jobs:
       version: ${{ steps.version.outputs.value }}
       revision: ${{ steps.revision.outputs.rev }}
       datestring: ${{ steps.metadata.outputs.date }}
+      hash: ${{ steps.package.outputs.hash }}
     steps:
       - uses: actions/checkout@v4
 
@@ -92,16 +93,22 @@ jobs:
           yarn electron-forge package
 
       - name: Create tarball artifact
+        id: package
         working-directory: logseq-src/static
         run: |
-          package_dir="out/Logseq-linux-x64"
-          if [ ! -d "$package_dir" ]; then
-            echo "Could not locate packaged Logseq bundle at $package_dir" >&2
+          mkdir -p builds/unpacked
+          zip_file=$(echo out/make/zip/linux/x64/*-linux-x64-*.zip)
+          unzip -q "$zip_file" -d builds/unpacked
+          inner=$(find builds/unpacked -maxdepth 1 -type d -name "Logseq-linux-x64*" | head -n1)
+          if [ -z "$inner" ]; then
+            echo "Could not locate packaged Logseq bundle" >&2
             exit 1
           fi
-          tar -C "$package_dir" -czf out/logseq-linux-x64-${{ steps.version.outputs.value }}.tar.gz .
+          tarball=out/logseq-linux-x64-${{ steps.version.outputs.value }}.tar.gz
+          tar -C "$inner" -czf "$tarball" .
           cp VERSION out/VERSION
-
+          hash=$(nix hash file --type sha256 --sri "$tarball")
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -128,12 +135,6 @@ jobs:
           extra_nix_config: |
             accept-flake-config = true
 
-      - name: Compute artifact hash
-        id: hash
-        run: |
-          hash=$(nix hash path --type sha256 --sri builds/logseq-linux-x64-${{ needs.build.outputs.version }}.tar.gz)
-          echo "sri=$hash" >> "$GITHUB_OUTPUT"
-
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -155,7 +156,7 @@ jobs:
             "  \"tag\": \"$tag\"," \
             "  \"publishedAt\": \"$published\"," \
             "  \"assetUrl\": \"$asset_url\"," \
-            "  \"assetSha256\": \"${{ steps.hash.outputs.sri }}\"," \
+            "  \"assetSha256\": \"${{ needs.build.outputs.hash }}\"," \
             "  \"logseqRev\": \"${{ needs.build.outputs.revision }}\"," \
             "  \"logseqVersion\": \"${{ needs.build.outputs.version }}\"" \
             '}' > manifest.json
