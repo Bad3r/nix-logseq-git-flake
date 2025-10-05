@@ -90,7 +90,6 @@ in
 
   config = mkIf cfg.enable (mkMerge [
     {
-      environment.systemPackages = [ cfg.package ];
 
       systemd.services.logseq-sync = {
         description = "Nightly Logseq package realisation";
