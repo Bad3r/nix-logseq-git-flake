@@ -21,7 +21,7 @@
         payload = pkgs.fetchzip {
           url = manifest.assetUrl;
           hash = manifest.assetSha256;
-          stripRoot = true;
+          stripRoot = false;
         };
         logseqTree = pkgs.runCommand "logseq-tree" {} ''
           mkdir -p $out/share/logseq
