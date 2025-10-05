@@ -162,9 +162,9 @@ jobs:
             accept-flake-config = true
 
       - name: Compute artifact hash
-        id: hash
         run: |
-          echo "sri=$(nix hash file --type sha256 --to sri builds/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz)" >> "$GITHUB_OUTPUT"
+          hash=$(nix hash path --type sha256 --sri builds/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz)
+          echo "sri=$hash" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub release
         env:
