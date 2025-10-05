@@ -131,9 +131,9 @@ jobs:
         working-directory: static
         run: |
           mkdir -p builds/unpacked
-          package_dir=$(find out -maxdepth 3 -type d -name 'Logseq-linux-x64*' | head -n1)
-          if [ -z "$package_dir" ]; then
-            echo "Could not locate packaged Logseq bundle" >&2
+          package_dir="out/logseq-linux-x64"
+          if [ ! -d "$package_dir" ]; then
+            echo "Could not locate packaged Logseq bundle at $package_dir" >&2
             exit 1
           fi
           cp -R "$package_dir" builds/unpacked/
