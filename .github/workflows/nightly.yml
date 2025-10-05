@@ -94,7 +94,7 @@ jobs:
       - name: Create tarball artifact
         working-directory: logseq-src/static
         run: |
-          package_dir="out/logseq-linux-x64"
+          package_dir="out/Logseq-linux-x64"
           if [ ! -d "$package_dir" ]; then
             echo "Could not locate packaged Logseq bundle at $package_dir" >&2
             exit 1
