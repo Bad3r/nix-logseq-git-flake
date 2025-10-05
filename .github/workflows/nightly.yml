@@ -105,6 +105,8 @@ jobs:
 
   build-linux-x64:
     runs-on: ubuntu-24.04
+    outputs:
+      hash: ${{ steps.package.outputs.hash }}
     needs: prepare-sources
     steps:
       - name: Download static bundle
@@ -128,15 +130,21 @@ jobs:
           yarn electron-forge package
 
       - name: Create tarball artifact
+        id: package
         working-directory: static
         run: |
-          package_dir="out/logseq-linux-x64"
-          if [ ! -d "$package_dir" ]; then
-            echo "Could not locate packaged Logseq bundle at $package_dir" >&2
+          mkdir -p builds/unpacked
+          zip_file=$(echo out/make/zip/linux/x64/*-linux-x64-*.zip)
+          unzip -q "$zip_file" -d builds/unpacked
+          inner=$(find builds/unpacked -maxdepth 1 -type d -name 'Logseq-linux-x64*' | head -n1)
+          if [ -z "$inner" ]; then
+            echo "Could not locate unpacked Logseq bundle" >&2
             exit 1
           fi
-          tar -C "$package_dir" -czf out/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz .
-          cp VERSION out/VERSION
+          hash=$(nix hash path --type sha256 --sri "$inner")
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+          tar -C "$inner" -czf builds/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz .
+          cp VERSION builds/VERSION
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
