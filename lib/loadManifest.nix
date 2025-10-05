@@ -1,7 +1,7 @@
 { lib, manifestPath }:
 let
-  inherit (builtins) fromJSON readFile hasAttr;
-  inherit (lib) assertMsg concatStringsSep hasPrefix;
+  inherit (builtins) fromJSON hasAttr readFile;
+  inherit (lib) concatStringsSep hasPrefix throwIf;
   parsed = fromJSON (readFile manifestPath);
   requiredKeys = [
     "tag"
@@ -11,10 +11,10 @@ let
     "logseqRev"
     "logseqVersion"
   ];
-  missing = lib.filter (key: ! hasAttr key parsed) requiredKeys;
-  _ = assertMsg (missing == [])
-        "Manifest missing required keys: ${concatStringsSep ", " missing}";
-  _sha = assertMsg (hasPrefix "sha256-" parsed.assetSha256)
-        "Manifest assetSha256 must begin with sha256- (Nix base32).";
+  missing = lib.filter (key: !hasAttr key parsed) requiredKeys;
 in
-parsed
+throwIf (missing != [ ]) "Manifest missing required keys: ${concatStringsSep ", " missing}" (
+  throwIf (
+    !hasPrefix "sha256-" parsed.assetSha256
+  ) "Manifest assetSha256 must begin with sha256- (Nix base32)." parsed
+)

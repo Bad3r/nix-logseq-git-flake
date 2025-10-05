@@ -6,24 +6,31 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+    }:
     let
       systems = flake-utils.lib.defaultSystems;
-    in flake-utils.lib.eachSystem systems (system:
+    in
+    flake-utils.lib.eachSystem systems (
+      system:
       let
         pkgs = import nixpkgs { inherit system; };
-        lib = pkgs.lib;
-        manifest = (import ./lib/loadManifest.nix {
+        inherit (pkgs) lib;
+        manifest = import ./lib/loadManifest.nix {
           inherit lib;
           manifestPath = ./data/logseq-nightly.json;
-        });
+        };
         runtimeLibs = (import ./lib/runtime-libs.nix) pkgs;
         payload = pkgs.fetchzip {
           url = manifest.assetUrl;
           hash = manifest.assetSha256;
           stripRoot = false;
         };
-        logseqTree = pkgs.runCommand "logseq-tree" {} ''
+        logseqTree = pkgs.runCommand "logseq-tree" { } ''
           mkdir -p $out/share/logseq
           src="${payload}"
           if [ -d "$src/Logseq-linux-x64" ]; then
@@ -52,7 +59,7 @@
             MimeType=x-scheme-handler/logseq;
           '';
         };
-        icon = pkgs.runCommand "logseq-icon" {} ''
+        icon = pkgs.runCommand "logseq-icon" { } ''
           mkdir -p $out/share/icons/hicolor/512x512/apps
           cp ${logseqTree}/share/logseq/resources/app/icon.png \
             $out/share/icons/hicolor/512x512/apps/logseq.png
@@ -80,20 +87,27 @@
             mainProgram = "logseq";
           };
         };
-      in {
+      in
+      {
         packages.logseq = package;
         packages.default = package;
         apps.logseq = {
           type = "app";
           program = "${package}/bin/logseq";
+          meta = {
+            description = "Launch the nightly Logseq build packaged from the upstream master branch";
+            homepage = "https://github.com/logseq/logseq";
+            source = self.outPath;
+          };
         };
-        checks.logseq = pkgs.runCommand "logseq-check" {} ''
+        checks.logseq = pkgs.runCommand "logseq-check" { } ''
           ${pkgs.coreutils}/bin/test -x ${package}/bin/logseq
           touch $out
         '';
-        formatter = pkgs.nixpkgs-fmt;
+        formatter = pkgs.nixfmt-rfc-style;
       }
-    ) // {
+    )
+    // {
       nixosModules.logseq = import ./modules/logseq-module.nix;
     };
 }

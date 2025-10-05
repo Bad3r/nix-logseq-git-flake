@@ -1,6 +1,19 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
-  inherit (lib) mkIf mkOption types attrByPath isString mkMerge mkDefault optionals;
+  inherit (lib)
+    mkIf
+    mkOption
+    types
+    attrByPath
+    isString
+    mkMerge
+    mkDefault
+    ;
   cfg = config.services.logseq;
   ownerUsername = attrByPath [ "flake" "lib" "meta" "owner" "username" ] config null;
   defaultUser = if isString ownerUsername then ownerUsername else "vx";
@@ -63,7 +76,11 @@ in
     };
 
     logLevel = mkOption {
-      type = types.enum [ "info" "warn" "debug" ];
+      type = types.enum [
+        "info"
+        "warn"
+        "debug"
+      ];
       default = "info";
       description = "Log verbosity level recorded by the sync service.";
     };
@@ -96,14 +113,18 @@ in
           Type = "oneshot";
           User = cfg.user;
           ExecStart = "${syncScript}/bin/logseq-sync";
-          Environment =
-            [
-              "NIX_CONFIG=accept-flake-config = true"
-              "LOGSEQ_LOG_LEVEL=${cfg.logLevel}"
-            ]
-            ++ (if cfg.buildDirectory != null then [
-              "LOGSEQ_BUILD_DIR=${toString cfg.buildDirectory}"
-            ] else []);
+          Environment = [
+            "NIX_CONFIG=accept-flake-config = true"
+            "LOGSEQ_LOG_LEVEL=${cfg.logLevel}"
+          ]
+          ++ (
+            if cfg.buildDirectory != null then
+              [
+                "LOGSEQ_BUILD_DIR=${toString cfg.buildDirectory}"
+              ]
+            else
+              [ ]
+          );
         };
       };
 
