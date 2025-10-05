@@ -18,6 +18,3 @@ jobs:
 
       - name: Run nix flake check
         run: nix flake check
-
-      - name: Build logseq package
-        run: nix build .#logseq

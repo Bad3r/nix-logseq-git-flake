@@ -17,7 +17,7 @@ env:
   LOGSEQ_BRANCH: ${{ github.event.inputs.logseq_branch || 'master' }}
 
 jobs:
-  prepare-sources:
+  build:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.value }}
@@ -37,19 +37,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Get yarn cache directory
-        id: yarn-cache
-        run: echo "dir=$(yarn cache dir)" >> "$GITHUB_OUTPUT"
-        working-directory: logseq-src
-
-      - name: Cache yarn dependencies
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.yarn-cache.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('logseq-src/**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
+          cache: 'yarn'
+          cache-dependency-path: |
+            logseq-src/yarn.lock
+            logseq-src/static/yarn.lock
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -86,79 +77,42 @@ jobs:
           LOGSEQ_SENTRY_DSN: ""
           LOGSEQ_POSTHOG_TOKEN: ""
         run: |
-          yarn install
-          npx gulp build
+          yarn install --frozen-lockfile
+          yarn gulp:build
           yarn cljs:release-electron
           yarn webpack-app-build
 
-      - name: Update package metadata
-        working-directory: logseq-src
-        run: |
-          sed -i "s/\"version\": \"0.0.1\"/\"version\": \"${{ steps.version.outputs.value }}\"/" ./static/package.json
-          echo "${{ steps.version.outputs.value }}" > ./static/VERSION
-
-      - name: Upload static bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: static-bundle
-          path: logseq-src/static
-
-  build-linux-x64:
-    runs-on: ubuntu-24.04
-    outputs:
-      hash: ${{ steps.package.outputs.hash }}
-    needs: prepare-sources
-    steps:
-      - name: Download static bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: static-bundle
-          path: static
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Build Electron application
-        working-directory: static
+      - name: Prepare Electron package
+        working-directory: logseq-src/static
         env:
           LOGSEQ_SENTRY_DSN: ""
           LOGSEQ_POSTHOG_TOKEN: ""
         run: |
-          yarn install
+          yarn install --frozen-lockfile
           yarn electron-forge package
 
       - name: Create tarball artifact
-        id: package
-        working-directory: static
+        working-directory: logseq-src/static
         run: |
-          mkdir -p builds/unpacked
-          zip_file=$(echo out/make/zip/linux/x64/*-linux-x64-*.zip)
-          unzip -q "$zip_file" -d builds/unpacked
-          inner=$(find builds/unpacked -maxdepth 1 -type d -name 'Logseq-linux-x64*' | head -n1)
-          if [ -z "$inner" ]; then
-            echo "Could not locate unpacked Logseq bundle" >&2
+          package_dir="out/logseq-linux-x64"
+          if [ ! -d "$package_dir" ]; then
+            echo "Could not locate packaged Logseq bundle at $package_dir" >&2
             exit 1
           fi
-          hash=$(nix hash path --type sha256 --sri "$inner")
-          echo "hash=$hash" >> "$GITHUB_OUTPUT"
-          tar -C "$inner" -czf builds/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz .
-          cp VERSION builds/VERSION
+          tar -C "$package_dir" -czf out/logseq-linux-x64-${{ steps.version.outputs.value }}.tar.gz .
+          cp VERSION out/VERSION
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
           path: |
-            static/out/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz
-            static/out/VERSION
+            logseq-src/static/out/logseq-linux-x64-${{ steps.version.outputs.value }}.tar.gz
+            logseq-src/static/out/VERSION
 
   publish-release:
     runs-on: ubuntu-24.04
-    needs:
-      - prepare-sources
-      - build-linux-x64
+    needs: build
     steps:
       - uses: actions/checkout@v4
 
@@ -175,38 +129,39 @@ jobs:
             accept-flake-config = true
 
       - name: Compute artifact hash
+        id: hash
         run: |
-          hash=$(nix hash path --type sha256 --sri static/out/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz)
+          hash=$(nix hash path --type sha256 --sri builds/logseq-linux-x64-${{ needs.build.outputs.version }}.tar.gz)
           echo "sri=$hash" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="nightly-${{ needs.prepare-sources.outputs.datestring }}"
+          tag="nightly-${{ needs.build.outputs.datestring }}"
           gh release delete "$tag" -y || true
-          gh release create "$tag" static/out/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz \
+          gh release create "$tag" builds/logseq-linux-x64-${{ needs.build.outputs.version }}.tar.gz \
             --title "Nightly $tag" \
-            --notes "Automated nightly build for commit ${{ needs.prepare-sources.outputs.revision }}" \
+            --notes "Automated nightly build for commit ${{ needs.build.outputs.revision }}" \
             --target main
 
       - name: Render manifest
         run: |
-          tag="nightly-${{ needs.prepare-sources.outputs.datestring }}"
+          tag="nightly-${{ needs.build.outputs.datestring }}"
           published=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          asset_url="https://github.com/${{ github.repository }}/releases/download/${tag}/logseq-linux-x64-${{ needs.prepare-sources.outputs.version }}.tar.gz"
+          asset_url="https://github.com/${{ github.repository }}/releases/download/${tag}/logseq-linux-x64-${{ needs.build.outputs.version }}.tar.gz"
           printf '%s\n' \
             '{' \
             "  \"tag\": \"$tag\"," \
             "  \"publishedAt\": \"$published\"," \
             "  \"assetUrl\": \"$asset_url\"," \
             "  \"assetSha256\": \"${{ steps.hash.outputs.sri }}\"," \
-            "  \"logseqRev\": \"${{ needs.prepare-sources.outputs.revision }}\"," \
-            "  \"logseqVersion\": \"${{ needs.prepare-sources.outputs.version }}\"" \
+            "  \"logseqRev\": \"${{ needs.build.outputs.revision }}\"," \
+            "  \"logseqVersion\": \"${{ needs.build.outputs.version }}\"" \
             '}' > manifest.json
+
       - name: Update manifest file
-        run: |
-          mv manifest.json data/logseq-nightly.json
+        run: mv manifest.json data/logseq-nightly.json
 
       - name: Configure git
         run: |
