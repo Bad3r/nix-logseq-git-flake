@@ -4,11 +4,17 @@ on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
+    inputs:
+      logseq_branch:
+        description: 'Logseq branch to build'
+        required: false
+        default: master
 
 env:
   NODE_VERSION: '22'
   JAVA_VERSION: '11'
   CLOJURE_VERSION: '1.11.1.1413'
+  LOGSEQ_BRANCH: ${{ github.event.inputs.logseq_branch || 'master' }}
 
 jobs:
   prepare-sources:
@@ -21,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Clone Logseq source
-        run: git clone --depth 1 --branch master https://github.com/logseq/logseq.git logseq-src
+        run: git clone --depth 1 --branch "${LOGSEQ_BRANCH}" https://github.com/logseq/logseq.git logseq-src
 
       - name: Set nightly metadata
         id: metadata
