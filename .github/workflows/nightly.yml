@@ -125,14 +125,18 @@ jobs:
           LOGSEQ_POSTHOG_TOKEN: ""
         run: |
           yarn install
-          yarn electron:make
+          yarn electron-forge package
 
       - name: Create tarball artifact
         working-directory: static
         run: |
           mkdir -p builds/unpacked
-          zip_file=$(echo out/make/zip/linux/x64/*-linux-x64-*.zip)
-          unzip -q "$zip_file" -d builds/unpacked
+          package_dir=$(find out -maxdepth 3 -type d -name 'Logseq-linux-x64*' | head -n1)
+          if [ -z "$package_dir" ]; then
+            echo "Could not locate packaged Logseq bundle" >&2
+            exit 1
+          fi
+          cp -R "$package_dir" builds/unpacked/
           inner=$(find builds/unpacked -maxdepth 1 -type d -name 'Logseq-linux-x64*' | head -n1)
           if [ -z "$inner" ]; then
             echo "Could not locate unpacked Logseq bundle" >&2
