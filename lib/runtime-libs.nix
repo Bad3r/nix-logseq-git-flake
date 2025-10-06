@@ -19,8 +19,8 @@ with pkgs;
     glib
     gdk-pixbuf
     gtk3
+    gtk4
     cups
-    cups.lib
     libappindicator-gtk3
     libnotify
     libsecret
@@ -29,12 +29,14 @@ with pkgs;
     xdg-user-dirs
     xdg-utils
     pipewire
+    systemd
     udev
     libudev0-shim
 
     # audio
     alsa-lib
     libpulseaudio
+    speechd-minimal
 
     # font stack
     dejavu_fonts
@@ -46,12 +48,14 @@ with pkgs;
 
     # media / GPU
     libdrm
+    libGL
     libglvnd
     libgbm
     mesa
     libva
     libvdpau
     vulkan-loader
+    pciutils
 
     # scripting runtimes used by extensions
     nspr
@@ -60,6 +64,7 @@ with pkgs;
     at-spi2-atk
     at-spi2-core
     expat
+    stdenv.cc.cc
   ]
   ++ (with pkgs.xorg; [
     libX11
@@ -69,11 +74,13 @@ with pkgs;
     libXdamage
     libXext
     libXfixes
+    libXkbfile
     libXrandr
     libXrender
     libXtst
     libXi
     libxcb
+    libxshmfence
     libXau
     libXdmcp
   ])
