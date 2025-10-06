@@ -43,7 +43,12 @@ let
       fi
 
       ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-      if out=$(${nixCmd} build "$dir"#logseq --print-out-paths 2>&1); then
+      if out=$(${nixCmd} \
+        --accept-flake-config \
+        --extra-experimental-features 'nix-command flakes' \
+        build "$dir"#logseq \
+        --print-out-paths 2>&1
+      ); then
         store_path=$(printf '%s' "$out" | ${pkgs.jq}/bin/jq -Rsa .)
         printf '{"timestamp":"%s","level":"info","message":"logseq built","storePath":%s}\n' "$ts" "$store_path"
       else
@@ -110,10 +115,6 @@ in
       systemd.services.logseq-sync = {
         description = "Nightly Logseq package realisation";
         environment = {
-          NIX_CONFIG = lib.concatStringsSep "\n" [
-            "accept-flake-config = true"
-            "experimental-features = nix-command flakes"
-          ];
           LOGSEQ_LOG_LEVEL = cfg.logLevel;
         }
         // lib.optionalAttrs (cfg.buildDirectory != null) {
