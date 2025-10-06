@@ -146,10 +146,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="nightly-${{ needs.build.outputs.datestring }}"
+          rev="${{ needs.build.outputs.revision }}"
+          rev_short="${rev:0:7}"
           gh release delete "$tag" -y || true
           gh release create "$tag" builds/logseq-linux-x64-${{ needs.build.outputs.version }}.tar.gz \
-            --title "Nightly $tag" \
-            --notes "Automated nightly build for commit ${{ needs.build.outputs.revision }}" \
+            --title "logseq-nightly-${rev_short}" \
+            --notes "Automated nightly build for commit [${rev_short}](https://github.com/logseq/logseq/commit/${rev})." \
             --target main
 
       - name: Render manifest
