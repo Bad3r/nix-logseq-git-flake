@@ -47,6 +47,7 @@ let
         --accept-flake-config \
         --extra-experimental-features 'nix-command flakes' \
         build "$dir"#logseq \
+        --no-link \
         --print-out-paths 2>&1
       ); then
         store_path=$(printf '%s' "$out" | ${pkgs.jq}/bin/jq -Rsa .)
