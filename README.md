@@ -1,10 +1,16 @@
 # nix-logseq-git-flake
 
 Nix flake that packages the Logseq nightly tarball produced by this repository’s
-GitHub Actions job (built from the latest upstream commit) as a first-class Nix
+[GitHub Actions nightly build](.github/workflows/nightly.yml) (built from the latest upstream commit) as a first-class Nix
 package, with an opinionated FHS wrapper tuned for Electron workloads. The
 package exposes a `logseq` binary you can run directly, a Nix app for `nix run`,
 and helper builders for composing your own environments.
+
+> [!NOTE]
+> Highlights information that users should take into account, even when skimming.
+>
+> This flake currently packages only the Linux x86_64 build of Logseq. Additional platforms can be added if there is demand.
+
 
 ## Outputs
 
@@ -66,6 +72,11 @@ variables that NVIDIA’s proprietary stack expects (`__NV_PRIME_RENDER_OFFLOAD`
   reports “Invalid visual ID requested,” or NVML complains about mismatched
   versions, reboot (or reload the NVIDIA modules) before assuming the flake is
   at fault.
+
+## CI pipelines
+
+- [Nightly build](.github/workflows/nightly.yml) keeps `data/logseq-nightly.json` in sync with the latest upstream commit and publishes the tarball consumed by this flake.
+- [Validate](.github/workflows/validate.yml) runs formatting and static checks on every push/PR to keep the flake tidy.
 
 ## License
 
