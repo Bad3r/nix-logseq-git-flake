@@ -111,8 +111,6 @@
           pname = "logseq";
           version = manifest.logseqVersion;
           dontUnpack = true;
-          nativeBuildInputs = [ pkgs.wrapGAppsHook3 ];
-          dontWrapGApps = true;
           buildCommand = ''
             mkdir -p $out
             cp -r --no-preserve=mode,ownership ${logseqTree}/share $out/
