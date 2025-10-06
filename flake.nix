@@ -106,8 +106,5 @@
         '';
         formatter = pkgs.nixfmt-rfc-style;
       }
-    )
-    // {
-      nixosModules.logseq = import ./modules/logseq-module.nix;
-    };
+    );
 }
