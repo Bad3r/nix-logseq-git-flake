@@ -1,66 +1,80 @@
 pkgs:
 with pkgs;
-[
-  alsa-lib
-  at-spi2-atk
-  at-spi2-core
-  atk
-  cairo
-  cups
-  dbus
-  dejavu_fonts
-  expat
-  fontconfig
-  freetype
-  gdk-pixbuf
-  glib
-  gtk3
-  gtk4
-  harfbuzz
-  krb5
-  libappindicator-gtk3
-  libdrm
-  libva
-  libvdpau
-  libnotify
-  libpulseaudio
-  libsecret
-  pciutils
-  speechd-minimal
-  stdenv.cc.cc
-  systemd
-  libuuid
-  libxkbcommon
-  nspr
-  nss
-  pango
-  pipewire
-  udev
-  xdg-desktop-portal
-  xdg-user-dirs
-  xdg-utils
-  zlib
-  libGL
-  libglvnd
-  libgbm
-  mesa
-  vulkan-loader
-]
-++ (with pkgs.xorg; [
-  libX11
-  libXScrnSaver
-  libXcomposite
-  libXcursor
-  libXdamage
-  libXext
-  libXfixes
-  libXkbfile
-  libXi
-  libXrandr
-  libXrender
-  libXtst
-  libxcb
-  libxshmfence
-  libXau
-  libXdmcp
-])
+(
+  [
+    # core toolchain bits expected by upstream bundles
+    glibc
+    curl
+    icu
+    libunwind
+    libuuid
+    lttng-ust
+    openssl
+    zlib
+
+    # mono/.NET friendly libraries
+    krb5
+
+    # GTK / desktop integration
+    glib
+    gdk-pixbuf
+    gtk3
+    cups
+    cups.lib
+    libappindicator-gtk3
+    libnotify
+    libsecret
+    libxkbcommon
+    xdg-desktop-portal
+    xdg-user-dirs
+    xdg-utils
+    pipewire
+    udev
+    libudev0-shim
+
+    # audio
+    alsa-lib
+    libpulseaudio
+
+    # font stack
+    dejavu_fonts
+    fontconfig
+    freetype
+    harfbuzz
+    pango
+    cairo
+
+    # media / GPU
+    libdrm
+    libglvnd
+    libgbm
+    mesa
+    libva
+    libvdpau
+    vulkan-loader
+
+    # scripting runtimes used by extensions
+    nspr
+    nss
+    dbus
+    at-spi2-atk
+    at-spi2-core
+    expat
+  ]
+  ++ (with pkgs.xorg; [
+    libX11
+    libXScrnSaver
+    libXcomposite
+    libXcursor
+    libXdamage
+    libXext
+    libXfixes
+    libXrandr
+    libXrender
+    libXtst
+    libXi
+    libxcb
+    libXau
+    libXdmcp
+  ])
+)
