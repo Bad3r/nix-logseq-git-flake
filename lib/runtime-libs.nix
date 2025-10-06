@@ -15,6 +15,7 @@ with pkgs;
   gdk-pixbuf
   glib
   gtk3
+  gtk4
   harfbuzz
   krb5
   libappindicator-gtk3
@@ -24,6 +25,10 @@ with pkgs;
   libnotify
   libpulseaudio
   libsecret
+  pciutils
+  speechd-minimal
+  stdenv.cc.cc
+  systemd
   libuuid
   libxkbcommon
   nspr
@@ -35,6 +40,7 @@ with pkgs;
   xdg-user-dirs
   xdg-utils
   zlib
+  libGL
   libglvnd
   libgbm
   mesa
@@ -48,11 +54,13 @@ with pkgs;
   libXdamage
   libXext
   libXfixes
+  libXkbfile
   libXi
   libXrandr
   libXrender
   libXtst
   libxcb
+  libxshmfence
   libXau
   libXdmcp
 ])
