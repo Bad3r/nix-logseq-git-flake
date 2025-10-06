@@ -109,22 +109,20 @@ in
 
       systemd.services.logseq-sync = {
         description = "Nightly Logseq package realisation";
+        environment = {
+          NIX_CONFIG = lib.concatStringsSep "\n" [
+            "accept-flake-config = true"
+            "experimental-features = nix-command flakes"
+          ];
+          LOGSEQ_LOG_LEVEL = cfg.logLevel;
+        }
+        // lib.optionalAttrs (cfg.buildDirectory != null) {
+          LOGSEQ_BUILD_DIR = toString cfg.buildDirectory;
+        };
         serviceConfig = {
           Type = "oneshot";
           User = cfg.user;
           ExecStart = "${syncScript}/bin/logseq-sync";
-          Environment = [
-            "NIX_CONFIG=accept-flake-config = true"
-            "LOGSEQ_LOG_LEVEL=${cfg.logLevel}"
-          ]
-          ++ (
-            if cfg.buildDirectory != null then
-              [
-                "LOGSEQ_BUILD_DIR=${toString cfg.buildDirectory}"
-              ]
-            else
-              [ ]
-          );
         };
       };
 
