@@ -2,7 +2,7 @@ pkgs:
 with pkgs;
 (
   [
-    # core toolchain bits expected by upstream bundles
+    # Core toolchain bits expected by upstream bundles
     glibc
     curl
     icu
@@ -12,7 +12,7 @@ with pkgs;
     openssl
     zlib
 
-    # mono/.NET friendly libraries
+    # Mono/.NET friendly libraries
     krb5
 
     # GTK / desktop integration
@@ -20,7 +20,6 @@ with pkgs;
     gdk-pixbuf
     gtk3
     gtk4
-    cups
     libappindicator-gtk3
     libnotify
     libsecret
@@ -33,12 +32,12 @@ with pkgs;
     udev
     libudev0-shim
 
-    # audio
+    # Audio
     alsa-lib
     libpulseaudio
     speechd-minimal
 
-    # font stack
+    # Font stack
     dejavu_fonts
     fontconfig
     freetype
@@ -46,7 +45,7 @@ with pkgs;
     pango
     cairo
 
-    # media / GPU
+    # Media / GPU
     libdrm
     libGL
     libglvnd
@@ -56,15 +55,16 @@ with pkgs;
     libvdpau
     vulkan-loader
     pciutils
+    stdenv.cc.cc
+    cups
 
-    # scripting runtimes used by extensions
+    # Runtime libraries used by Electron extensions
     nspr
     nss
     dbus
     at-spi2-atk
     at-spi2-core
     expat
-    stdenv.cc.cc
   ]
   ++ (with pkgs.xorg; [
     libX11
@@ -74,7 +74,7 @@ with pkgs;
     libXdamage
     libXext
     libXfixes
-    libXkbfile
+    libxkbfile
     libXrandr
     libXrender
     libXtst

@@ -25,6 +25,8 @@
           manifestPath = ./data/logseq-nightly.json;
         };
         runtimeLibs = import ./lib/runtime-libs.nix;
+        runtimeLibList = runtimeLibs pkgs;
+        runtimeLibPath = lib.makeLibraryPath runtimeLibList;
         payload = pkgs.fetchzip {
           url = manifest.assetUrl;
           hash = manifest.assetSha256;
@@ -73,6 +75,20 @@
             $out/share/icons/hicolor/512x512/apps/logseq.png
         '';
         launcher = pkgs.writeShellScriptBin "logseq" ''
+          base_ld="${runtimeLibPath}"
+          if [ -n "''${LD_LIBRARY_PATH-}" ]; then
+            base_ld="$base_ld:''${LD_LIBRARY_PATH}"
+          fi
+          if [ -d /run/opengl-driver ]; then
+            export LD_LIBRARY_PATH="/run/opengl-driver/lib:/run/opengl-driver-32/lib:$base_ld"
+            export LIBGL_DRIVERS_PATH="''${LIBGL_DRIVERS_PATH:-/run/opengl-driver/lib/dri}"
+            export LIBVA_DRIVERS_PATH="''${LIBVA_DRIVERS_PATH:-/run/opengl-driver/lib/dri}"
+            if [ -z "''${VK_ICD_FILENAMES-}" ] && [ -f /run/opengl-driver/share/vulkan/icd.d/nvidia_icd.json ]; then
+              export VK_ICD_FILENAMES=/run/opengl-driver/share/vulkan/icd.d/nvidia_icd.json
+            fi
+          else
+            export LD_LIBRARY_PATH="$base_ld"
+          fi
           exec ${logseqFhs}/bin/logseq-fhs "$@"
         '';
         package = pkgs.stdenv.mkDerivation {
