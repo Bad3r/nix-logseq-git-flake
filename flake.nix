@@ -41,19 +41,27 @@
             cp -r "$src/." $out/share/logseq/
           fi
         '';
-        logseqFhs = pkgs.buildFHSEnv {
-          name = "logseq-fhs";
-          targetPkgs = runtimeLibs;
-          extraBwrapArgs = [
-            "--bind-try"
-            "/etc/nixos"
-            "/etc/nixos"
-            "--ro-bind-try"
-            "/etc/xdg"
-            "/etc/xdg"
-          ];
-          runScript = "${logseqTree}/share/logseq/Logseq";
-        };
+        fhsBase =
+          {
+            additionalPkgs ? (_pkgs: [ ]),
+          }:
+          pkgs.buildFHSEnv {
+            name = "logseq-fhs";
+            targetPkgs = pkgs: runtimeLibs pkgs ++ additionalPkgs pkgs;
+            extraBwrapArgs = [
+              "--bind-try"
+              "/etc/nixos"
+              "/etc/nixos"
+              "--ro-bind-try"
+              "/etc/xdg"
+              "/etc/xdg"
+            ];
+            extraInstallCommands = ''
+              ln -s ${logseqTree}/share $out/share
+            '';
+            runScript = "${logseqTree}/share/logseq/Logseq";
+          };
+        logseqFhs = fhsBase { };
         desktopEntry = pkgs.writeTextFile {
           name = "logseq-desktop";
           destination = "/share/applications/logseq.desktop";
@@ -95,6 +103,8 @@
           pname = "logseq";
           version = manifest.logseqVersion;
           dontUnpack = true;
+          nativeBuildInputs = [ pkgs.wrapGAppsHook3 ];
+          dontWrapGApps = true;
           buildCommand = ''
             mkdir -p $out
             cp -r --no-preserve=mode,ownership ${logseqTree}/share $out/
@@ -109,6 +119,10 @@
             license = licenses.agpl3Plus;
             platforms = platforms.linux;
             mainProgram = "logseq";
+          };
+          passthru = {
+            fhs = logseqFhs;
+            fhsWithPackages = fhsBase;
           };
         };
       in
