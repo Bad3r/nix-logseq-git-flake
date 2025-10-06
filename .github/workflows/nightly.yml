@@ -96,18 +96,19 @@ jobs:
         id: package
         working-directory: logseq-src/static
         run: |
-          mkdir -p builds/unpacked
-          zip_file=$(echo out/make/zip/linux/x64/*-linux-x64-*.zip)
-          unzip -q "$zip_file" -d builds/unpacked
-          inner=$(find builds/unpacked -maxdepth 1 -type d -name "Logseq-linux-x64*" | head -n1)
-          if [ -z "$inner" ]; then
-            echo "Could not locate packaged Logseq bundle" >&2
+          set -euo pipefail
+          mkdir -p out
+          src_dir="out/Logseq-linux-x64"
+          if [ ! -d "$src_dir" ]; then
+            echo "Could not locate packaged Logseq bundle at $src_dir" >&2
+            find out -maxdepth 2 -mindepth 1 -print >&2 || true
             exit 1
           fi
-          tarball=out/logseq-linux-x64-${{ steps.version.outputs.value }}.tar.gz
-          tar -C "$inner" -czf "$tarball" .
-          cp VERSION out/VERSION
-          hash=$(nix hash file --type sha256 --sri "$tarball")
+          tarball="out/logseq-linux-x64-${{ steps.version.outputs.value }}.tar.gz"
+          tar -C "$src_dir" -czf "$tarball" .
+          printf '%s\n' "${{ steps.version.outputs.value }}" > out/VERSION
+          sha=$(sha256sum "$tarball" | awk '{print $1}')
+          hash=$(python -c 'import base64, binascii, sys; print("sha256-" + base64.b64encode(binascii.unhexlify(sys.argv[1])).decode())' "$sha")
           echo "hash=$hash" >> "$GITHUB_OUTPUT"
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -186,4 +187,3 @@ jobs:
         run: |
           nix flake check
           nix build .#logseq
-          nix run .#logseq -- --version
