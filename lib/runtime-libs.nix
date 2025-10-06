@@ -19,6 +19,8 @@ with pkgs;
   krb5
   libappindicator-gtk3
   libdrm
+  libva
+  libvdpau
   libnotify
   libpulseaudio
   libsecret
@@ -36,6 +38,7 @@ with pkgs;
   libglvnd
   libgbm
   mesa
+  vulkan-loader
 ]
 ++ (with pkgs.xorg; [
   libX11
