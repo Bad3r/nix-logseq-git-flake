@@ -92,6 +92,12 @@ jobs:
           yarn install --frozen-lockfile
           yarn electron-forge package
 
+      - name: Install Nix
+        uses: cachix/install-nix-action@v26
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+
       - name: Create tarball artifact
         id: package
         working-directory: logseq-src/static
@@ -107,8 +113,7 @@ jobs:
           tarball="out/logseq-linux-x64-${{ steps.version.outputs.value }}.tar.gz"
           tar -C "$src_dir" -czf "$tarball" .
           printf '%s\n' "${{ steps.version.outputs.value }}" > out/VERSION
-          sha=$(sha256sum "$tarball" | awk '{print $1}')
-          hash=$(python -c 'import base64, binascii, sys; print("sha256-" + base64.b64encode(binascii.unhexlify(sys.argv[1])).decode())' "$sha")
+          hash=$(nix hash path --type sha256 --sri "$src_dir")
           echo "hash=$hash" >> "$GITHUB_OUTPUT"
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
