@@ -7,8 +7,6 @@ package exposes a `logseq` binary you can run directly, a Nix app for `nix run`,
 and helper builders for composing your own environments.
 
 > [!NOTE]
-> Highlights information that users should take into account, even when skimming.
->
 > This flake currently packages only the Linux x86_64 build of Logseq. Additional platforms can be added if there is demand.
 
 
