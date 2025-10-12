@@ -3,24 +3,38 @@
 Nix flake that packages the Logseq nightly tarball produced by this repository’s
 [GitHub Actions nightly build](.github/workflows/nightly.yml) (built from the latest upstream commit) as a first-class Nix
 package, with an opinionated FHS wrapper tuned for Electron workloads. The
-package exposes a `logseq` binary and helper builders for composing your own environments.
+package exposes a `logseq` binary you can run directly, a Nix app for `nix run`,
+and helper builders for composing your own environments.
 
 > [!NOTE]
+> Highlights information that users should take into account, even when skimming.
+>
 > This flake currently packages only the Linux x86_64 build of Logseq. Additional platforms can be added if there is demand.
-
 
 ## Outputs
 
-| Output                                   | Description                                                       |
-| ---------------------------------------- | ----------------------------------------------------------------- |
-| `packages.${system}.logseq`              | Standalone package containing Logseq, desktop entry, and icons.   |
-| `packages.${system}.logseq.fhs`          | FHS environment used by the launcher (exposed via `passthru`).    |
+| Output                                      | Description                                                      |
+| ------------------------------------------- | ---------------------------------------------------------------- |
+| `packages.${system}.logseq`                 | Standalone package containing Logseq, desktop entry, and icons.  |
+| `apps.${system}.logseq`                     | `nix run` entry point invoking the packaged binary.              |
+| `packages.${system}.logseq.fhs`             | FHS environment used by the launcher (exposed via `passthru`).   |
 | `packages.${system}.logseq.fhsWithPackages` | Helper to extend the FHS with additional packages at build time. |
 
 All systems from `flake-utils.lib.defaultSystems` are built by default; the
 default `nixpkgs` input tracks `nixos-unstable`, but you can point it at any
 channel that provides the required Electron runtime libraries.
 
+> [!NOTE]
+> The flake pins `nixpkgs` to `nixos-unstable` when its inputs aren’t overridden.
+> To reuse the caller’s inputs instead, add `follows` entries alongside the
+> import, for example:
+>
+> ```nix
+> inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+> inputs.logseq.url = "github:your-user/nix-logseq-git-flake";
+> inputs.logseq.inputs.nixpkgs.follows = "nixpkgs";
+> inputs.logseq.inputs.flake-utils.follows = "flake-utils";
+> ```
 
 ## Quick start
 

@@ -2,18 +2,18 @@ name: Nightly Build
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: "0 0 * * *"
   workflow_dispatch:
     inputs:
       logseq_branch:
-        description: 'Logseq branch to build'
+        description: "Logseq branch to build"
         required: false
         default: master
 
 env:
-  NODE_VERSION: '22'
-  JAVA_VERSION: '11'
-  CLOJURE_VERSION: '1.11.1.1413'
+  NODE_VERSION: "22"
+  JAVA_VERSION: "11"
+  CLOJURE_VERSION: "1.11.1.1413"
   LOGSEQ_BRANCH: ${{ github.event.inputs.logseq_branch || 'master' }}
 
 jobs:
@@ -38,7 +38,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
+          cache: "yarn"
           cache-dependency-path: |
             logseq-src/yarn.lock
             logseq-src/static/yarn.lock
@@ -46,7 +46,7 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: "zulu"
           java-version: ${{ env.JAVA_VERSION }}
 
       - name: Cache Clojure deps
