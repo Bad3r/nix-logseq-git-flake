@@ -66,8 +66,7 @@ variables that NVIDIA’s proprietary stack expects (`__NV_PRIME_RENDER_OFFLOAD`
 - **GPU mismatches**: The wrapper assumes that your running kernel module and the
   libraries in `/run/opengl-driver` belong to the same driver version. If ANGLE
   reports “Invalid visual ID requested,” or NVML complains about mismatched
-  versions, reboot (or reload the NVIDIA modules) before assuming the flake is
-  at fault.
+  versions, reboot (or reload the NVIDIA modules).
 
 ## CI pipelines
 
