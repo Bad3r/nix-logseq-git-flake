@@ -3,8 +3,7 @@
 Nix flake that packages the Logseq nightly tarball produced by this repository’s
 [GitHub Actions nightly build](.github/workflows/nightly.yml) (built from the latest upstream commit) as a first-class Nix
 package, with an opinionated FHS wrapper tuned for Electron workloads. The
-package exposes a `logseq` binary you can run directly, a Nix app for `nix run`,
-and helper builders for composing your own environments.
+package exposes a `logseq` binary and helper builders for composing your own environments.
 
 > [!NOTE]
 > This flake currently packages only the Linux x86_64 build of Logseq. Additional platforms can be added if there is demand.
@@ -15,7 +14,6 @@ and helper builders for composing your own environments.
 | Output                                   | Description                                                       |
 | ---------------------------------------- | ----------------------------------------------------------------- |
 | `packages.${system}.logseq`              | Standalone package containing Logseq, desktop entry, and icons.   |
-| `apps.${system}.logseq`                  | `nix run` entry point invoking the packaged binary.               |
 | `packages.${system}.logseq.fhs`          | FHS environment used by the launcher (exposed via `passthru`).    |
 | `packages.${system}.logseq.fhsWithPackages` | Helper to extend the FHS with additional packages at build time. |
 
