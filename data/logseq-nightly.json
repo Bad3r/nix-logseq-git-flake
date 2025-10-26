@@ -1,8 +1,8 @@
 {
-  "tag": "nightly-20251025",
-  "publishedAt": "2025-10-25T02:05:49Z",
-  "assetUrl": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20251025/logseq-linux-x64-0.11.0-alpha+nightly.20251025.tar.gz",
-  "assetSha256": "sha256-RYsia/jUc1dXyCCUtKBjXxRJ9nkVo1xHJTyw46WoSJU=",
+  "tag": "nightly-20251026",
+  "publishedAt": "2025-10-26T02:14:50Z",
+  "assetUrl": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20251026/logseq-linux-x64-0.11.0-alpha+nightly.20251026.tar.gz",
+  "assetSha256": "sha256-/vm4yAKm1dpvecXXcdpxxr7eeJLc1S1ZZBrZOx0Reog=",
   "logseqRev": "f3f6c0ce6afa6080cbb6fdcf5f2795b1722b34c5",
-  "logseqVersion": "0.11.0-alpha+nightly.20251025"
+  "logseqVersion": "0.11.0-alpha+nightly.20251026"
 }
