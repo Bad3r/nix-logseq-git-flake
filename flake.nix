@@ -151,7 +151,7 @@
           ${pkgs.coreutils}/bin/test -x ${package}/bin/logseq
           touch $out
         '';
-        formatter = pkgs.nixfmt-rfc-style;
+        formatter = pkgs.nixfmt;
       }
     );
 }
