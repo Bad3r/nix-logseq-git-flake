@@ -6,9 +6,7 @@ package, with an opinionated FHS wrapper tuned for Electron workloads. The
 package exposes a `logseq` binary you can run directly, a Nix app for `nix run`,
 and helper builders for composing your own environments.
 
-> [!NOTE]
-> Highlights information that users should take into account, even when skimming.
->
+> [!WARNING]
 > This flake currently packages only the Linux x86_64 build of Logseq. Additional platforms can be added if there is demand.
 
 ## Outputs
@@ -30,7 +28,7 @@ channel that provides the required Electron runtime libraries.
 > import, for example:
 >
 > ```nix
-> inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+> inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
 > inputs.logseq.url = "github:your-user/nix-logseq-git-flake";
 > inputs.logseq.inputs.nixpkgs.follows = "nixpkgs";
 > inputs.logseq.inputs.flake-utils.follows = "flake-utils";
@@ -41,10 +39,6 @@ channel that provides the required Electron runtime libraries.
 ```bash
 # Run Logseq from the flake in the current directory
 nix run .#logseq
-
-# Build the package and add it to your profile
-nix build .#logseq
-nix profile install result
 
 # Launch Logseq inside a shell without installing it
 nix shell .#logseq --command logseq
