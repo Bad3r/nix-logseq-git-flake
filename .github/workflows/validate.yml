@@ -17,5 +17,8 @@ jobs:
           extra_nix_config: |
             accept-flake-config = true
 
+      - name: Check formatting
+        run: nix fmt -- --check .
+
       - name: Run nix flake check
         run: nix flake check
