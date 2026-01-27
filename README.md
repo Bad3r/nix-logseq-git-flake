@@ -3,15 +3,15 @@
 Nix flake packaging **Logseq Desktop** (nightly Electron app) and **Logseq CLI** (DB graph management / MCP server) from upstream `master`.
 
 > [!WARNING]
-> Linux x86_64 only.
+> Linux x86_64 only. [Open an issue](https://github.com/Bad3r/nix-logseq-git-flake/issues) to request other platforms.
 
 ## Packages
 
-| Package | Binary | Description |
-|---------|--------|-------------|
-| `logseq` | `logseq` | Desktop app with FHS wrapper, desktop entry, and icon |
+| Package      | Binary       | Description                                  |
+| ------------ | ------------ | -------------------------------------------- |
+| `logseq`     | `logseq`     | Desktop app with FHS wrapper                 |
 | `logseq-cli` | `logseq-cli` | CLI for DB graphs: query, export, MCP server |
-| `default` | `logseq` | Alias for `logseq` |
+| `default`    | both         | Desktop app + CLI combined                   |
 
 ## Installation
 
@@ -54,17 +54,17 @@ nix run github:Bad3r/nix-logseq-git-flake#logseq-cli -- --help
 
 ### Commands
 
-| Command | Description |
-|---------|-------------|
-| `logseq-cli list` | List local graphs |
-| `logseq-cli show <graph>` | Graph info (schema version, creation date) |
-| `logseq-cli search -g <graph> "<term>"` | Full-text search |
-| `logseq-cli query -g <graph> '<datalog>'` | Datalog query |
-| `logseq-cli export -g <graph>` | Export as Markdown |
-| `logseq-cli export-edn -g <graph>` | Export as EDN |
-| `logseq-cli import-edn -g <graph> -f <file>` | Import EDN into graph |
-| `logseq-cli validate -g <graph>` | Validate graph integrity |
-| `logseq-cli mcp-server -g <graph>` | Start MCP server |
+| Command                                      | Description                                |
+| -------------------------------------------- | ------------------------------------------ |
+| `logseq-cli list`                            | List local graphs                          |
+| `logseq-cli show <graph>`                    | Graph info (schema version, creation date) |
+| `logseq-cli search -g <graph> "<term>"`      | Full-text search                           |
+| `logseq-cli query -g <graph> '<datalog>'`    | Datalog query                              |
+| `logseq-cli export -g <graph>`               | Export as Markdown                         |
+| `logseq-cli export-edn -g <graph>`           | Export as EDN                              |
+| `logseq-cli import-edn -g <graph> -f <file>` | Import EDN into graph                      |
+| `logseq-cli validate -g <graph>`             | Validate graph integrity                   |
+| `logseq-cli mcp-server -g <graph>`           | Start MCP server                           |
 
 ### MCP Server
 

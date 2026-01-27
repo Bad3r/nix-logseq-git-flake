@@ -118,8 +118,8 @@
             cliYarnDepsHash
             ;
         };
-        package = pkgs.stdenv.mkDerivation {
-          pname = "logseq";
+        logseqDesktop = pkgs.stdenv.mkDerivation {
+          pname = "logseq-desktop";
           version = manifest.logseqVersion;
           dontUnpack = true;
           buildCommand = ''
@@ -131,7 +131,7 @@
             ln -s ${launcher}/bin/logseq $out/bin/logseq
           '';
           meta = with lib; {
-            description = "Logseq nightly wrapper";
+            description = "Logseq nightly desktop app";
             homepage = "https://github.com/logseq/logseq";
             license = licenses.agpl3Plus;
             platforms = platforms.linux;
@@ -145,13 +145,19 @@
       in
       {
         packages = {
-          logseq = package;
+          logseq = logseqDesktop;
           logseq-cli = cli;
-          default = package;
+          default = pkgs.symlinkJoin {
+            name = "logseq-nightly";
+            paths = [
+              logseqDesktop
+              cli
+            ];
+          };
         };
         apps.logseq = {
           type = "app";
-          program = "${package}/bin/logseq";
+          program = "${logseqDesktop}/bin/logseq";
           meta = {
             description = "Launch the nightly Logseq build packaged from the upstream master branch";
             homepage = "https://github.com/logseq/logseq";
@@ -160,7 +166,7 @@
         };
         checks = {
           logseq = pkgs.runCommand "logseq-check" { } ''
-            ${pkgs.coreutils}/bin/test -x ${package}/bin/logseq
+            ${pkgs.coreutils}/bin/test -x ${logseqDesktop}/bin/logseq
             touch $out
           '';
           logseq-cli = pkgs.runCommand "logseq-cli-check" { } ''
