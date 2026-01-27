@@ -110,6 +110,7 @@
           fi
           exec ${logseqFhs}/bin/logseq-fhs "$@"
         '';
+        cli = pkgs.callPackage ./lib/cli.nix { };
         package = pkgs.stdenv.mkDerivation {
           pname = "logseq";
           version = manifest.logseqVersion;
@@ -136,8 +137,11 @@
         };
       in
       {
-        packages.logseq = package;
-        packages.default = package;
+        packages = {
+          logseq = package;
+          logseq-cli = cli;
+          default = package;
+        };
         apps.logseq = {
           type = "app";
           program = "${package}/bin/logseq";
@@ -147,10 +151,16 @@
             source = self.outPath;
           };
         };
-        checks.logseq = pkgs.runCommand "logseq-check" { } ''
-          ${pkgs.coreutils}/bin/test -x ${package}/bin/logseq
-          touch $out
-        '';
+        checks = {
+          logseq = pkgs.runCommand "logseq-check" { } ''
+            ${pkgs.coreutils}/bin/test -x ${package}/bin/logseq
+            touch $out
+          '';
+          logseq-cli = pkgs.runCommand "logseq-cli-check" { } ''
+            ${pkgs.coreutils}/bin/test -x ${cli}/bin/logseq-cli
+            touch $out
+          '';
+        };
         formatter = pkgs.nixfmt;
       }
     );
