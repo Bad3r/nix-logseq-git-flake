@@ -18,7 +18,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.value }}
       revision: ${{ steps.revision.outputs.rev }}
@@ -124,7 +124,7 @@ jobs:
             logseq-src/static/out/VERSION
 
   publish-release:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     needs: build
     steps:
       - uses: actions/checkout@v4
@@ -154,23 +154,15 @@ jobs:
             --notes "Automated nightly build for commit [${rev_short}](https://github.com/logseq/logseq/commit/${rev})." \
             --target main
 
-      - name: Render manifest
-        run: |
-          tag="nightly-${{ needs.build.outputs.datestring }}"
-          published=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          asset_url="https://github.com/${{ github.repository }}/releases/download/${tag}/logseq-linux-x64-${{ needs.build.outputs.version }}.tar.gz"
-          printf '%s\n' \
-            '{' \
-            "  \"tag\": \"$tag\"," \
-            "  \"publishedAt\": \"$published\"," \
-            "  \"assetUrl\": \"$asset_url\"," \
-            "  \"assetSha256\": \"${{ needs.build.outputs.hash }}\"," \
-            "  \"logseqRev\": \"${{ needs.build.outputs.revision }}\"," \
-            "  \"logseqVersion\": \"${{ needs.build.outputs.version }}\"" \
-            '}' > manifest.json
-
-      - name: Update manifest file
-        run: mv manifest.json data/logseq-nightly.json
+      - name: Update nightly manifest and CLI hashes
+        env:
+          LOGSEQ_REV: ${{ needs.build.outputs.revision }}
+          LOGSEQ_VERSION: ${{ needs.build.outputs.version }}
+          ASSET_URL: >-
+            https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.build.outputs.datestring }}/logseq-linux-x64-${{ needs.build.outputs.version }}.tar.gz
+          ASSET_HASH: ${{ needs.build.outputs.hash }}
+          NIGHTLY_TAG: nightly-${{ needs.build.outputs.datestring }}
+        run: bash scripts/update-nightly.sh
 
       - name: Configure git
         run: |
@@ -180,9 +172,9 @@ jobs:
       - name: Format repository
         run: nix fmt
 
-      - name: Commit manifest update
+      - name: Commit nightly update
         run: |
-          if git status --short | grep -q data/logseq-nightly.json; then
+          if ! git diff --quiet -- data/logseq-nightly.json; then
             git add data/logseq-nightly.json
             git commit -m "chore: bump nightly manifest"
             git push
@@ -194,3 +186,4 @@ jobs:
         run: |
           nix flake check
           nix build .#logseq
+          nix build .#logseq-cli

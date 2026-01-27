@@ -6,9 +6,11 @@ The desktop app is built from the latest upstream commit via this repository's
 [GitHub Actions nightly build](.github/workflows/nightly.yml), wrapped in an
 opinionated FHS environment tuned for Electron workloads.
 
-The CLI is built from the official `@logseq/cli` source, providing offline
-access to DB graphs for querying, exporting, and running an MCP server without
-the desktop app.
+The CLI is built from the official `@logseq/cli` source, pinned to the same
+upstream commit as the desktop app via the shared
+[`data/logseq-nightly.json`](data/logseq-nightly.json) manifest. It provides
+offline access to DB graphs for querying, exporting, and running an MCP server
+without the desktop app.
 
 > [!WARNING]
 > This flake currently packages only Linux x86_64 builds. Additional platforms can be added if there is demand.
@@ -177,8 +179,9 @@ that NVIDIA's proprietary stack expects (`__NV_PRIME_RENDER_OFFLOAD`,
 
 ## CI pipelines
 
-- [Nightly build](.github/workflows/nightly.yml) keeps `data/logseq-nightly.json` in sync with the latest upstream commit and publishes the tarball consumed by this flake.
-- [Validate](.github/workflows/validate.yml) runs formatting and static checks on every push/PR to keep the flake tidy.
+- [Nightly build](.github/workflows/nightly.yml) builds Logseq from upstream `master`, publishes the tarball, and runs [`scripts/update-nightly.sh`](scripts/update-nightly.sh) to compute all manifest fields (desktop hash, CLI source hash, yarn deps hash, CLI version) into `data/logseq-nightly.json`.
+- [Validate](.github/workflows/validate.yml) runs formatting and static checks on every push/PR.
+- [Flake Update](.github/workflows/flake-update.yml) updates `flake.lock` weekly (Sunday cron).
 
 ## License
 

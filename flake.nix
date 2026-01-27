@@ -110,7 +110,14 @@
           fi
           exec ${logseqFhs}/bin/logseq-fhs "$@"
         '';
-        cli = pkgs.callPackage ./lib/cli.nix { };
+        cli = pkgs.callPackage ./lib/cli.nix {
+          inherit (manifest)
+            logseqRev
+            cliSrcHash
+            cliVersion
+            cliYarnDepsHash
+            ;
+        };
         package = pkgs.stdenv.mkDerivation {
           pname = "logseq";
           version = manifest.logseqVersion;
@@ -161,7 +168,7 @@
             touch $out
           '';
         };
-        formatter = pkgs.nixfmt;
+        formatter = pkgs.nixfmt-tree;
       }
     );
 }
