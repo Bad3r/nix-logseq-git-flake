@@ -1,6 +1,6 @@
 # nix-logseq-git-flake
 
-Nix flake packaging **Logseq Desktop** (nightly Electron app) and **Logseq CLI** (DB graph management / MCP server) from upstream `master`.
+Nix flake packaging **Logseq Desktop** (nightly) and **Logseq CLI** (DB graph management / MCP server) from upstream `master`.
 
 > [!WARNING]
 > Linux x86_64 only. [Open an issue](https://github.com/Bad3r/nix-logseq-git-flake/issues) to request other platforms.
