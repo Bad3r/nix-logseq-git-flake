@@ -29,7 +29,7 @@ echo "::endgroup::"
 
 # ── Phase 2: Compute CLI source hash ────────────────────────────────
 echo "::group::Phase 2: Compute CLI source hash (nix-prefetch-github)"
-CLI_SRC_HASH=$(nix shell nixpkgs#nix-prefetch-github -c \
+CLI_SRC_HASH=$(nix shell nixpkgs#nix-prefetch-github nixpkgs#nix-prefetch-git -c \
   nix-prefetch-github logseq logseq --rev "$LOGSEQ_REV" --json | jq -r '.hash')
 echo "  cliSrcHash=$CLI_SRC_HASH"
 echo "::endgroup::"
