@@ -16,9 +16,15 @@ let
   ];
   missing = lib.filter (key: !hasAttr key parsed) requiredKeys;
   validateHash =
-    key:
-    throwIf (!hasPrefix "sha256-" parsed.${key}) "Manifest ${key} must begin with sha256- (Nix SRI).";
+    acc: key:
+    throwIf (
+      !hasPrefix "sha256-" parsed.${key}
+    ) "Manifest ${key} must begin with sha256- (Nix SRI)." acc;
 in
 throwIf (missing != [ ]) "Manifest missing required keys: ${concatStringsSep ", " missing}" (
-  validateHash "assetSha256" (validateHash "cliSrcHash" (validateHash "cliYarnDepsHash" parsed))
+  builtins.foldl' validateHash parsed [
+    "assetSha256"
+    "cliSrcHash"
+    "cliYarnDepsHash"
+  ]
 )

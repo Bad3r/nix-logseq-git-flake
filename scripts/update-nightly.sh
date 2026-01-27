@@ -82,7 +82,7 @@ if [ "$BUILD_EXIT" -eq 0 ]; then
 fi
 
 # ── Phase 6: Extract real hash from error output ─────────────────────
-YARN_HASH=$(echo "$BUILD_OUTPUT" | sed -n 's/.*got: *\(sha256-[A-Za-z0-9+/=]\{1,\}\).*/\1/p' | head -1)
+YARN_HASH=$(echo "$BUILD_OUTPUT" | sed -n 's/.*got: *\(sha256-[A-Za-z0-9+/=]\{44\}\).*/\1/p' | head -1)
 
 if [ -z "$YARN_HASH" ]; then
   echo "ERROR: Could not extract yarn deps hash from build output" >&2
