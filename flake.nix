@@ -170,5 +170,10 @@
         };
         formatter = pkgs.nixfmt-tree;
       }
-    );
+    )
+    // {
+      overlays.default = import ./overlays {
+        inherit (self) packages;
+      };
+    };
 }
