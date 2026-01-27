@@ -13,23 +13,28 @@
   gcc,
   pkg-config,
   sqlite,
+  # Manifest-driven parameters (passed from flake.nix)
+  logseqRev,
+  cliSrcHash,
+  cliVersion,
+  cliYarnDepsHash,
 }:
 
 let
-  version = "0.4.2";
+  version = cliVersion;
 
   src = fetchFromGitHub {
     owner = "logseq";
     repo = "logseq";
-    rev = "master";
-    hash = "sha256-2qwleKVmWhqMvtJOT+dWFq1MoLpxaZ+wIvVGL2jShaw=";
+    rev = logseqRev;
+    hash = cliSrcHash;
   };
 
   cliOfflineCache = fetchYarnDeps {
     name = "logseq-cli-yarn-deps";
     inherit src;
     postPatch = "cd deps/cli";
-    hash = "sha256-bhhDJQV62RSW2LsSk8D5eRZv/FLhn1Co3Aqn+ZKVgWs=";
+    hash = cliYarnDepsHash;
   };
 
   # Build the CLI from offline yarn cache

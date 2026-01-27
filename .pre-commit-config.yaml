@@ -3,7 +3,7 @@ repos:
     hooks:
       - id: nixfmt-rfc-style
         name: nixfmt (rfc-style)
-        entry: nix fmt .
+        entry: nix fmt
         language: system
         pass_filenames: false
       - id: deadnix

@@ -10,11 +10,15 @@ let
     "assetSha256"
     "logseqRev"
     "logseqVersion"
+    "cliSrcHash"
+    "cliYarnDepsHash"
+    "cliVersion"
   ];
   missing = lib.filter (key: !hasAttr key parsed) requiredKeys;
+  validateHash =
+    key:
+    throwIf (!hasPrefix "sha256-" parsed.${key}) "Manifest ${key} must begin with sha256- (Nix SRI).";
 in
 throwIf (missing != [ ]) "Manifest missing required keys: ${concatStringsSep ", " missing}" (
-  throwIf (
-    !hasPrefix "sha256-" parsed.assetSha256
-  ) "Manifest assetSha256 must begin with sha256- (Nix base32)." parsed
+  validateHash "assetSha256" (validateHash "cliSrcHash" (validateHash "cliYarnDepsHash" parsed))
 )
