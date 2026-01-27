@@ -4,16 +4,15 @@
   lib,
   stdenv,
   fetchFromGitHub,
+  fetchYarnDeps,
   writeShellScript,
   nodejs_22,
-  yarn,
+  yarnConfigHook,
   python3,
   gnumake,
   gcc,
   pkg-config,
   sqlite,
-  cacert,
-  git,
 }:
 
 let
@@ -26,7 +25,14 @@ let
     hash = "sha256-2qwleKVmWhqMvtJOT+dWFq1MoLpxaZ+wIvVGL2jShaw=";
   };
 
-  # Build the CLI - allow network for GitHub dependency
+  cliOfflineCache = fetchYarnDeps {
+    name = "logseq-cli-yarn-deps";
+    inherit src;
+    postPatch = "cd deps/cli";
+    hash = "sha256-bhhDJQV62RSW2LsSk8D5eRZv/FLhn1Co3Aqn+ZKVgWs=";
+  };
+
+  # Build the CLI from offline yarn cache
   # The CLI has local deps on sibling packages (outliner, db,
   # graph-parser, common) so we need the full deps/ tree.
   cliBuilt = stdenv.mkDerivation {
@@ -34,34 +40,30 @@ let
     inherit version src;
     sourceRoot = "${src.name}/deps";
 
-    __noChroot = true; # Allow network for yarn install (GitHub dep)
-
     nativeBuildInputs = [
       nodejs_22
-      yarn
+      yarnConfigHook
       python3
       gnumake
       gcc
       pkg-config
-      cacert
-      git
     ];
 
     buildInputs = [ sqlite ];
 
     env.npm_config_nodedir = nodejs_22;
 
-    buildPhase = ''
-      runHook preBuild
-      export HOME=$TMPDIR
-      export SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt
+    # yarn.lock lives in cli/, not the sourceRoot — disable auto-hook
+    dontYarnInstallDeps = true;
 
-      cd cli
-      yarn install --frozen-lockfile --ignore-engines
-      cd ..
-
-      runHook postBuild
+    postConfigure = ''
+      pushd cli
+      yarnOfflineCache="${cliOfflineCache}" yarnConfigHook
+      npm rebuild --verbose
+      popd
     '';
+
+    dontBuild = true;
 
     installPhase = ''
       runHook preInstall
