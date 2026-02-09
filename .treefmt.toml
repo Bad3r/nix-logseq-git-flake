@@ -1,37 +1,3 @@
-[formatter.nixfmt]
-command = "nixfmt"
-excludes = []
-includes = ["*.nix"]
-options = []
-
-[formatter.prettier]
-command = "prettier"
-includes = [
-    "*.cjs",
-    "*.css",
-    "*.html",
-    "*.js",
-    "*.json",
-    "*.json5",
-    "*.jsx",
-    "*.md",
-    "*.mdx",
-    "*.mjs",
-    "*.scss",
-    "*.ts",
-    "*.tsx",
-    "*.vue",
-    "*.yaml",
-    "*.yml",
-]
-options = ["--write"]
-
-[formatter.shfmt]
-command = "shfmt"
-excludes = []
-includes = ["*.sh", "*.bash", "*.envrc", "*.envrc.*"]
-options = ["-s", "-w", "-i", "2"]
-
 [global]
 excludes = [
     "*.lock",
@@ -42,5 +8,55 @@ excludes = [
     ".gitmodules",
     ".hgignore",
     ".svnignore",
+    "lefthook.yml",
 ]
 on-unmatched = "warn"
+
+[formatter.nixfmt]
+command = "nixfmt"
+includes = ["*.nix"]
+
+[formatter.biome]
+command = "biome"
+includes = [
+    "*.js",
+    "*.mjs",
+    "*.cjs",
+    "*.ts",
+    "*.mts",
+    "*.cts",
+    "*.d.ts",
+    "*.d.mts",
+    "*.d.cts",
+    "*.jsx",
+    "*.tsx",
+    "*.json",
+    "*.jsonc",
+    "*.css",
+    "*.graphql",
+    "*.gql",
+    "*.html",
+]
+options = ["format", "--write"]
+
+[formatter.prettier]
+command = "prettier"
+includes = [
+    "*.md",
+    "*.mdx",
+    "*.yaml",
+    "*.yml",
+]
+options = ["--write"]
+
+[formatter.shfmt]
+command = "shfmt"
+includes = ["*.sh", "*.bash", "*.envrc", "*.envrc.*"]
+options = ["-s", "-w", "-i", "2"]
+
+[formatter.actionlint]
+command = "actionlint"
+includes = [
+    ".github/workflows/*.yml",
+    ".github/workflows/*.yaml",
+]
