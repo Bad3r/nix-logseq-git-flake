@@ -109,9 +109,10 @@ jobs:
               core.warning('Policy jobs also failed — PR may still be blocked after code fixes');
             }
 
-            // 8000 chars per job keeps total under GitHub's 1MB step output limit
-            // even with many failed jobs serialized via toJSON().
-            const MAX_LOG_CHARS = 8000;
+            // 16K chars per job keeps total well under GitHub's 1MB step output
+            // limit even with many failed jobs serialized via toJSON().
+            // Nix builds produce long output; 8K was too tight for full context.
+            const MAX_LOG_CHARS = 16000;
             // Match error keywords anywhere on the line (not just at start),
             // plus common build-system patterns like "undefined reference".
             const ERROR_PATTERNS = /.*(error|FAIL|FAILED|fatal|panic|exception|assert|undefined reference|cannot find|no such file|command not found|permission denied|compilation terminated|segmentation fault|killed|aborted).*/gim;
