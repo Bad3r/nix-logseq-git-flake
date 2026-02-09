@@ -1,6 +1,6 @@
 ---
 # Git hooks manager - https://lefthook.dev/
-min_version: 1.10.0
+min_version: 1.10.0 # required for glob_matcher: doublestar
 glob_matcher: doublestar
 rc: ./scripts/lefthook-rc.sh
 

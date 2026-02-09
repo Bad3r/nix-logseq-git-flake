@@ -19,7 +19,7 @@ nix run .#logseq-cli -- --help
 
 # Validation (CI runs these on every push/PR)
 nix flake check           # builds checks + evaluates flake
-nix fmt                   # format all Nix files (nixfmt)
+nix fmt                   # format all files (nixfmt, biome, prettier, shfmt)
 
 # Linters (also run as lefthook pre-commit hooks)
 nix run nixpkgs#deadnix -- --fail
@@ -77,7 +77,7 @@ nix develop -c lefthook run pre-commit
 ```
 
 **Hooks** (run in priority order):
-1. **formatting** — `nix fmt -- --fail-on-change` (treefmt with nixfmt, biome, prettier, shfmt)
+1. **formatting** — `nix fmt -- --fail-on-change` (treefmt with nixfmt, biome, prettier, shfmt). CI uses `--ci` instead, which also disables the cache and adjusts output for CI environments.
 2. **linting** (parallel) — deadnix, statix (`*.nix`), actionlint (`.github/workflows/`), shellcheck (`*.sh`)
 3. **file-hygiene** — trailing whitespace, EOF newline, merge conflicts, JSON/YAML validation
 

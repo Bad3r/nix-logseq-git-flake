@@ -152,6 +152,9 @@
               return 0
             }
 
+            # Exclude: Nix build output (result/), dev env (.direnv/), VCS (.git/),
+            # language build dirs (node_modules/, dist/, build/, target/),
+            # and lockfiles/patches that may have intentional formatting.
             is_excluded() {
               case "$1" in
                 result/*|.direnv/*|.git/*|node_modules/*|dist/*|build/*|target/*|*.lock|*.patch) return 0 ;;
@@ -299,6 +302,8 @@
             touch $out
           '';
         };
+        # hooks shell is separate from default so it can stay minimal for
+        # lefthook-rc.sh PATH caching; default may gain extra dev tools later.
         devShells =
           let
             hookShell = pkgs.mkShell {
