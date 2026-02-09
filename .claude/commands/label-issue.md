@@ -28,14 +28,14 @@ TASK OVERVIEW:
    - The issue title and description
    - The type of issue (bug report, feature request, question, etc.)
    - Technical areas mentioned (nix, logseq, electron, cli, flake, ci, gpu, etc.)
-   - Severity or priority indicators (P1 = critical, P2 = medium, P3 = low)
+   - Severity or priority indicators (P1 = critical/blocking, P2 = important but not blocking, P3 = nice to have)
    - Components affected (desktop-app, cli, packaging, nightly-build, etc.)
-   - Whether the issue originates upstream in Logseq itself
+   - Whether the issue originates upstream in Logseq itself (use `upstream` label)
 
 4. Select appropriate labels from the available labels list:
    - Choose labels that accurately reflect the issue's nature
    - Be specific but comprehensive
-   - If you find similar issues using gh search, consider using a "duplicate" label if appropriate. Only do so if the issue is a duplicate of another OPEN issue.
+   - Do NOT apply the "duplicate" label — duplicate detection is handled by a separate workflow.
 
 5. Apply the selected labels:
    - Use `gh issue edit` to apply your selected labels
@@ -49,4 +49,7 @@ IMPORTANT GUIDELINES:
 - Only select labels from the provided list above
 - DO NOT post any comments to the issue
 - Your ONLY action should be to apply labels using gh issue edit
-- It's okay to not add any labels if none are clearly applicable
+- Apply a label only when the issue clearly matches it — when in doubt, skip it
+- Always apply exactly one type label (bug, enhancement, question, or documentation)
+- Apply component labels (nix, flake, desktop-app, cli, ci, etc.) only when explicitly mentioned
+- Apply priority labels only when severity is clearly stated or obvious (e.g. crash = P1)

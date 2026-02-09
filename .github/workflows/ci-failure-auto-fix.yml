@@ -1,0 +1,267 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: "Claude: Auto Fix CI"
+
+on:
+  workflow_run:
+    workflows: ["Validate Flake"]
+    types:
+      - completed
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  issues: write
+  id-token: write
+
+concurrency:
+  group: auto-fix-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  # Fork PRs excluded (head_repository check) — we don't auto-fix untrusted code.
+  check-permissions:
+    if: |
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.pull_requests[0] &&
+      !startsWith(github.event.workflow_run.head_branch, 'claude-auto-fix-ci-') &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.check.outputs.result }}
+    steps:
+      - name: Check PR author permissions
+        id: check
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pr = context.payload.workflow_run.pull_requests[0];
+            if (!pr) return false;
+            const prData = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number
+            });
+            const association = prData.data.author_association;
+            return ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(association);
+
+  auto-fix:
+    needs: check-permissions
+    if: needs.check-permissions.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup git identity
+        run: |
+          git config --global user.email "claude[bot]@users.noreply.github.com"
+          git config --global user.name "claude[bot]"
+
+      - name: Create fix branch
+        id: branch
+        env:
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          SAFE_BRANCH=$(echo "$HEAD_BRANCH" | tr -cd '[:alnum:]-_' | head -c 60)
+          BRANCH_NAME="claude-auto-fix-ci-${SAFE_BRANCH}-${RUN_ID}"
+          git checkout -b "$BRANCH_NAME"
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Get CI failure details
+        id: failure_details
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const run = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: ${{ github.event.workflow_run.id }}
+            });
+
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: ${{ github.event.workflow_run.id }}
+            });
+
+            // Skip policy/label-gate jobs — those failures need human action, not code fixes.
+            const policyFailed = jobs.data.jobs.some(job =>
+              job.conclusion === 'failure' && job.name.toLowerCase().includes('policy')
+            );
+            const failedJobs = jobs.data.jobs.filter(job =>
+              job.conclusion === 'failure' && !job.name.toLowerCase().includes('policy')
+            );
+
+            if (failedJobs.length === 0) {
+              core.setOutput('result', JSON.stringify({ skip: true }));
+              return { skip: true };
+            }
+
+            if (policyFailed) {
+              core.warning('Policy jobs also failed — PR may still be blocked after code fixes');
+            }
+
+            // 16K chars per job keeps total well under GitHub's 1MB step output
+            // limit even with many failed jobs serialized via toJSON().
+            // Nix builds produce long output; 8K was too tight for full context.
+            const MAX_LOG_CHARS = 16000;
+            // Match error keywords anywhere on the line (not just at start),
+            // plus common build-system patterns like "undefined reference".
+            const ERROR_PATTERNS = /.*(error|FAIL|FAILED|fatal|panic|exception|assert|undefined reference|cannot find|no such file|command not found|permission denied|compilation terminated|segmentation fault|killed|aborted).*/gim;
+
+            function extractRelevantLines(logText) {
+              // Try to extract error lines first
+              const errorLines = [];
+              let match;
+              while ((match = ERROR_PATTERNS.exec(logText)) !== null) {
+                errorLines.push(match[0].trim());
+              }
+              if (errorLines.length > 0) {
+                const errorExcerpt = errorLines.join('\n');
+                if (errorExcerpt.length <= MAX_LOG_CHARS) return errorExcerpt;
+                return errorExcerpt.slice(0, MAX_LOG_CHARS) + '\n...(truncated)';
+              }
+              // Fall back to tail of log
+              if (logText.length <= MAX_LOG_CHARS) return logText;
+              return '...(truncated)\n' + logText.slice(-MAX_LOG_CHARS);
+            }
+
+            let errorLogs = [];
+            for (const job of failedJobs) {
+              try {
+                const logs = await github.rest.actions.downloadJobLogsForWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  job_id: job.id
+                });
+                let logText = '';
+                if (typeof logs.data === 'string') {
+                  logText = logs.data;
+                } else if (Buffer.isBuffer(logs.data)) {
+                  // ZIP archives (magic bytes: 50 4B 03 04) can't be decoded inline.
+                  if (logs.data.length >= 4 &&
+                      logs.data[0] === 0x50 && logs.data[1] === 0x4B &&
+                      logs.data[2] === 0x03 && logs.data[3] === 0x04) {
+                    logText = '(Log is a ZIP archive — too large to process inline)';
+                  } else {
+                    logText = logs.data.toString('utf8');
+                  }
+                } else if (logs.data) {
+                  logText = String(logs.data);
+                }
+                errorLogs.push({
+                  jobName: job.name,
+                  logs: extractRelevantLines(logText)
+                });
+              } catch (e) {
+                errorLogs.push({
+                  jobName: job.name,
+                  logs: `(failed to fetch logs: ${e.message})`
+                });
+              }
+            }
+
+            return {
+              runUrl: run.data.html_url,
+              failedJobs: failedJobs.map(j => j.name),
+              errorLogs: errorLogs,
+              policyFailed: policyFailed
+            };
+
+      - name: Skip if only policy jobs failed
+        if: fromJSON(steps.failure_details.outputs.result).skip == true
+        run: |
+          echo "::notice::Only policy/label-gate jobs failed — no code fixes needed."
+          exit 0
+
+      - name: Fix CI failures with Claude
+        if: fromJSON(steps.failure_details.outputs.result).skip != true
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            /fix-ci
+            Failed CI Run: ${{ fromJSON(steps.failure_details.outputs.result).runUrl }}
+            Failed Jobs: ${{ join(fromJSON(steps.failure_details.outputs.result).failedJobs, ', ') }}
+            PR Number: ${{ github.event.workflow_run.pull_requests[0].number }}
+            Branch Name: ${{ steps.branch.outputs.branch_name }}
+            Base Branch: ${{ github.event.workflow_run.head_branch }}
+            Repository: ${{ github.repository }}
+
+            ${{ fromJSON(steps.failure_details.outputs.result).policyFailed && 'NOTE: Policy jobs also failed. After fixing code issues, a maintainer must add the required label.' || '' }}
+
+            Error logs:
+            ${{ toJSON(fromJSON(steps.failure_details.outputs.result).errorLogs) }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model opus
+            --allowedTools 'Edit,MultiEdit,Write,Read,Glob,Grep,LS,Bash(git:*),Bash(nix:*),Bash(gh:*)'
+
+      - name: Create PR for auto-fix
+        if: steps.claude.outcome == 'success' && fromJSON(steps.failure_details.outputs.result).skip != true
+        id: fix_pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH_NAME: ${{ steps.branch.outputs.branch_name }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_URL: ${{ fromJSON(steps.failure_details.outputs.result).runUrl }}
+        run: |
+          # Only create PR if there are actual commits on the fix branch
+          if git log --oneline "$HEAD_BRANCH".."$BRANCH_NAME" | grep -q .; then
+            git push origin "$BRANCH_NAME"
+            PR_URL=$(gh pr create \
+              --base "$HEAD_BRANCH" \
+              --head "$BRANCH_NAME" \
+              --title "fix(ci): auto-fix failures from $HEAD_BRANCH" \
+              --body "Automated fixes for CI failures.
+
+            Failed run: $RUN_URL
+            Source branch: \`$HEAD_BRANCH\`")
+            echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Claude ran but produced no commits."
+          fi
+
+      - name: Notify original PR
+        if: always() && fromJSON(steps.failure_details.outputs.result).skip != true
+        uses: actions/github-script@v8
+        env:
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          BRANCH_NAME: ${{ steps.branch.outputs.branch_name }}
+          RUN_URL: ${{ fromJSON(steps.failure_details.outputs.result).runUrl }}
+          CLAUDE_OUTCOME: ${{ steps.claude.outcome }}
+          FIX_PR_URL: ${{ steps.fix_pr.outputs.pr_url }}
+          POLICY_FAILED: ${{ fromJSON(steps.failure_details.outputs.result).policyFailed }}
+        with:
+          script: |
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
+            const branch = process.env.BRANCH_NAME;
+            const runUrl = process.env.RUN_URL;
+            const outcome = process.env.CLAUDE_OUTCOME;
+            const fixPrUrl = process.env.FIX_PR_URL;
+            const policyFailed = process.env.POLICY_FAILED === 'true';
+            const policyNote = policyFailed
+              ? '\n\n**Note**: Policy/label jobs also failed. A maintainer must add the required label before this PR can merge.'
+              : '';
+            let status;
+            if (outcome === 'success' && fixPrUrl) {
+              status = `pushed fixes — review at ${fixPrUrl}`;
+            } else if (outcome === 'success') {
+              status = 'ran but produced no commits';
+            } else {
+              status = 'could not auto-fix';
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `**Auto-fix CI** ${status}\n\nFailed run: ${runUrl}\nFix branch: \`${branch}\`${policyNote}`
+            });
