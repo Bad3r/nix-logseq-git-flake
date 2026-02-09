@@ -115,12 +115,14 @@ jobs:
       - name: Enforce security review label for sensitive changes
         if: steps.detect.outputs.sensitive_changed == 'true'
         uses: actions/github-script@v8
+        env:
+          MATCHED_FILES: ${{ steps.detect.outputs.matched_files }}
         with:
           script: |
             const requiredLabel = "security-review-approved";
             const labels = (context.payload.pull_request.labels || []).map((label) => label.name);
             if (!labels.includes(requiredLabel)) {
-              const changed = `${{ steps.detect.outputs.matched_files }}`;
+              const changed = process.env.MATCHED_FILES;
               core.setFailed(
                 [
                   `Sensitive file changes detected:\n${changed}`,
