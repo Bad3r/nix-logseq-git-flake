@@ -110,6 +110,134 @@
           fi
           exec ${logseqFhs}/bin/logseq-fhs "$@"
         '';
+        lefthookStatix = pkgs.writeShellApplication {
+          name = "lefthook-statix";
+          runtimeInputs = [
+            pkgs.coreutils
+            pkgs.statix
+          ];
+          text = ''
+            set -euo pipefail
+
+            if [ "$#" -eq 0 ]; then
+              statix check --format errfmt
+              exit 0
+            fi
+
+            status=0
+            for file in "$@"; do
+              if [ -f "$file" ]; then
+                statix check --format errfmt "$file" || status=$?
+              fi
+            done
+            exit "$status"
+          '';
+        };
+        lefthookFileHygiene = pkgs.writeShellApplication {
+          name = "lefthook-file-hygiene";
+          runtimeInputs = [
+            pkgs.coreutils
+            pkgs.file
+            pkgs.gnugrep
+            pkgs.jq
+            pkgs.yq-go
+          ];
+          text = ''
+            set -euo pipefail
+
+            status=0
+
+            is_binary() {
+              file --mime-type -b "$1" 2>/dev/null | grep -q "^text/" && return 1
+              return 0
+            }
+
+            # Exclude: Nix build output (result/), dev env (.direnv/), VCS (.git/),
+            # language build dirs (node_modules/, dist/, build/, target/),
+            # and lockfiles/patches that may have intentional formatting.
+            is_excluded() {
+              case "$1" in
+                result/*|.direnv/*|.git/*|node_modules/*|dist/*|build/*|target/*|*.lock|*.patch) return 0 ;;
+                *) return 1 ;;
+              esac
+            }
+
+            for file in "$@"; do
+              [ -f "$file" ] || continue
+              is_excluded "$file" && continue
+              is_binary "$file" && continue
+
+              # Trailing whitespace
+              if grep -Pn '\s+$' "$file" >/dev/null 2>&1; then
+                echo "trailing-whitespace: $file"
+                grep -Pn '\s+$' "$file" | head -5
+                status=1
+              fi
+
+              # End-of-file newline
+              if [ -s "$file" ]; then
+                last_byte=$(tail -c1 "$file" | od -An -tx1 | tr -d ' ')
+                if [ "$last_byte" != "0a" ]; then
+                  echo "missing-eof-newline: $file"
+                  status=1
+                fi
+              fi
+
+              # Merge conflicts (pattern split to avoid self-match in source)
+              conflict_marker="<""<""<""<""<""<""< "
+              if grep -n "$conflict_marker" "$file" >/dev/null 2>&1; then
+                echo "merge-conflict: $file"
+                grep -n "$conflict_marker\|=======\|>>>>>>>" "$file" | head -10
+                status=1
+              fi
+
+              # JSON validation
+              case "$file" in
+                *.json)
+                  if ! jq empty "$file" 2>/dev/null; then
+                    echo "invalid-json: $file"
+                    status=1
+                  fi
+                  ;;
+              esac
+
+              # YAML validation
+              case "$file" in
+                *.yaml|*.yml)
+                  if ! yq '.' "$file" >/dev/null 2>&1; then
+                    echo "invalid-yaml: $file"
+                    status=1
+                  fi
+                  ;;
+              esac
+            done
+
+            exit "$status"
+          '';
+        };
+        hookToolPackages = [
+          pkgs.lefthook
+          pkgs.deadnix
+          pkgs.statix
+          pkgs.nixfmt
+          pkgs.biome
+          pkgs.actionlint
+          pkgs.shellcheck
+          pkgs.nodePackages.prettier
+          pkgs.shfmt
+          pkgs.jq
+          pkgs.yq-go
+          lefthookStatix
+          lefthookFileHygiene
+        ];
+        hookShellSetup = ''
+          if command -v lefthook >/dev/null 2>&1; then
+            pre_commit_hook="$(git rev-parse --git-path hooks/pre-commit 2>/dev/null || echo ".git/hooks/pre-commit")"
+            if [ ! -f "$pre_commit_hook" ] || ! grep -q "lefthook" "$pre_commit_hook" 2>/dev/null; then
+              lefthook install 2>/dev/null || true
+            fi
+          fi
+        '';
         cli = pkgs.callPackage ./lib/cli.nix {
           inherit (manifest)
             logseqRev
@@ -174,6 +302,23 @@
             touch $out
           '';
         };
+        # hooks shell is separate from default so it can stay minimal for
+        # lefthook-rc.sh PATH caching; default may gain extra dev tools later.
+        devShells =
+          let
+            hookShell = pkgs.mkShell {
+              packages = [
+                pkgs.coreutils
+                pkgs.git
+              ]
+              ++ hookToolPackages;
+              shellHook = hookShellSetup;
+            };
+          in
+          {
+            default = hookShell;
+            hooks = hookShell;
+          };
         formatter = pkgs.nixfmt-tree;
       }
     )
