@@ -24,7 +24,8 @@ jobs:
     if: |
       github.event.workflow_run.conclusion == 'failure' &&
       github.event.workflow_run.pull_requests[0] &&
-      !startsWith(github.event.workflow_run.head_branch, 'claude-auto-fix-ci-')
+      !startsWith(github.event.workflow_run.head_branch, 'claude-auto-fix-ci-') &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -69,6 +70,9 @@ jobs:
             });
 
             // Skip policy/label-gate jobs — those failures need human action, not code fixes.
+            const policyFailed = jobs.data.jobs.some(job =>
+              job.conclusion === 'failure' && job.name.toLowerCase().includes('policy')
+            );
             const failedJobs = jobs.data.jobs.filter(job =>
               job.conclusion === 'failure' && !job.name.toLowerCase().includes('policy')
             );
@@ -78,12 +82,16 @@ jobs:
               return { skip: true };
             }
 
+            if (policyFailed) {
+              core.warning('Policy jobs also failed — PR may still be blocked after code fixes');
+            }
+
             // 8000 chars per job keeps total under GitHub's 1MB step output limit
             // even with many failed jobs serialized via toJSON().
             const MAX_LOG_CHARS = 8000;
             // Match error keywords anywhere on the line (not just at start),
             // plus common build-system patterns like "undefined reference".
-            const ERROR_PATTERNS = /^.*(?:error|ERROR|FAIL|FAILED|fatal|panic|exception|assert|undefined reference|cannot find|no such file|command not found|permission denied)[\s:\[].*/gim;
+            const ERROR_PATTERNS = /^.*(?:error|ERROR|FAIL|FAILED|fatal|panic|exception|assert|undefined reference|cannot find|no such file|command not found|permission denied).*$/gim;
 
             function extractRelevantLines(logText) {
               // Try to extract error lines first
@@ -110,7 +118,14 @@ jobs:
                   repo: context.repo.repo,
                   job_id: job.id
                 });
-                const logText = typeof logs.data === 'string' ? logs.data : '';
+                let logText = '';
+                if (typeof logs.data === 'string') {
+                  logText = logs.data;
+                } else if (Buffer.isBuffer(logs.data)) {
+                  logText = logs.data.toString('utf8');
+                } else if (logs.data) {
+                  logText = String(logs.data);
+                }
                 errorLogs.push({
                   jobName: job.name,
                   logs: extractRelevantLines(logText)
@@ -126,7 +141,8 @@ jobs:
             return {
               runUrl: run.data.html_url,
               failedJobs: failedJobs.map(j => j.name),
-              errorLogs: errorLogs
+              errorLogs: errorLogs,
+              policyFailed: policyFailed
             };
 
       - name: Skip if only policy jobs failed
@@ -148,6 +164,8 @@ jobs:
             Branch Name: ${{ steps.branch.outputs.branch_name }}
             Base Branch: ${{ github.event.workflow_run.head_branch }}
             Repository: ${{ github.repository }}
+
+            ${{ fromJSON(steps.failure_details.outputs.result).policyFailed && 'NOTE: Policy jobs also failed. After fixing code issues, a maintainer must add the required label.' || '' }}
 
             Error logs:
             ${{ toJSON(fromJSON(steps.failure_details.outputs.result).errorLogs) }}

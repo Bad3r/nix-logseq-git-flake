@@ -17,6 +17,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Notify external contributors that @claude is restricted to maintainers.
+  notify-external:
+    if: |
+      (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') &&
+         github.event.comment.author_association != 'OWNER' && github.event.comment.author_association != 'MEMBER' && github.event.comment.author_association != 'COLLABORATOR')
+        ||
+        (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
+         github.event.issue.author_association != 'OWNER' && github.event.issue.author_association != 'MEMBER' && github.event.issue.author_association != 'COLLABORATOR')
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Post notice
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const number = context.issue?.number || context.payload.pull_request?.number;
+            if (number) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: number,
+                body: 'Only repository maintainers can invoke `@claude`. A maintainer will review your request.'
+              });
+            }
+
   claude:
     if: |
       (

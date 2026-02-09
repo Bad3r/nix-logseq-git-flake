@@ -31,7 +31,7 @@ jobs:
               pull_number: context.payload.pull_request.number
             });
             const hasClaudeReview = reviews.data.some(r =>
-              r.user?.login?.includes('claude') || r.user?.type === 'Bot'
+              r.user?.login === 'claude[bot]'
             );
             return hasClaudeReview;
 
@@ -39,7 +39,7 @@ jobs:
         if: steps.existing.outputs.result != 'true'
         uses: actions/checkout@v6
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Run PR review
         id: claude

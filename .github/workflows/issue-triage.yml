@@ -25,7 +25,20 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Check if already labeled
+        id: check_labels
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const issue = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number
+            });
+            return issue.data.labels.length > 0;
+
       - name: Validate label-issue command exists
+        if: steps.check_labels.outputs.result != 'true'
         run: |
           if [ ! -f ".claude/commands/label-issue.md" ]; then
             echo "::error::Missing .claude/commands/label-issue.md"
@@ -34,6 +47,7 @@ jobs:
 
       - name: Run Claude Code for Issue Triage
         id: claude
+        if: steps.check_labels.outputs.result != 'true'
         uses: anthropics/claude-code-action@v1
         with:
           prompt: "/label-issue REPO: ${{ github.repository }} ISSUE_NUMBER: ${{ github.event.issue.number }}"
@@ -42,7 +56,7 @@ jobs:
             --model opus
 
       - name: Notify on failure
-        if: failure() && steps.claude.outcome == 'failure'
+        if: failure() && steps.claude.outcome == 'failure' && steps.check_labels.outputs.result != 'true'
         uses: actions/github-script@v8
         with:
           script: |

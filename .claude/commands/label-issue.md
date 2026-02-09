@@ -35,7 +35,7 @@ TASK OVERVIEW:
 4. Select appropriate labels from the available labels list:
    - Choose labels that accurately reflect the issue's nature
    - Be specific but comprehensive
-   - Do NOT check for or apply duplicate labels — that is handled by a separate deduplication workflow.
+   - Do NOT apply the "duplicate" label — duplicate detection is handled by a separate workflow.
 
 5. Apply the selected labels:
    - Use `gh issue edit` to apply your selected labels
