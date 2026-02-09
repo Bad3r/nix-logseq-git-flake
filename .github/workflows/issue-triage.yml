@@ -25,11 +25,30 @@ jobs:
         with:
           fetch-depth: 1
 
-      # NOTE: requires a .claude/commands/label-issue.md file in the repo
+      - name: Validate label-issue command exists
+        run: |
+          if [ ! -f ".claude/commands/label-issue.md" ]; then
+            echo "::error::Missing .claude/commands/label-issue.md"
+            exit 1
+          fi
+
       - name: Run Claude Code for Issue Triage
+        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           prompt: "/label-issue REPO: ${{ github.repository }} ISSUE_NUMBER: ${{ github.event.issue.number }}"
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --model opus
+
+      - name: Notify on failure
+        if: failure() && steps.claude.outcome == 'failure'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: `Auto-triage failed. [Workflow run](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}).`
+            });

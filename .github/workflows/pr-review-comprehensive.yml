@@ -19,12 +19,31 @@ jobs:
       pull-requests: write
       id-token: write
     steps:
+      - name: Check for existing Claude review
+        id: existing
+        if: github.event.action == 'opened' || github.event.action == 'reopened'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const reviews = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number
+            });
+            const hasClaudeReview = reviews.data.some(r =>
+              r.user?.login?.includes('claude') || r.user?.type === 'Bot'
+            );
+            return hasClaudeReview;
+
       - name: Checkout repository
+        if: steps.existing.outputs.result != 'true'
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
       - name: Run PR review
+        id: claude
+        if: steps.existing.outputs.result != 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -65,4 +84,16 @@ jobs:
 
           claude_args: |
             --model opus
-            --allowedTools "Read,Glob,Grep,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(nix:*)"
+            --allowedTools "Read,Glob,Grep,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(git:*),Bash(nix:*)"
+
+      - name: Notify on failure
+        if: failure() && steps.claude.outcome == 'failure'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `PR review failed. [Workflow run](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}).`
+            });

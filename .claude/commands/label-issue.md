@@ -35,7 +35,7 @@ TASK OVERVIEW:
 4. Select appropriate labels from the available labels list:
    - Choose labels that accurately reflect the issue's nature
    - Be specific but comprehensive
-   - If you find similar issues using gh search, consider using a "duplicate" label if appropriate. Only do so if the issue is a duplicate of another OPEN issue.
+   - Do NOT check for or apply duplicate labels — that is handled by a separate deduplication workflow.
 
 5. Apply the selected labels:
    - Use `gh issue edit` to apply your selected labels
