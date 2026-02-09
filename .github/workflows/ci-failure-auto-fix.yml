@@ -66,17 +66,29 @@ jobs:
 
             const failedJobs = jobs.data.jobs.filter(job => job.conclusion === 'failure');
 
+            const MAX_LOG_CHARS = 20000;
             let errorLogs = [];
             for (const job of failedJobs) {
-              const logs = await github.rest.actions.downloadJobLogsForWorkflowRun({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                job_id: job.id
-              });
-              errorLogs.push({
-                jobName: job.name,
-                logs: logs.data
-              });
+              try {
+                const logs = await github.rest.actions.downloadJobLogsForWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  job_id: job.id
+                });
+                const logText = typeof logs.data === 'string' ? logs.data : '';
+                const truncated = logText.length > MAX_LOG_CHARS
+                  ? '...(truncated)\n' + logText.slice(-MAX_LOG_CHARS)
+                  : logText;
+                errorLogs.push({
+                  jobName: job.name,
+                  logs: truncated
+                });
+              } catch (e) {
+                errorLogs.push({
+                  jobName: job.name,
+                  logs: `(failed to fetch logs: ${e.message})`
+                });
+              }
             }
 
             return {
