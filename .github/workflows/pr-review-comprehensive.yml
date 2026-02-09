@@ -19,27 +19,44 @@ jobs:
       pull-requests: write
       id-token: write
     steps:
-      - name: Check for existing Claude review
+      - name: Check for recent Claude activity
         id: existing
-        if: github.event.action == 'opened' || github.event.action == 'reopened'
         uses: actions/github-script@v8
         with:
           script: |
+            const prNumber = context.payload.pull_request.number;
+
+            // Check reviews
             const reviews = await github.rest.pulls.listReviews({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number
+              pull_number: prNumber
             });
-            const hasClaudeReview = reviews.data.some(r =>
-              r.user?.login === 'claude[bot]'
+
+            // Check comments
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber
+            });
+
+            // Skip if Claude posted a review or comment in the last hour
+            const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+            const recentReview = reviews.data.some(r =>
+              r.user?.login === 'claude[bot]' &&
+              new Date(r.submitted_at) > oneHourAgo
             );
-            return hasClaudeReview;
+            const recentComment = comments.data.some(c =>
+              c.user?.login === 'claude[bot]' &&
+              new Date(c.created_at) > oneHourAgo
+            );
+            return recentReview || recentComment;
 
       - name: Checkout repository
         if: steps.existing.outputs.result != 'true'
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 50
 
       - name: Run PR review
         id: claude

@@ -20,12 +20,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  auto-fix:
+  # Fork PRs excluded (head_repository check) — we don't auto-fix untrusted code.
+  check-permissions:
     if: |
       github.event.workflow_run.conclusion == 'failure' &&
       github.event.workflow_run.pull_requests[0] &&
       !startsWith(github.event.workflow_run.head_branch, 'claude-auto-fix-ci-') &&
       github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.check.outputs.result }}
+    steps:
+      - name: Check PR author permissions
+        id: check
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pr = context.payload.workflow_run.pull_requests[0];
+            if (!pr) return false;
+            const prData = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number
+            });
+            const association = prData.data.author_association;
+            return ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(association);
+
+  auto-fix:
+    needs: check-permissions
+    if: needs.check-permissions.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -91,7 +114,7 @@ jobs:
             const MAX_LOG_CHARS = 8000;
             // Match error keywords anywhere on the line (not just at start),
             // plus common build-system patterns like "undefined reference".
-            const ERROR_PATTERNS = /^.*(?:error|ERROR|FAIL|FAILED|fatal|panic|exception|assert|undefined reference|cannot find|no such file|command not found|permission denied).*$/gim;
+            const ERROR_PATTERNS = /.*(error|FAIL|FAILED|fatal|panic|exception|assert|undefined reference|cannot find|no such file|command not found|permission denied|compilation terminated|segmentation fault|killed|aborted).*/gim;
 
             function extractRelevantLines(logText) {
               // Try to extract error lines first
@@ -122,7 +145,14 @@ jobs:
                 if (typeof logs.data === 'string') {
                   logText = logs.data;
                 } else if (Buffer.isBuffer(logs.data)) {
-                  logText = logs.data.toString('utf8');
+                  // ZIP archives (magic bytes: 50 4B 03 04) can't be decoded inline.
+                  if (logs.data.length >= 4 &&
+                      logs.data[0] === 0x50 && logs.data[1] === 0x4B &&
+                      logs.data[2] === 0x03 && logs.data[3] === 0x04) {
+                    logText = '(Log is a ZIP archive — too large to process inline)';
+                  } else {
+                    logText = logs.data.toString('utf8');
+                  }
                 } else if (logs.data) {
                   logText = String(logs.data);
                 }
@@ -208,6 +238,7 @@ jobs:
           RUN_URL: ${{ fromJSON(steps.failure_details.outputs.result).runUrl }}
           CLAUDE_OUTCOME: ${{ steps.claude.outcome }}
           FIX_PR_URL: ${{ steps.fix_pr.outputs.pr_url }}
+          POLICY_FAILED: ${{ fromJSON(steps.failure_details.outputs.result).policyFailed }}
         with:
           script: |
             const prNumber = parseInt(process.env.PR_NUMBER, 10);
@@ -215,6 +246,10 @@ jobs:
             const runUrl = process.env.RUN_URL;
             const outcome = process.env.CLAUDE_OUTCOME;
             const fixPrUrl = process.env.FIX_PR_URL;
+            const policyFailed = process.env.POLICY_FAILED === 'true';
+            const policyNote = policyFailed
+              ? '\n\n**Note**: Policy/label jobs also failed. A maintainer must add the required label before this PR can merge.'
+              : '';
             let status;
             if (outcome === 'success' && fixPrUrl) {
               status = `pushed fixes — review at ${fixPrUrl}`;
@@ -227,5 +262,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: prNumber,
-              body: `**Auto-fix CI** ${status}\n\nFailed run: ${runUrl}\nFix branch: \`${branch}\``
+              body: `**Auto-fix CI** ${status}\n\nFailed run: ${runUrl}\nFix branch: \`${branch}\`${policyNote}`
             });

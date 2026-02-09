@@ -12,6 +12,8 @@ on:
   pull_request_review:
     types: [submitted]
 
+# Multiple @claude requests on the same issue/PR cancel earlier runs,
+# allowing users to correct their request without waiting.
 concurrency:
   group: claude-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
@@ -38,11 +40,12 @@ jobs:
           script: |
             const number = context.issue?.number || context.payload.pull_request?.number;
             if (number) {
+              const actor = context.payload.comment?.user?.login || context.payload.issue?.user?.login || 'unknown';
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: number,
-                body: 'Only repository maintainers can invoke `@claude`. A maintainer will review your request.'
+                body: `@${context.repo.owner} External contributor @${actor} requested Claude assistance. Only repository maintainers can invoke \`@claude\`.`
               });
             }
 

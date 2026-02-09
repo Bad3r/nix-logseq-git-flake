@@ -40,20 +40,23 @@ jobs:
             2. Search for similar existing issues using mcp__github__search_issues with relevant keywords from the issue title and body
             3. Compare the new issue with existing ones to identify potential duplicates
 
-            Criteria for duplicates:
-            - Same bug or error being reported
-            - Same feature request (even if worded differently)
-            - Same question being asked
-            - Issues describing the same root problem
+            Criteria for TRUE duplicates (100% certainty required):
+            - The error message is IDENTICAL
+            - The symptoms are IDENTICAL
+            - The root cause is IDENTICAL
 
             Before taking any action, check existing comments on the issue to avoid
             duplicate bot comments. If a deduplication comment already exists, do nothing.
 
-            If you find a clear duplicate (high confidence only):
+            If you find a TRUE duplicate (100% certainty):
             - Apply a "duplicate" label to the new issue
             - Add ONE comment linking to the original issue(s)
             - Be polite and explain why it's a duplicate
             - Suggest the user follow the original issue for updates
+
+            If you find a POSSIBLE duplicate (related but not identical):
+            - Post a comment like: "This might be related to #X. Please check if that issue describes your problem."
+            - Do NOT apply the "duplicate" label
 
             If it's NOT a duplicate or you're unsure:
             - Don't add any comments
