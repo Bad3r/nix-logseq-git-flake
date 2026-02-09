@@ -148,16 +148,13 @@
             status=0
 
             is_binary() {
-              enc=$(file --mime-encoding -b "$1" 2>/dev/null || echo "binary")
-              case "$enc" in
-                us-ascii|utf-8|ascii) return 1 ;;
-                *) return 0 ;;
-              esac
+              file --mime-type -b "$1" 2>/dev/null | grep -q "^text/" && return 1
+              return 0
             }
 
             is_excluded() {
               case "$1" in
-                result/*|.direnv/*|.git/*|*.lock|*.patch) return 0 ;;
+                result/*|.direnv/*|.git/*|node_modules/*|dist/*|build/*|target/*|*.lock|*.patch) return 0 ;;
                 *) return 1 ;;
               esac
             }
@@ -222,6 +219,7 @@
           pkgs.nixfmt
           pkgs.biome
           pkgs.actionlint
+          pkgs.shellcheck
           pkgs.nodePackages.prettier
           pkgs.shfmt
           pkgs.jq
@@ -233,7 +231,7 @@
           if command -v lefthook >/dev/null 2>&1; then
             pre_commit_hook="$(git rev-parse --git-path hooks/pre-commit 2>/dev/null || echo ".git/hooks/pre-commit")"
             if [ ! -f "$pre_commit_hook" ] || ! grep -q "lefthook" "$pre_commit_hook" 2>/dev/null; then
-              lefthook install
+              lefthook install 2>/dev/null || true
             fi
           fi
         '';
@@ -301,24 +299,21 @@
             touch $out
           '';
         };
-        devShells = {
-          default = pkgs.mkShell {
-            packages = [
-              pkgs.coreutils
-              pkgs.git
-            ]
-            ++ hookToolPackages;
-            shellHook = hookShellSetup;
+        devShells =
+          let
+            hookShell = pkgs.mkShell {
+              packages = [
+                pkgs.coreutils
+                pkgs.git
+              ]
+              ++ hookToolPackages;
+              shellHook = hookShellSetup;
+            };
+          in
+          {
+            default = hookShell;
+            hooks = hookShell;
           };
-          hooks = pkgs.mkShell {
-            packages = [
-              pkgs.coreutils
-              pkgs.git
-            ]
-            ++ hookToolPackages;
-            shellHook = hookShellSetup;
-          };
-        };
         formatter = pkgs.nixfmt-tree;
       }
     )

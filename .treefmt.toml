@@ -8,7 +8,7 @@ excludes = [
     ".gitmodules",
     ".hgignore",
     ".svnignore",
-    "lefthook.yml",
+    "lefthook.yml", # excluded to prevent prettier from reformatting multiline YAML scalars
 ]
 on-unmatched = "warn"
 
@@ -54,9 +54,3 @@ command = "shfmt"
 includes = ["*.sh", "*.bash", "*.envrc", "*.envrc.*"]
 options = ["-s", "-w", "-i", "2"]
 
-[formatter.actionlint]
-command = "actionlint"
-includes = [
-    ".github/workflows/*.yml",
-    ".github/workflows/*.yaml",
-]

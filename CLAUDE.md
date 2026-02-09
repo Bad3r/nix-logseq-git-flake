@@ -77,8 +77,8 @@ nix develop -c lefthook run pre-commit
 ```
 
 **Hooks** (run in priority order):
-1. **formatting** — `nix fmt -- --check .` (nixfmt-tree)
-2. **nix-linting** (parallel, `*.nix` only) — deadnix, statix
+1. **formatting** — `nix fmt -- --fail-on-change` (treefmt with nixfmt, biome, prettier, shfmt)
+2. **linting** (parallel) — deadnix, statix (`*.nix`), actionlint (`.github/workflows/`), shellcheck (`*.sh`)
 3. **file-hygiene** — trailing whitespace, EOF newline, merge conflicts, JSON/YAML validation
 
 **Dev shells**:

@@ -27,21 +27,34 @@ pre-commit:
             run: nix fmt -- --fail-on-change
             fail_text: "Formatting differs. Run: nix fmt"
 
-    - name: nix-linting
+    - name: linting
       priority: 2
-      glob: "**/*.nix"
       group:
         parallel: true
         jobs:
           - name: deadnix
             tags: [nix]
+            glob: "**/*.nix"
             run: deadnix --fail -- {files}
             fail_text: "Unused Nix bindings found. Remove dead code shown above."
 
           - name: statix
             tags: [nix]
+            glob: "**/*.nix"
             run: lefthook-statix {files}
             fail_text: "Nix anti-patterns found. Run: statix fix <file>"
+
+          - name: actionlint
+            tags: [ci]
+            glob: ".github/workflows/*.{yml,yaml}"
+            run: actionlint {files}
+            fail_text: "GitHub Actions workflow issues found."
+
+          - name: shellcheck
+            tags: [shell]
+            glob: "**/*.sh"
+            run: shellcheck {files}
+            fail_text: "Shell script issues found."
 
     - name: file-hygiene
       priority: 3
