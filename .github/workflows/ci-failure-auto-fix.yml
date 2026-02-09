@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
-name: Auto Fix CI Failures
+name: "Claude: Auto Fix CI"
 
 on:
   workflow_run:
@@ -42,8 +42,12 @@ jobs:
 
       - name: Create fix branch
         id: branch
+        env:
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          RUN_ID: ${{ github.run_id }}
         run: |
-          BRANCH_NAME="claude-auto-fix-ci-${{ github.event.workflow_run.head_branch }}-${{ github.run_id }}"
+          SAFE_BRANCH=$(echo "$HEAD_BRANCH" | tr -cd '[:alnum:]-_' | head -c 60)
+          BRANCH_NAME="claude-auto-fix-ci-${SAFE_BRANCH}-${RUN_ID}"
           git checkout -b "$BRANCH_NAME"
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
@@ -66,7 +70,26 @@ jobs:
 
             const failedJobs = jobs.data.jobs.filter(job => job.conclusion === 'failure');
 
-            const MAX_LOG_CHARS = 20000;
+            const MAX_LOG_CHARS = 8000;
+            const ERROR_PATTERNS = /(?:^(?:error|Error|ERROR|FAIL|FAILED|fatal|panic|exception|assert)[\s:\[].+$)/gm;
+
+            function extractRelevantLines(logText) {
+              // Try to extract error lines first
+              const errorLines = [];
+              let match;
+              while ((match = ERROR_PATTERNS.exec(logText)) !== null) {
+                errorLines.push(match[0]);
+              }
+              if (errorLines.length > 0) {
+                const errorExcerpt = errorLines.join('\n');
+                if (errorExcerpt.length <= MAX_LOG_CHARS) return errorExcerpt;
+                return errorExcerpt.slice(0, MAX_LOG_CHARS) + '\n...(truncated)';
+              }
+              // Fall back to tail of log
+              if (logText.length <= MAX_LOG_CHARS) return logText;
+              return '...(truncated)\n' + logText.slice(-MAX_LOG_CHARS);
+            }
+
             let errorLogs = [];
             for (const job of failedJobs) {
               try {
@@ -76,12 +99,9 @@ jobs:
                   job_id: job.id
                 });
                 const logText = typeof logs.data === 'string' ? logs.data : '';
-                const truncated = logText.length > MAX_LOG_CHARS
-                  ? '...(truncated)\n' + logText.slice(-MAX_LOG_CHARS)
-                  : logText;
                 errorLogs.push({
                   jobName: job.name,
-                  logs: truncated
+                  logs: extractRelevantLines(logText)
                 });
               } catch (e) {
                 errorLogs.push({
@@ -114,5 +134,27 @@ jobs:
             ${{ toJSON(fromJSON(steps.failure_details.outputs.result).errorLogs) }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
-            --model claude-opus-4-5-20251101
+            --model claude-opus-4-6
             --allowedTools 'Edit,MultiEdit,Write,Read,Glob,Grep,LS,Bash(git:*),Bash(nix:*),Bash(gh:*)'
+
+      - name: Notify PR of auto-fix attempt
+        if: always()
+        uses: actions/github-script@v8
+        env:
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          BRANCH_NAME: ${{ steps.branch.outputs.branch_name }}
+          RUN_URL: ${{ fromJSON(steps.failure_details.outputs.result).runUrl }}
+          CLAUDE_OUTCOME: ${{ steps.claude.outcome }}
+        with:
+          script: |
+            const prNumber = parseInt(process.env.PR_NUMBER, 10);
+            const branch = process.env.BRANCH_NAME;
+            const runUrl = process.env.RUN_URL;
+            const outcome = process.env.CLAUDE_OUTCOME;
+            const status = outcome === 'success' ? '✅ pushed fixes' : '❌ could not auto-fix';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `🤖 **Auto-fix CI** ${status}\n\nFailed run: ${runUrl}\nFix branch: \`${branch}\``
+            });

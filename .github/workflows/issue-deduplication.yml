@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
-name: Issue Deduplication
+name: "Claude: Issue Deduplication"
 
 on:
   issues:
@@ -45,15 +45,19 @@ jobs:
             - Same question being asked
             - Issues describing the same root problem
 
-            If you find duplicates:
-            - Add a comment on the new issue linking to the original issue(s)
+            Before taking any action, check existing comments on the issue to avoid
+            duplicate bot comments. If a deduplication comment already exists, do nothing.
+
+            If you find a clear duplicate (high confidence only):
             - Apply a "duplicate" label to the new issue
+            - Add ONE comment linking to the original issue(s)
             - Be polite and explain why it's a duplicate
             - Suggest the user follow the original issue for updates
 
-            If it's NOT a duplicate:
+            If it's NOT a duplicate or you're unsure:
             - Don't add any comments
-            - You may apply appropriate topic labels based on the issue content
+            - Don't apply any labels
+            - When in doubt, leave it for human review
 
             Use these tools:
             - mcp__github__get_issue: Get issue details
@@ -66,4 +70,5 @@ jobs:
 
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
+            --model claude-opus-4-6
             --allowedTools "mcp__github__get_issue,mcp__github__search_issues,mcp__github__list_issues,mcp__github__create_issue_comment,mcp__github__update_issue,mcp__github__get_issue_comments"

@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
-name: Claude Commit Analysis
+name: "Claude: Commit Analysis"
 
 on:
   workflow_dispatch:
@@ -39,7 +39,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
-            --model claude-opus-4-5-20251101
+            --model claude-opus-4-6
           prompt: |
             REPO: ${{ github.repository }}
             BRANCH: ${{ github.ref_name }}
