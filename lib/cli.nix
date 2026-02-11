@@ -8,6 +8,7 @@
   writeShellScript,
   nodejs_22,
   yarnConfigHook,
+  nix_prefetch_git,
   python3,
   gnumake,
   gcc,
@@ -30,12 +31,16 @@ let
     hash = cliSrcHash;
   };
 
-  cliOfflineCache = fetchYarnDeps {
+  cliOfflineCache = (fetchYarnDeps {
     name = "logseq-cli-yarn-deps";
     inherit src;
     postPatch = "cd deps/cli";
     hash = cliYarnDepsHash;
-  };
+  }).overrideAttrs (old: {
+    # Upstream yarn prefetch occasionally regresses PATH setup for git deps.
+    # Keep nix-prefetch-git explicitly available to avoid ENOENT in CI.
+    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ nix_prefetch_git ];
+  });
 
   # Build the CLI from offline yarn cache
   # The CLI has local deps on sibling packages (outliner, db,
