@@ -9,10 +9,6 @@ on:
         description: "Space-separated flake inputs to update (empty = all)"
         required: false
         default: ""
-      nix_options:
-        description: "Extra nix options for update commands (empty = none)"
-        required: false
-        default: ""
 
 permissions:
   contents: write
@@ -36,24 +32,18 @@ jobs:
       - name: Update flake inputs
         env:
           UPDATE_INPUTS: ${{ github.event.inputs.update_inputs || '' }}
-          NIX_OPTIONS: ${{ github.event.inputs.nix_options || '' }}
         run: |
           set -euo pipefail
-          nix_args=()
-          if [ -n "$NIX_OPTIONS" ]; then
-            read -r -a nix_args <<< "$NIX_OPTIONS"
-          fi
-
           update_inputs=()
           if [ -n "$UPDATE_INPUTS" ]; then
             read -r -a update_inputs <<< "$UPDATE_INPUTS"
           fi
 
           if [ "${#update_inputs[@]}" -eq 0 ]; then
-            nix flake update "${nix_args[@]}"
+            nix flake update
           else
             for input in "${update_inputs[@]}"; do
-              nix flake lock --update-input "$input" "${nix_args[@]}"
+              nix flake lock --update-input "$input"
             done
           fi
 
