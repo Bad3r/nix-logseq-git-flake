@@ -4,10 +4,22 @@ on:
   schedule:
     - cron: "0 0 * * 0" # Weekly on Sunday
   workflow_dispatch:
+    inputs:
+      update_inputs:
+        description: "Space-separated flake inputs to update (empty = all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  issues: write
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    concurrency:
+      group: repo-main-writer
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
@@ -18,7 +30,22 @@ jobs:
             accept-flake-config = true
 
       - name: Update flake inputs
-        run: nix flake update
+        env:
+          UPDATE_INPUTS: ${{ github.event.inputs.update_inputs || '' }}
+        run: |
+          set -euo pipefail
+          update_inputs=()
+          if [ -n "$UPDATE_INPUTS" ]; then
+            read -r -a update_inputs <<< "$UPDATE_INPUTS"
+          fi
+
+          if [ "${#update_inputs[@]}" -eq 0 ]; then
+            nix flake update
+          else
+            for input in "${update_inputs[@]}"; do
+              nix flake lock --update-input "$input"
+            done
+          fi
 
       - name: Format
         run: nix fmt
@@ -34,7 +61,10 @@ jobs:
 
       - name: Validate flake
         if: steps.changes.outputs.changed == 'true'
-        run: nix flake check
+        run: |
+          nix flake check
+          nix build .#logseq
+          nix build .#logseq-cli
 
       - name: Commit and push
         if: steps.changes.outputs.changed == 'true'
@@ -44,3 +74,139 @@ jobs:
           git add -A
           git commit -m "chore(deps): automated flake input update"
           git push
+
+  report-failure:
+    if: ${{ always() && github.event_name == 'schedule' && needs.update.result == 'failure' }}
+    needs: update
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or update failure issue
+        uses: actions/github-script@v8
+        env:
+          ISSUE_TITLE: Flake update automation failing
+          ISSUE_MARKER: <!-- flake-update-failure -->
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const title = process.env.ISSUE_TITLE;
+            const marker = process.env.ISSUE_MARKER;
+            const runUrl = process.env.RUN_URL;
+            const timestamp = new Date().toISOString();
+
+            const body = [
+              marker,
+              "Automated flake update failed on a scheduled run.",
+              "",
+              `Latest failed run: ${runUrl}`,
+              "",
+              "This is a rolling issue; new failures are added as comments."
+            ].join("\n");
+
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: "open",
+              per_page: 100
+            });
+
+            const existing = openIssues.find(
+              (issue) =>
+                !issue.pull_request &&
+                issue.title === title &&
+                issue.body &&
+                issue.body.includes(marker)
+            );
+
+            const commentBody = [
+              `Failure detected at ${timestamp}.`,
+              `Run: ${runUrl}`
+            ].join("\n");
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: existing.number,
+                body: commentBody
+              });
+              core.info(`Updated existing issue #${existing.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body
+              });
+              core.info(`Created issue #${created.data.number}`);
+            }
+
+  report-recovery:
+    if: ${{ always() && github.event_name == 'schedule' && needs.update.result == 'success' }}
+    needs: update
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close failure issue after recovery
+        uses: actions/github-script@v8
+        env:
+          ISSUE_TITLE: Flake update automation failing
+          ISSUE_MARKER: <!-- flake-update-failure -->
+          RECOVERED_LABEL: recovered
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const title = process.env.ISSUE_TITLE;
+            const marker = process.env.ISSUE_MARKER;
+            const recoveredLabel = process.env.RECOVERED_LABEL;
+            const runUrl = process.env.RUN_URL;
+            const timestamp = new Date().toISOString();
+
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: "open",
+              per_page: 100
+            });
+
+            const existing = openIssues.find(
+              (issue) =>
+                !issue.pull_request &&
+                issue.title === title &&
+                issue.body &&
+                issue.body.includes(marker)
+            );
+
+            if (!existing) {
+              core.info("No open rolling flake update failure issue to close.");
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: existing.number,
+              body: [
+                `Recovery detected at ${timestamp}.`,
+                `Successful run: ${runUrl}`,
+                "Closing this rolling failure issue."
+              ].join("\n")
+            });
+
+            await github.rest.issues.update({
+              owner,
+              repo,
+              issue_number: existing.number,
+              labels: Array.from(
+                new Set([
+                  ...(existing.labels || []).map((label) =>
+                    typeof label === "string" ? label : label.name
+                  ),
+                  recoveredLabel
+                ])
+              ),
+              state: "closed"
+            });
+            core.info(`Closed issue #${existing.number}`);

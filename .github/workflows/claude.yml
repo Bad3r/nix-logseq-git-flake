@@ -12,12 +12,6 @@ on:
   pull_request_review:
     types: [submitted]
 
-# Multiple @claude requests on the same issue/PR cancel earlier runs,
-# allowing users to correct their request without waiting.
-concurrency:
-  group: claude-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
   # Notify external contributors that @claude is restricted to maintainers.
   notify-external:
@@ -68,6 +62,9 @@ jobs:
         contains(github.event.review.body, '@claude') &&
         (github.event.review.author_association == 'OWNER' || github.event.review.author_association == 'MEMBER' || github.event.review.author_association == 'COLLABORATOR')
       )
+    concurrency:
+      group: claude-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
