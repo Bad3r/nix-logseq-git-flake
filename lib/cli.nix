@@ -6,6 +6,7 @@
   fetchFromGitHub,
   fetchYarnDeps,
   writeShellScript,
+  writeShellScriptBin,
   nodejs_22,
   yarnConfigHook,
   nix_prefetch_git,
@@ -23,6 +24,20 @@
 
 let
   version = cliVersion;
+  nixPrefetchGitCompat = writeShellScriptBin "nix-prefetch-git" ''
+    # nixpkgs can ship only a version-suffixed executable (e.g. nix-prefetch-git-<ver>).
+    # prefetch-yarn-deps still calls plain "nix-prefetch-git", so provide a stable shim.
+    for candidate in \
+      ${nix_prefetch_git}/bin/nix-prefetch-git \
+      ${nix_prefetch_git}/bin/nix-prefetch-git-*; do
+      if [ -x "$candidate" ]; then
+        exec "$candidate" "$@"
+      fi
+    done
+
+    echo "nix-prefetch-git executable not found under ${nix_prefetch_git}/bin" >&2
+    exit 127
+  '';
 
   src = fetchFromGitHub {
     owner = "logseq";
@@ -39,9 +54,9 @@ let
       hash = cliYarnDepsHash;
     }).overrideAttrs
       (old: {
-        # Upstream yarn prefetch occasionally regresses PATH setup for git deps.
-        # Keep nix-prefetch-git explicitly available to avoid ENOENT in CI.
-        nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ nix_prefetch_git ];
+        # prefetch-yarn-deps expects "nix-prefetch-git" in PATH. Newer nixpkgs
+        # may only provide a version-suffixed binary, so add a stable shim.
+        nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ nixPrefetchGitCompat ];
       });
 
   # Build the CLI from offline yarn cache
