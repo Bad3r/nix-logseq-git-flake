@@ -1,20 +1,34 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
 name: Validate Flake
 
 on:
   push:
+    branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
   workflow_dispatch:
+
+concurrency:
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v26
+        uses: DeterminateSystems/nix-installer-action@v21
         with:
-          extra_nix_config: |
+          determinate: false
+          extra-conf: |
+            experimental-features = nix-command flakes
             accept-flake-config = true
 
       - name: Check formatting
@@ -22,3 +36,98 @@ jobs:
 
       - name: Run nix flake check
         run: nix flake check
+
+  audit-flake-inputs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v21
+        with:
+          determinate: false
+          extra-conf: |
+            experimental-features = nix-command flakes
+
+      - name: Audit flake inputs
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if nix run nixpkgs#flake-checker -- \
+              --no-telemetry \
+              --fail-mode \
+              --check-outdated \
+              --check-owner \
+              --check-supported \
+              flake.lock; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "flake-checker attempt ${attempt} failed; retrying..." >&2
+              sleep 5
+            fi
+          done
+          exit 1
+
+  sensitive-change-policy:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Detect sensitive changes
+        id: detect
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const sensitivePatterns = [
+              /^\.github\/workflows\/.*/,
+              /(^|\/)flake\.lock$/
+            ];
+
+            const prNumber = context.payload.pull_request.number;
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+                per_page: 100
+              }
+            );
+
+            const matched = files
+              .map((f) => f.filename)
+              .filter((filename) =>
+                sensitivePatterns.some((pattern) => pattern.test(filename))
+              );
+
+            core.info(`Sensitive files changed: ${matched.length}`);
+            core.setOutput("sensitive_changed", matched.length > 0 ? "true" : "false");
+            core.setOutput("matched_files", matched.join("\n"));
+
+      - name: Enforce security review label for sensitive changes
+        if: steps.detect.outputs.sensitive_changed == 'true'
+        uses: actions/github-script@v8
+        env:
+          MATCHED_FILES: ${{ steps.detect.outputs.matched_files }}
+        with:
+          script: |
+            const requiredLabel = "security-review-approved";
+            const labels = (context.payload.pull_request.labels || []).map((label) => label.name);
+            if (!labels.includes(requiredLabel)) {
+              const changed = process.env.MATCHED_FILES;
+              core.setFailed(
+                [
+                  `Sensitive file changes detected:\n${changed}`,
+                  `Missing required label: ${requiredLabel}`,
+                  "Add the label and ensure CODEOWNER approval before merge."
+                ].join("\n\n")
+              );
+            }

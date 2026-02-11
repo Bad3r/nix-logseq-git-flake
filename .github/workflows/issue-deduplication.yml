@@ -1,0 +1,90 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: "Claude: Issue Deduplication"
+
+on:
+  issues:
+    types: [opened]
+
+concurrency:
+  group: issue-dedup-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  deduplicate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Check for duplicate issues
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            Analyze this new issue and check if it's a duplicate of existing issues in the repository.
+
+            Issue: #${{ github.event.issue.number }}
+            Repository: ${{ github.repository }}
+
+            Your task:
+            1. Use mcp__github__get_issue to get details of the current issue (#${{ github.event.issue.number }})
+            2. Search for similar existing issues using mcp__github__search_issues with relevant keywords from the issue title and body
+            3. Compare the new issue with existing ones to identify potential duplicates
+
+            Criteria for TRUE duplicates (100% certainty required):
+            - The error message is IDENTICAL
+            - The symptoms are IDENTICAL
+            - The root cause is IDENTICAL
+
+            Before taking any action, check existing comments on the issue to avoid
+            duplicate bot comments. If a deduplication comment already exists, do nothing.
+
+            If you find a TRUE duplicate (100% certainty):
+            - Apply a "duplicate" label to the new issue
+            - Add ONE comment linking to the original issue(s)
+            - Be polite and explain why it's a duplicate
+            - Suggest the user follow the original issue for updates
+
+            If you find a POSSIBLE duplicate (related but not identical):
+            - Post a comment like: "This might be related to #X. Please check if that issue describes your problem."
+            - Do NOT apply the "duplicate" label
+
+            If it's NOT a duplicate or you're unsure:
+            - Don't add any comments
+            - Don't apply any labels
+            - When in doubt, leave it for human review
+
+            Use these tools:
+            - mcp__github__get_issue: Get issue details
+            - mcp__github__search_issues: Search for similar issues
+            - mcp__github__list_issues: List recent issues if needed
+            - mcp__github__create_issue_comment: Add a comment if duplicate found
+            - mcp__github__update_issue: Add labels
+
+            Be thorough but efficient. Focus on finding true duplicates, not just similar issues.
+
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model opus
+            --allowedTools "mcp__github__get_issue,mcp__github__search_issues,mcp__github__list_issues,mcp__github__create_issue_comment,mcp__github__update_issue,mcp__github__get_issue_comments"
+
+      - name: Notify on failure
+        if: failure() && steps.claude.outcome == 'failure'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: `Deduplication check failed. [Workflow run](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}).`
+            });

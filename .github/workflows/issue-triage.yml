@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: "Claude: Issue Triage"
+
+on:
+  issues:
+    types: [opened]
+
+concurrency:
+  group: issue-triage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage-issue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Check if already labeled
+        id: check_labels
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const issue = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number
+            });
+            return issue.data.labels.length > 0;
+
+      - name: Validate label-issue command exists
+        if: steps.check_labels.outputs.result != 'true'
+        run: |
+          if [ ! -f ".claude/commands/label-issue.md" ]; then
+            echo "::error::Missing .claude/commands/label-issue.md"
+            exit 1
+          fi
+
+      - name: Run Claude Code for Issue Triage
+        id: claude
+        if: steps.check_labels.outputs.result != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: "/label-issue REPO: ${{ github.repository }} ISSUE_NUMBER: ${{ github.event.issue.number }}"
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model opus
+
+      - name: Notify on failure
+        if: failure() && steps.claude.outcome == 'failure' && steps.check_labels.outputs.result != 'true'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: `Auto-triage failed. [Workflow run](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}).`
+            });
