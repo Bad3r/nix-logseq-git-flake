@@ -182,8 +182,14 @@ jobs:
       - name: Validate flake
         run: |
           nix flake check
-          nix build .#logseq
-          nix build .#logseq-cli
+
+      - name: Push Nix store paths to Cachix
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          nix shell nixpkgs#cachix -c bash -c \
+            'nix build --no-link --print-out-paths .#logseq .#logseq-cli .#default | cachix push nix-logseq-git-flake'
 
       - name: Commit nightly update
         run: |

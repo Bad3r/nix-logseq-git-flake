@@ -10,6 +10,15 @@
     };
   };
 
+  nixConfig = {
+    extra-substituters = [
+      "https://nix-logseq-git-flake.cachix.org"
+    ];
+    extra-trusted-public-keys = [
+      "nix-logseq-git-flake.cachix.org-1:DSBNW07PSRyCvS926tpIWahb53OIydwwZhsP6LhJNZo="
+    ];
+  };
+
   outputs =
     {
       self,
