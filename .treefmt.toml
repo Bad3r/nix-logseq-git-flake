@@ -8,7 +8,6 @@ excludes = [
     ".gitmodules",
     ".hgignore",
     ".svnignore",
-    "lefthook.yml", # excluded to prevent prettier from reformatting multiline YAML scalars
 ]
 on-unmatched = "warn"
 
@@ -53,4 +52,3 @@ options = ["--write"]
 command = "shfmt"
 includes = ["*.sh", "*.bash", "*.envrc", "*.envrc.*"]
 options = ["-s", "-w", "-i", "2"]
-

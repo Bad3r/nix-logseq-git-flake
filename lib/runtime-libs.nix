@@ -1,4 +1,4 @@
-pkgs: with pkgs; ([
+pkgs: with pkgs; [
   # Core toolchain bits expected by upstream bundles
   glibc
   curl
@@ -79,4 +79,4 @@ pkgs: with pkgs; ([
   libxshmfence
   libxau
   libxdmcp
-])
+]

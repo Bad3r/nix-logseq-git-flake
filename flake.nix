@@ -4,6 +4,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -11,6 +15,7 @@
       self,
       nixpkgs,
       flake-utils,
+      git-hooks,
     }:
     let
       systems = flake-utils.lib.defaultSystems;
@@ -110,134 +115,107 @@
           fi
           exec ${logseqFhs}/bin/logseq-fhs "$@"
         '';
-        lefthookStatix = pkgs.writeShellApplication {
-          name = "lefthook-statix";
-          runtimeInputs = [
-            pkgs.coreutils
-            pkgs.statix
-          ];
-          text = ''
-            set -euo pipefail
+        preCommit = git-hooks.lib.${system}.run {
+          src = ./.;
 
-            if [ "$#" -eq 0 ]; then
-              statix check --format errfmt
-              exit 0
-            fi
+          hooks = {
+            treefmt = {
+              enable = true;
+              settings = {
+                fail-on-change = true;
+                no-cache = true;
+                formatters = [
+                  pkgs.nixfmt
+                  pkgs.biome
+                  pkgs.nodePackages.prettier
+                  pkgs.shfmt
+                ];
+              };
+            };
 
-            status=0
-            for file in "$@"; do
-              if [ -f "$file" ]; then
-                statix check --format errfmt "$file" || status=$?
-              fi
-            done
-            exit "$status"
-          '';
+            deadnix = {
+              enable = true;
+              after = [ "treefmt" ];
+            };
+
+            statix = {
+              enable = true;
+              after = [ "treefmt" ];
+            };
+
+            actionlint = {
+              enable = true;
+              after = [ "treefmt" ];
+            };
+
+            shellcheck = {
+              enable = true;
+              after = [ "treefmt" ];
+            };
+
+            trim-trailing-whitespace = {
+              enable = true;
+              after = [
+                "deadnix"
+                "statix"
+                "actionlint"
+                "shellcheck"
+              ];
+              excludes = [
+                "\\.lock$"
+                "\\.patch$"
+              ];
+            };
+
+            end-of-file-fixer = {
+              enable = true;
+              after = [
+                "deadnix"
+                "statix"
+                "actionlint"
+                "shellcheck"
+              ];
+              excludes = [
+                "\\.lock$"
+                "\\.patch$"
+              ];
+            };
+
+            check-merge-conflicts = {
+              enable = true;
+              after = [
+                "deadnix"
+                "statix"
+                "actionlint"
+                "shellcheck"
+              ];
+              excludes = [
+                "\\.lock$"
+                "\\.patch$"
+              ];
+            };
+
+            check-json = {
+              enable = true;
+              after = [
+                "deadnix"
+                "statix"
+                "actionlint"
+                "shellcheck"
+              ];
+            };
+
+            check-yaml = {
+              enable = true;
+              after = [
+                "deadnix"
+                "statix"
+                "actionlint"
+                "shellcheck"
+              ];
+            };
+          };
         };
-        lefthookFileHygiene = pkgs.writeShellApplication {
-          name = "lefthook-file-hygiene";
-          runtimeInputs = [
-            pkgs.coreutils
-            pkgs.file
-            pkgs.gnugrep
-            pkgs.jq
-            pkgs.yq-go
-          ];
-          text = ''
-            set -euo pipefail
-
-            status=0
-
-            is_binary() {
-              file --mime-type -b "$1" 2>/dev/null | grep -q "^text/" && return 1
-              return 0
-            }
-
-            # Exclude: Nix build output (result/), dev env (.direnv/), VCS (.git/),
-            # language build dirs (node_modules/, dist/, build/, target/),
-            # and lockfiles/patches that may have intentional formatting.
-            is_excluded() {
-              case "$1" in
-                result/*|.direnv/*|.git/*|node_modules/*|dist/*|build/*|target/*|*.lock|*.patch) return 0 ;;
-                *) return 1 ;;
-              esac
-            }
-
-            for file in "$@"; do
-              [ -f "$file" ] || continue
-              is_excluded "$file" && continue
-              is_binary "$file" && continue
-
-              # Trailing whitespace
-              if grep -Pn '\s+$' "$file" >/dev/null 2>&1; then
-                echo "trailing-whitespace: $file"
-                grep -Pn '\s+$' "$file" | head -5
-                status=1
-              fi
-
-              # End-of-file newline
-              if [ -s "$file" ]; then
-                last_byte=$(tail -c1 "$file" | od -An -tx1 | tr -d ' ')
-                if [ "$last_byte" != "0a" ]; then
-                  echo "missing-eof-newline: $file"
-                  status=1
-                fi
-              fi
-
-              # Merge conflicts (pattern split to avoid self-match in source)
-              conflict_marker="<""<""<""<""<""<""< "
-              if grep -n "$conflict_marker" "$file" >/dev/null 2>&1; then
-                echo "merge-conflict: $file"
-                grep -n "$conflict_marker\|=======\|>>>>>>>" "$file" | head -10
-                status=1
-              fi
-
-              # JSON validation
-              case "$file" in
-                *.json)
-                  if ! jq empty "$file" 2>/dev/null; then
-                    echo "invalid-json: $file"
-                    status=1
-                  fi
-                  ;;
-              esac
-
-              # YAML validation
-              case "$file" in
-                *.yaml|*.yml)
-                  if ! yq '.' "$file" >/dev/null 2>&1; then
-                    echo "invalid-yaml: $file"
-                    status=1
-                  fi
-                  ;;
-              esac
-            done
-
-            exit "$status"
-          '';
-        };
-        hookToolPackages = [
-          pkgs.lefthook
-          pkgs.deadnix
-          pkgs.statix
-          pkgs.nixfmt
-          pkgs.biome
-          pkgs.actionlint
-          pkgs.shellcheck
-          pkgs.nodePackages.prettier
-          pkgs.shfmt
-          pkgs.jq
-          pkgs.yq-go
-          lefthookStatix
-          lefthookFileHygiene
-        ];
-        hookShellSetup = ''
-          if command -v lefthook >/dev/null 2>&1; then
-            pre_commit_hook="$(git rev-parse --git-path hooks/pre-commit 2>/dev/null || echo ".git/hooks/pre-commit")"
-            if [ ! -f "$pre_commit_hook" ] || ! grep -q "lefthook" "$pre_commit_hook" 2>/dev/null; then
-              lefthook install 2>/dev/null || true
-            fi
-          fi
-        '';
         cli = pkgs.callPackage ./lib/cli.nix {
           nix_prefetch_git = pkgs.nix-prefetch-git;
           inherit (manifest)
@@ -302,18 +280,17 @@
             ${pkgs.coreutils}/bin/test -x ${cli}/bin/logseq-cli
             touch $out
           '';
+          pre-commit-check = preCommit;
         };
-        # hooks shell is separate from default so it can stay minimal for
-        # lefthook-rc.sh PATH caching; default may gain extra dev tools later.
         devShells =
           let
             hookShell = pkgs.mkShell {
-              packages = [
+              packages = preCommit.enabledPackages ++ [
                 pkgs.coreutils
                 pkgs.git
-              ]
-              ++ hookToolPackages;
-              shellHook = hookShellSetup;
+                pkgs.pre-commit
+              ];
+              inherit (preCommit) shellHook;
             };
           in
           {
