@@ -37,8 +37,8 @@ echo "::endgroup::"
 # ── Phase 3: Fetch CLI version from upstream ─────────────────────────
 echo "::group::Phase 3: Fetch CLI version"
 CLI_VERSION=$(curl -fsSL \
-  "https://raw.githubusercontent.com/logseq/logseq/${LOGSEQ_REV}/deps/cli/package.json" \
-  | jq -r '.version')
+  "https://raw.githubusercontent.com/logseq/logseq/${LOGSEQ_REV}/deps/cli/package.json" |
+  jq -r '.version')
 echo "  cliVersion=$CLI_VERSION"
 echo "::endgroup::"
 
@@ -65,7 +65,7 @@ jq -n \
     cliSrcHash: $cliSrcHash,
     cliYarnDepsHash: $cliYarnDepsHash,
     cliVersion: $cliVersion
-  }' > "$MANIFEST"
+  }' >"$MANIFEST"
 echo "  Wrote $MANIFEST with placeholder cliYarnDepsHash"
 echo "::endgroup::"
 
@@ -95,7 +95,7 @@ echo "::endgroup::"
 
 # ── Phase 7: Rewrite manifest with real yarn hash ────────────────────
 echo "::group::Phase 7: Finalize manifest"
-jq --arg hash "$YARN_HASH" '.cliYarnDepsHash = $hash' "$MANIFEST" > "${MANIFEST}.tmp"
+jq --arg hash "$YARN_HASH" '.cliYarnDepsHash = $hash' "$MANIFEST" >"${MANIFEST}.tmp"
 mv "${MANIFEST}.tmp" "$MANIFEST"
 echo "  Updated $MANIFEST with real cliYarnDepsHash"
 echo "::endgroup::"

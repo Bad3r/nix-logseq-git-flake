@@ -21,13 +21,13 @@ nix run .#logseq-cli -- --help
 nix flake check           # builds checks + evaluates flake
 nix fmt                   # format all files (nixfmt, biome, prettier, shfmt)
 
-# Linters (also run as lefthook pre-commit hooks)
+# Linters (also run as pre-commit hooks)
 nix run nixpkgs#deadnix -- --fail
 nix run nixpkgs#statix -- check
 
-# Dev shell (auto-installs lefthook hooks)
+# Dev shell (auto-installs pre-commit hooks)
 nix develop
-nix develop -c lefthook run pre-commit
+nix develop -c pre-commit run --all-files
 ```
 
 ## Architecture
@@ -64,23 +64,30 @@ The desktop package does **not** build Logseq from source. Instead:
 - **`validate.yml`** — Every push/PR: `nix fmt -- --check .` and `nix flake check`.
 - **`flake-update.yml`** — Weekly cron (Sunday): `nix flake update`, format, check, auto-commit.
 
-## Git Hooks (lefthook)
+## Git Hooks (git-hooks.nix)
 
-`lefthook.yml` manages pre-commit hooks via [lefthook](https://lefthook.dev/). Hooks are installed automatically when entering `nix develop`. The `scripts/lefthook-rc.sh` caches the PATH from `nix develop .#hooks` so hooks also work outside the dev shell.
+Git hooks are managed via [`cachix/git-hooks.nix`](https://github.com/cachix/git-hooks.nix) (pre-commit integration). Hooks are installed automatically when entering `nix develop`.
+
+This repository assumes you commit from inside `nix develop`, so the Nix-provided hook toolchain is always available.
 
 ```bash
-# Enter dev shell (auto-installs lefthook)
+# Enter dev shell (auto-installs hooks)
 nix develop
 
 # Run hooks manually
-nix develop -c lefthook run pre-commit
+nix develop -c pre-commit run --all-files
+
+# Run hooks sandboxed (CI-style)
+nix flake check
 ```
 
 **Hooks** (run in priority order):
-1. **formatting** — `nix fmt -- --fail-on-change` (treefmt with nixfmt, biome, prettier, shfmt). CI uses `--ci` instead, which also disables the cache and adjusts output for CI environments.
-2. **linting** (parallel) — deadnix, statix (`*.nix`), actionlint (`.github/workflows/`), shellcheck (`*.sh`)
+
+1. **formatting** — treefmt (`.treefmt.toml`) check (fails if formatting differs). Fix with `nix fmt`. CI uses `nix fmt -- --ci`.
+2. **linting** — deadnix, statix (`*.nix`), actionlint (`.github/workflows/`), shellcheck
 3. **file-hygiene** — trailing whitespace, EOF newline, merge conflicts, JSON/YAML validation
 
 **Dev shells**:
+
 - `devShells.default` — full dev shell with all hook tools
-- `devShells.hooks` — minimal shell used by `lefthook-rc.sh` for PATH caching
+- `devShells.hooks` — alias of `default` (kept for compatibility)
