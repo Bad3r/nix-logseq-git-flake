@@ -18,9 +18,18 @@ Nix flake packaging **Logseq Desktop** (nightly) and **Logseq CLI** (DB graph ma
 ### Try Without Installing
 
 ```bash
-nix run github:Bad3r/nix-logseq-git-flake#logseq
-nix run github:Bad3r/nix-logseq-git-flake#logseq-cli -- --help
+nix run --accept-flake-config github:Bad3r/nix-logseq-git-flake#logseq
+nix run --accept-flake-config github:Bad3r/nix-logseq-git-flake#logseq-cli -- --help
 ```
+
+### Binary Cache (Cachix)
+
+This flake publishes binaries to Cachix and exposes the cache in `flake.nix` via:
+
+- `nixConfig.extra-substituters = [ "https://nix-logseq-git-flake.cachix.org" ]`
+- `nixConfig.extra-trusted-public-keys = [ "nix-logseq-git-flake.cachix.org-1:DSBNW07PSRyCvS926tpIWahb53OIydwwZhsP6LhJNZo=" ]`
+
+Passing `--accept-flake-config` in commands above enables these settings from the flake.
 
 ### Flake Input
 
@@ -29,6 +38,14 @@ nix run github:Bad3r/nix-logseq-git-flake#logseq-cli -- --help
   inputs.logseq-nightly.url = "github:Bad3r/nix-logseq-git-flake";
   # optional: share nixpkgs
   inputs.logseq-nightly.inputs.nixpkgs.follows = "nixpkgs";
+
+  # optional but recommended: pin cache settings in your own flake too
+  nixConfig = {
+    extra-substituters = [ "https://nix-logseq-git-flake.cachix.org" ];
+    extra-trusted-public-keys = [
+      "nix-logseq-git-flake.cachix.org-1:DSBNW07PSRyCvS926tpIWahb53OIydwwZhsP6LhJNZo="
+    ];
+  };
 
   # in your NixOS module:
   environment.systemPackages = [
