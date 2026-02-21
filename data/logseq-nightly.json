@@ -1,11 +1,11 @@
 {
-  "tag": "nightly-20260220",
-  "publishedAt": "2026-02-20T02:52:32Z",
-  "assetUrl": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260220/logseq-linux-x64-2.0.1-alpha+nightly.20260220.tar.gz",
-  "assetSha256": "sha256-oElGyUTpjlaHq2s8gJrp3dZpaErQyVm2vhbI22V07gs=",
-  "logseqRev": "991e38419a18aef912ebada6d671e987ab32cc24",
-  "logseqVersion": "2.0.1-alpha+nightly.20260220",
-  "cliSrcHash": "sha256-9Xazur/Hnq9mTrRB+RWwFLFva9cqKB4bS1zay4mKGGY=",
+  "tag": "nightly-20260221",
+  "publishedAt": "2026-02-21T02:46:15Z",
+  "assetUrl": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260221/logseq-linux-x64-2.0.1-alpha+nightly.20260221.tar.gz",
+  "assetSha256": "sha256-rXo08DGacS1hh6IQpyOVNflSSeKZDRxxG6ZMLjIJcVI=",
+  "logseqRev": "b484b072a3cd2d69ca3f7bd6a703042c1ba38eab",
+  "logseqVersion": "2.0.1-alpha+nightly.20260221",
+  "cliSrcHash": "sha256-sym0KxbkyUOt3Dt+FAo5mKvRXZsIPr/SMEgyjOxzIGE=",
   "cliYarnDepsHash": "sha256-bhhDJQV62RSW2LsSk8D5eRZv/FLhn1Co3Aqn+ZKVgWs=",
   "cliVersion": "0.4.2"
 }
