@@ -99,13 +99,34 @@ let
       mkdir -p $out
       cp -r . $out/
 
-      # Patch nbb_deps.js to use NBB_CACHE_DIR env var if set
-      # Original: mMa=esm_import$node_path.resolve(lMa,".nbb",".cache")
-      # Patched: use process.env.NBB_CACHE_DIR or fallback to original
-      substituteInPlace $out/cli/node_modules/@logseq/nbb-logseq/lib/nbb_deps.js \
-        --replace-fail \
-          'mMa=esm_import$node_path.resolve(lMa,".nbb",".cache")' \
-          'mMa=process.env.NBB_CACHE_DIR||esm_import$node_path.resolve(lMa,".nbb",".cache")'
+      # Patch nbb_deps.js to use NBB_CACHE_DIR env var if set. The file is
+      # minified, so upstream regularly renames local symbols while keeping the
+      # same resolve(<state>,".nbb",".cache") structure.
+      python <<'PY'
+      import os
+      import re
+      from pathlib import Path
+
+      path = (
+          Path(os.environ["out"])
+          / "cli/node_modules/@logseq/nbb-logseq/lib/nbb_deps.js"
+      )
+      text = path.read_text()
+      pattern = re.compile(
+          r'([A-Za-z_$][A-Za-z0-9_$]*)=esm_import\$node_path\.resolve\('
+          r'([A-Za-z_$][A-Za-z0-9_$]*),"\.nbb","\.cache"\)'
+      )
+      replacement = (
+          r'\1=process.env.NBB_CACHE_DIR||'
+          r'esm_import$node_path.resolve(\2,".nbb",".cache")'
+      )
+      patched, count = pattern.subn(replacement, text, count=1)
+      if count != 1:
+          raise SystemExit(
+              f"expected to patch one nbb cache path assignment in {path}, got {count}"
+          )
+      path.write_text(patched)
+      PY
 
       runHook postInstall
     '';
