@@ -149,7 +149,7 @@
                 formatters = [
                   pkgs.nixfmt
                   pkgs.biome
-                  pkgs.nodePackages.prettier
+                  pkgs.prettier
                   pkgs.shfmt
                 ];
               };
