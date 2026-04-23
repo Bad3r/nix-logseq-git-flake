@@ -94,7 +94,7 @@ jobs:
           LOGSEQ_POSTHOG_TOKEN: ""
         run: |
           yarn install --frozen-lockfile
-          yarn electron-forge package
+          yarn electron:make
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
@@ -108,10 +108,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out
-          src_dir="out/Logseq-linux-x64"
+          src_dir="dist/linux-unpacked"
           if [ ! -d "$src_dir" ]; then
             echo "Could not locate packaged Logseq bundle at $src_dir" >&2
-            find out -maxdepth 2 -mindepth 1 -print >&2 || true
+            find dist -maxdepth 2 -mindepth 1 -print >&2 || true
             exit 1
           fi
           tarball="out/logseq-linux-x64-${{ steps.version.outputs.value }}.tar.gz"
