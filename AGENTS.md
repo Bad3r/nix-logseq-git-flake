@@ -1,6 +1,8 @@
-# AGENTS.md
+# CLAUDE.md
 
-Repo guidance for coding agents working in `nix-logseq-git-flake`.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+(Also read via the `AGENTS.md` symlink by other coding agents; keep content tool-agnostic.)
 
 ## Scope
 
@@ -17,6 +19,43 @@ Repo guidance for coding agents working in `nix-logseq-git-flake`.
 - `lib/runtime-libs.nix` feeds the desktop FHS wrapper; `overlays/default.nix` stays intentionally small.
 - `scripts/update-nightly.sh` regenerates manifest fields and CLI hashes.
 - `.github/workflows/validate.yml` is the clearest snapshot of CI expectations.
+
+## Architecture
+
+### Nightly pipeline
+
+The flake does **not** build Logseq Desktop from source. It consumes a pre-packaged binary tarball from a GitHub Release, wraps it in an FHS env, and layers a desktop entry + icon. Only the CLI is built from source inside Nix.
+
+End-to-end data flow:
+
+1. `.github/workflows/nightly.yml` → `build` job runs on a GitHub-hosted Ubuntu runner **without** Nix. It clones upstream `logseq/logseq`, runs `yarn gulp:build && yarn cljs:release-electron && yarn webpack-app-build` to populate `static/`, then `yarn electron:make` (electron-builder) to produce `static/dist/linux-unpacked/`. That directory is tarred as `logseq-linux-x64-<version>.tar.gz` and uploaded as an artifact.
+2. `.github/workflows/nightly.yml` → `publish-release` job installs Nix + Cachix, publishes the tarball as a GitHub Release tagged `nightly-<YYYYMMDD>`, then runs `bash scripts/update-nightly.sh`.
+3. `scripts/update-nightly.sh` rewrites `data/logseq-nightly.json` with the new release URL, SRI hash, upstream rev, and CLI version. It extracts `cliYarnDepsHash` via a deliberate double-build: build with a placeholder hash, parse the resulting "got: sha256-…" error from stderr, rewrite the manifest with the real hash.
+4. `nix flake check` validates the updated manifest through `lib/loadManifest.nix`, rebuilds both packages, then the `logseq-nightly-bot` auto-commits the manifest bump to `main`.
+
+The manifest is the single source of truth for downstream consumers. Adding a field requires updating **both** `scripts/update-nightly.sh` (producer) **and** `lib/loadManifest.nix` (validator) in the same change.
+
+### Manifest fan-out inside `flake.nix`
+
+- `payload = fetchzip { url = manifest.assetUrl; hash = manifest.assetSha256; }` — the desktop bundle.
+- `logseqSrc = fetchFromGitHub { rev = manifest.logseqRev; hash = manifest.cliSrcHash; }` — shared between the icon derivation (in `flake.nix`) and the CLI build (in `lib/cli.nix`). Two sites, one hash.
+- `lib/cli.nix` also reads `cliYarnDepsHash` for the offline yarn cache and `cliVersion` for the derivation's `version` attr.
+
+### Upstream layout assumptions
+
+The bundle's internal layout is dictated by upstream's packaging tool and changes when upstream switches tools. Since `logseq/logseq#12517` (2026-04-17) migrated from electron-forge to electron-builder, the tarball contains a flat tree with:
+
+- `logseq` (lowercase executable; earlier electron-forge builds shipped `Logseq`).
+- `resources/app.asar` (app sources sealed — no unpacked `resources/app/` tree).
+- Chromium runtime libs, locales, swiftshader, etc.
+
+`logseqTree` in `flake.nix` creates a reciprocal symlink so both `Logseq` and `logseq` resolve, keeping old and new nightlies working. The icon is fetched from `logseqSrc` (upstream repo at pinned rev), not extracted from the tarball — because asar-packed resources aren't filesystem-accessible.
+
+When a nightly fails, first check whether upstream renamed a path, changed the packaging tool, or moved an expected file. The cleanest signal is usually a diff of upstream's `.github/workflows/build-desktop-release.yml` around the failing step.
+
+### Desktop FHS wrapper
+
+The desktop package is wrapped in `pkgs.buildFHSEnv` because Electron expects a traditional `/lib`, `/usr/lib` filesystem layout for its Chromium runtime. `lib/runtime-libs.nix` lists the injected libraries — extend it only when a runtime-load failure points to a missing `.so`. The `launcher` shell script in `flake.nix` additionally sets NVIDIA PRIME and Mesa driver paths before execing the FHS env; GPU-related regressions belong there, not in `runtime-libs.nix`.
 
 ## Core Commands
 
