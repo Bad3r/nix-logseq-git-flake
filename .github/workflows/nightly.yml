@@ -16,7 +16,7 @@ permissions:
 
 env:
   NODE_VERSION: "22"
-  JAVA_VERSION: "11"
+  JAVA_VERSION: "21"
   CLOJURE_VERSION: "1.11.1.1413"
   LOGSEQ_BRANCH: ${{ github.event.inputs.logseq_branch || 'master' }}
 
