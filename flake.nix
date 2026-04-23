@@ -46,6 +46,12 @@
           hash = manifest.assetSha256;
           stripRoot = false;
         };
+        logseqSrc = pkgs.fetchFromGitHub {
+          owner = "logseq";
+          repo = "logseq";
+          rev = manifest.logseqRev;
+          hash = manifest.cliSrcHash;
+        };
         logseqTree = pkgs.runCommand "logseq-tree" { } ''
           mkdir -p $out/share/logseq
           src="${payload}"
@@ -53,6 +59,15 @@
             cp -r "$src/Logseq-linux-x64/." $out/share/logseq/
           else
             cp -r "$src/." $out/share/logseq/
+          fi
+          # electron-builder (upstream after logseq#12517) names the exe
+          # lowercase `logseq`; older electron-forge nightlies shipped `Logseq`.
+          # Expose both so the launcher and `runScript` work either way.
+          cd $out/share/logseq
+          if [ -x logseq ] && [ ! -e Logseq ]; then
+            ln -s logseq Logseq
+          elif [ -x Logseq ] && [ ! -e logseq ]; then
+            ln -s Logseq logseq
           fi
         '';
         fhsBase =
@@ -73,7 +88,7 @@
             extraInstallCommands = ''
               ln -s ${logseqTree}/share $out/share
             '';
-            runScript = "${logseqTree}/share/logseq/Logseq";
+            runScript = "${logseqTree}/share/logseq/logseq";
           };
         logseqFhs = fhsBase { };
         desktopEntry = pkgs.writeTextFile {
@@ -93,7 +108,7 @@
         };
         icon = pkgs.runCommand "logseq-icon" { } ''
           mkdir -p $out/share/icons/hicolor/512x512/apps
-          cp ${logseqTree}/share/logseq/resources/app/icon.png \
+          cp ${logseqSrc}/resources/icon.png \
             $out/share/icons/hicolor/512x512/apps/logseq.png
         '';
         launcher = pkgs.writeShellScriptBin "logseq" ''
