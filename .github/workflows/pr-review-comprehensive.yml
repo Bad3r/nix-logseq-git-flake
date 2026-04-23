@@ -21,7 +21,7 @@ jobs:
     steps:
       - name: Check for recent Claude activity
         id: existing
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
@@ -105,7 +105,7 @@ jobs:
 
       - name: Notify on failure
         if: failure() && steps.claude.outcome == 'failure'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             await github.rest.issues.createComment({

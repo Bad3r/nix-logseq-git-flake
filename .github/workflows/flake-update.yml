@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Create or update failure issue
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           ISSUE_TITLE: Flake update automation failing
           ISSUE_MARKER: <!-- flake-update-failure -->
@@ -148,7 +148,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Close failure issue after recovery
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           ISSUE_TITLE: Flake update automation failing
           ISSUE_MARKER: <!-- flake-update-failure -->

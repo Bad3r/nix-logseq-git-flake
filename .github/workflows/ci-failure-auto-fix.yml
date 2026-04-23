@@ -33,7 +33,7 @@ jobs:
     steps:
       - name: Check PR author permissions
         id: check
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const pr = context.payload.workflow_run.pull_requests[0];
@@ -77,7 +77,7 @@ jobs:
 
       - name: Get CI failure details
         id: failure_details
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const run = await github.rest.actions.getWorkflowRun({
@@ -232,7 +232,7 @@ jobs:
 
       - name: Notify original PR
         if: always() && fromJSON(steps.failure_details.outputs.result).skip != true
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
           BRANCH_NAME: ${{ steps.branch.outputs.branch_name }}

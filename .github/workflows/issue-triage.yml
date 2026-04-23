@@ -27,7 +27,7 @@ jobs:
 
       - name: Check if already labeled
         id: check_labels
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const issue = await github.rest.issues.get({
@@ -57,7 +57,7 @@ jobs:
 
       - name: Notify on failure
         if: failure() && steps.claude.outcome == 'failure' && steps.check_labels.outputs.result != 'true'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             await github.rest.issues.createComment({
