@@ -97,7 +97,7 @@ jobs:
           yarn electron-forge package
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v26
+        uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
@@ -142,7 +142,7 @@ jobs:
         run: gh run download "${{ github.run_id }}" --repo "${{ github.repository }}" --name linux-build --dir builds
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v26
+        uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
