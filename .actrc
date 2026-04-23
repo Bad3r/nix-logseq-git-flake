@@ -1,0 +1,17 @@
+# Local act defaults for this repo.
+#
+# The workflows use Ubuntu-hosted jobs with Nix, Node, Java, cache, and artifact
+# actions. The medium catthehacker image is closer to GitHub's runner than act's
+# tiny default image, while still being reasonable to pull locally.
+-P ubuntu-latest=ghcr.io/catthehacker/ubuntu:act-latest
+-P ubuntu-24.04=ghcr.io/catthehacker/ubuntu:act-24.04
+-P ubuntu-22.04=ghcr.io/catthehacker/ubuntu:act-22.04
+
+# This flake targets x86_64-linux, and some Nix installer paths need elevated
+# container privileges under Docker.
+--container-architecture=linux/amd64
+--container-options --privileged
+
+# Enable local backing stores for actions/cache and upload/download-artifact.
+--cache-server-path=./.act/cache
+--artifact-server-path=./.act/artifacts

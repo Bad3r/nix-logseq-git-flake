@@ -1,5 +1,6 @@
 /result
 /.direnv
 /flake.lock.backup
+/.act
 /.pre-commit-config.yaml
 **/.vscode/
