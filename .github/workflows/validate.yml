@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v21
+        uses: DeterminateSystems/nix-installer-action@v22
         with:
           determinate: false
           extra-conf: |
@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v21
+        uses: DeterminateSystems/nix-installer-action@v22
         with:
           determinate: false
           extra-conf: |
