@@ -220,12 +220,11 @@
           };
         };
         cli = pkgs.callPackage ./lib/cli.nix {
-          nix_prefetch_git = pkgs.nix-prefetch-git;
           inherit (manifest)
             logseqRev
             cliSrcHash
             cliVersion
-            cliYarnDepsHash
+            cliPnpmDepsHash
             ;
         };
         logseqDesktop = pkgs.stdenv.mkDerivation {

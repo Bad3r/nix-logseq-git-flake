@@ -30,7 +30,7 @@ End-to-end data flow:
 
 1. `.github/workflows/nightly.yml` → `build` job runs on a GitHub-hosted Ubuntu runner **without** Nix. It clones upstream `logseq/logseq`, installs upstream pnpm dependencies, runs `pnpm gulp:build && pnpm cljs:release-electron && pnpm webpack-app-build` to populate `static/`, then runs `pnpm electron:make` (electron-builder) in `static/` to produce `static/dist/linux-unpacked/`. That directory is tarred as `logseq-linux-x64-<version>.tar.gz` and uploaded as an artifact.
 2. `.github/workflows/nightly.yml` → `publish-release` job installs Nix + Cachix, publishes the tarball as a GitHub Release tagged `nightly-<YYYYMMDD>`, then runs `bash scripts/update-nightly.sh`.
-3. `scripts/update-nightly.sh` rewrites `data/logseq-nightly.json` with the new release URL, SRI hash, upstream rev, and CLI version. It extracts `cliYarnDepsHash` via a deliberate double-build: build with a placeholder hash, parse the resulting "got: sha256-…" error from stderr, rewrite the manifest with the real hash.
+3. `scripts/update-nightly.sh` rewrites `data/logseq-nightly.json` with the new release URL, SRI hash, upstream rev, and CLI version. It extracts `cliPnpmDepsHash` via a deliberate double-build: build with a placeholder hash, parse the resulting "got: sha256-…" error from stderr, rewrite the manifest with the real hash.
 4. `nix flake check` validates the updated manifest through `lib/loadManifest.nix`, rebuilds both packages, then the `logseq-nightly-bot` auto-commits the manifest bump to `main`.
 
 The manifest is the single source of truth for downstream consumers. Adding a field requires updating **both** `scripts/update-nightly.sh` (producer) **and** `lib/loadManifest.nix` (validator) in the same change.
@@ -39,7 +39,7 @@ The manifest is the single source of truth for downstream consumers. Adding a fi
 
 - `payload = fetchzip { url = manifest.assetUrl; hash = manifest.assetSha256; }` — the desktop bundle.
 - `logseqSrc = fetchFromGitHub { rev = manifest.logseqRev; hash = manifest.cliSrcHash; }` — shared between the icon derivation (in `flake.nix`) and the CLI build (in `lib/cli.nix`). Two sites, one hash.
-- `lib/cli.nix` also reads `cliYarnDepsHash` for the offline yarn cache and `cliVersion` for the derivation's `version` attr.
+- `lib/cli.nix` also reads `cliPnpmDepsHash` for the offline pnpm store and `cliVersion` for the derivation's `version` attr.
 
 ### Upstream layout assumptions
 
@@ -188,6 +188,6 @@ Required env vars for `scripts/update-nightly.sh`: `LOGSEQ_REV`, `LOGSEQ_VERSION
 
 - Do not edit the `result` symlink; it is a build artifact.
 - Treat `data/logseq-nightly.json` as generated data unless the task is specifically about manifest format or manifest values.
-- When updating the CLI source revision flow, expect to update both `cliSrcHash` and `cliYarnDepsHash`.
+- When updating the CLI source revision flow, expect to update both `cliSrcHash` and `cliPnpmDepsHash`.
 - The fastest trustworthy feedback is usually a targeted `nix build` or one check attr, not a full `nix flake check`.
 - Before finishing, prefer `nix fmt` plus the smallest relevant build or check for the files you changed.

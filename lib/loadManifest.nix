@@ -11,7 +11,7 @@ let
     "logseqRev"
     "logseqVersion"
     "cliSrcHash"
-    "cliYarnDepsHash"
+    "cliPnpmDepsHash"
     "cliVersion"
   ];
   missing = lib.filter (key: !hasAttr key parsed) requiredKeys;
@@ -25,6 +25,6 @@ throwIf (missing != [ ]) "Manifest missing required keys: ${concatStringsSep ", 
   builtins.foldl' validateHash parsed [
     "assetSha256"
     "cliSrcHash"
-    "cliYarnDepsHash"
+    "cliPnpmDepsHash"
   ]
 )

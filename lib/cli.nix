@@ -4,12 +4,11 @@
   lib,
   stdenv,
   fetchFromGitHub,
-  fetchYarnDeps,
+  fetchPnpmDeps,
   writeShellScript,
-  writeShellScriptBin,
   nodejs_22,
-  yarnConfigHook,
-  nix_prefetch_git,
+  pnpm_10,
+  pnpmConfigHook,
   python3,
   gnumake,
   gcc,
@@ -19,26 +18,11 @@
   logseqRev,
   cliSrcHash,
   cliVersion,
-  cliYarnDepsHash,
+  cliPnpmDepsHash,
 }:
 
 let
   version = cliVersion;
-  nixPrefetchGitCompat = writeShellScriptBin "nix-prefetch-git" ''
-    # nixpkgs can ship only a version-suffixed executable (e.g. nix-prefetch-git-<ver>).
-    # prefetch-yarn-deps still calls plain "nix-prefetch-git", so provide a stable shim.
-    for candidate in \
-      ${nix_prefetch_git}/bin/nix-prefetch-git \
-      ${nix_prefetch_git}/bin/nix-prefetch-git-*; do
-      if [ -x "$candidate" ]; then
-        exec "$candidate" "$@"
-      fi
-    done
-
-    echo "nix-prefetch-git executable not found under ${nix_prefetch_git}/bin" >&2
-    exit 127
-  '';
-
   src = fetchFromGitHub {
     owner = "logseq";
     repo = "logseq";
@@ -46,20 +30,16 @@ let
     hash = cliSrcHash;
   };
 
-  cliOfflineCache =
-    (fetchYarnDeps {
-      name = "logseq-cli-yarn-deps";
-      inherit src;
-      postPatch = "cd deps/cli";
-      hash = cliYarnDepsHash;
-    }).overrideAttrs
-      (old: {
-        # prefetch-yarn-deps expects "nix-prefetch-git" in PATH. Newer nixpkgs
-        # may only provide a version-suffixed binary, so add a stable shim.
-        nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ nixPrefetchGitCompat ];
-      });
+  cliPnpmDeps = fetchPnpmDeps {
+    pname = "logseq-cli";
+    inherit version src;
+    sourceRoot = "${src.name}/deps/cli";
+    pnpm = pnpm_10;
+    fetcherVersion = 3;
+    hash = cliPnpmDepsHash;
+  };
 
-  # Build the CLI from offline yarn cache
+  # Build the CLI from an offline pnpm store.
   # The CLI has local deps on sibling packages (outliner, db,
   # graph-parser, common) so we need the full deps/ tree.
   cliBuilt = stdenv.mkDerivation {
@@ -69,7 +49,8 @@ let
 
     nativeBuildInputs = [
       nodejs_22
-      yarnConfigHook
+      pnpm_10
+      pnpmConfigHook
       python3
       gnumake
       gcc
@@ -78,19 +59,20 @@ let
 
     buildInputs = [ sqlite ];
 
+    pnpmDeps = cliPnpmDeps;
+    pnpmRoot = "cli";
+
     env.npm_config_nodedir = nodejs_22;
 
-    # yarn.lock lives in cli/, not the sourceRoot — disable auto-hook
-    dontYarnInstallDeps = true;
+    buildPhase = ''
+      runHook preBuild
 
-    postConfigure = ''
       pushd cli
-      yarnOfflineCache="${cliOfflineCache}" yarnConfigHook
-      npm rebuild --verbose
+      pnpm rebuild
       popd
-    '';
 
-    dontBuild = true;
+      runHook postBuild
+    '';
 
     installPhase = ''
       runHook preInstall
