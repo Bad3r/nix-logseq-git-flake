@@ -61,6 +61,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
+      - name: Cache Electron downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('logseq-src/resources/package.json', 'logseq-src/resources/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
@@ -107,8 +117,18 @@ jobs:
           LOGSEQ_SENTRY_DSN: ""
           LOGSEQ_POSTHOG_TOKEN: ""
         run: |
+          set -euo pipefail
           pnpm install --frozen-lockfile
-          pnpm electron:make
+          for attempt in 1 2 3; do
+            if pnpm electron:make; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            echo "electron:make attempt ${attempt} failed; retrying..." >&2
+            sleep $((attempt * 20))
+          done
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
