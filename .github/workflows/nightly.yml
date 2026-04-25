@@ -49,15 +49,16 @@ jobs:
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - name: Get pnpm store path
-        id: pnpm-store
-        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - name: Get pnpm store directory path
+        id: pnpm-store-dir-path
+        run: echo "dir=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
 
-      - name: Cache pnpm store
+      - name: Cache pnpm store directory
+        id: pnpm-cache
         uses: actions/cache@v5
         with:
-          path: ${{ steps.pnpm-store.outputs.path }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('logseq-src/**/pnpm-lock.yaml') }}
+          path: ${{ steps.pnpm-store-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-
 
@@ -95,6 +96,11 @@ jobs:
         run: echo "value=$(node ./scripts/get-pkg-version.js nightly)" >> "$GITHUB_OUTPUT"
         working-directory: logseq-src
 
+      - name: Update Nightly APP Version
+        run: |
+          sed -i 's/defonce version ".*"/defonce version "${{ steps.version.outputs.value }}"/g' src/main/frontend/version.cljs
+        working-directory: logseq-src
+
       - name: Record source revision
         id: revision
         run: echo "rev=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -110,6 +116,15 @@ jobs:
           pnpm gulp:build
           pnpm cljs:release-electron
           pnpm webpack-app-build
+
+      - name: Update APP Version
+        run: |
+          sed -i 's/"version": "0.0.1"/"version": "${{ steps.version.outputs.value }}"/g' ./package.json
+        working-directory: logseq-src/static
+
+      - name: Save VERSION file
+        run: echo "${{ steps.version.outputs.value }}" > ./VERSION
+        working-directory: logseq-src/static
 
       - name: Prepare Electron package
         working-directory: logseq-src/static
