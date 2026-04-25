@@ -16,6 +16,7 @@ permissions:
 
 env:
   NODE_VERSION: "24"
+  PNPM_VERSION: "10.33.0"
   JAVA_VERSION: "21"
   CLOJURE_VERSION: "1.12.4.1618"
   LOGSEQ_BRANCH: ${{ github.event.inputs.logseq_branch || 'master' }}
@@ -42,10 +43,23 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "yarn"
-          cache-dependency-path: |
-            logseq-src/yarn.lock
-            logseq-src/static/yarn.lock
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Get pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('logseq-src/**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -82,10 +96,10 @@ jobs:
           LOGSEQ_SENTRY_DSN: ""
           LOGSEQ_POSTHOG_TOKEN: ""
         run: |
-          yarn install --frozen-lockfile
-          yarn gulp:build
-          yarn cljs:release-electron
-          yarn webpack-app-build
+          pnpm install --frozen-lockfile
+          pnpm gulp:build
+          pnpm cljs:release-electron
+          pnpm webpack-app-build
 
       - name: Prepare Electron package
         working-directory: logseq-src/static
@@ -93,8 +107,8 @@ jobs:
           LOGSEQ_SENTRY_DSN: ""
           LOGSEQ_POSTHOG_TOKEN: ""
         run: |
-          yarn install --frozen-lockfile
-          yarn electron:make
+          pnpm install --frozen-lockfile
+          pnpm electron:make
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
