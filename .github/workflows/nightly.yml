@@ -168,6 +168,15 @@ jobs:
           printf '%s\n' "${{ steps.version.outputs.value }}" > out/VERSION
           hash=$(nix hash path --type sha256 --sri "$src_dir")
           echo "hash=$hash" >> "$GITHUB_OUTPUT"
+
+      - name: Render release notes
+        working-directory: logseq-src
+        env:
+          LOGSEQ_REV: ${{ steps.revision.outputs.rev }}
+          MANIFEST_PATH: ../data/logseq-nightly.json
+          OUTPUT_PATH: static/out/release-notes.md
+        run: bash ../scripts/render-nightly-release-notes.sh
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -175,6 +184,7 @@ jobs:
           path: |
             logseq-src/static/out/logseq-linux-x64-${{ steps.version.outputs.value }}.tar.gz
             logseq-src/static/out/VERSION
+            logseq-src/static/out/release-notes.md
 
   publish-release:
     runs-on: ubuntu-latest
@@ -212,7 +222,7 @@ jobs:
           gh release delete "$tag" -y || true
           gh release create "$tag" builds/logseq-linux-x64-${{ needs.build.outputs.version }}.tar.gz \
             --title "logseq-nightly-${rev_short}" \
-            --notes "Automated nightly build for commit [${rev_short}](https://github.com/logseq/logseq/commit/${rev})." \
+            --notes-file builds/release-notes.md \
             --target main
 
       - name: Update nightly manifest and CLI hashes
