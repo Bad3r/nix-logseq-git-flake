@@ -37,6 +37,15 @@ let
     pnpm = pnpm_10;
     fetcherVersion = 3;
     hash = cliPnpmDepsHash;
+    # nixpkgs fetchPnpmDeps disables pnpm's auto-switch via `pushd ..; pnpm
+    # config set ...`, but `..` is still inside the upstream repo, whose root
+    # package.json pins `packageManager: pnpm@10.33.0`. pnpm walks up, finds it,
+    # and tries to self-install before applying the setting. Place an .npmrc at
+    # the pushd target so the setting is read first.
+    postPatch = ''
+      chmod +w ..
+      echo "manage-package-manager-versions=false" >> ../.npmrc
+    '';
   };
 
   # Build the CLI from an offline pnpm store.
