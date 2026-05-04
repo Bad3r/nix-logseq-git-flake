@@ -61,8 +61,17 @@ let
   # `logseq.common.graph-dir` and friends.
   #
   # Implemented as a fixed-output derivation: `pnpm exec nbb-logseq -e
-  # :load-deps` fetches sha-pinned git/maven deps over the network. The output
-  # is just CLJS sources keyed by namespace, so the NAR hash is deterministic.
+  # :load-deps` fetches sha-pinned git/maven deps over the network. The
+  # `:load-deps` keyword itself is a no-op expression; nbb just has to
+  # bootstrap its dep graph before evaluating any `-e` form, and that
+  # bootstrap is what populates `.nbb/.cache/<hash>/nbb-deps/`. The output is
+  # CLJS sources keyed by namespace, so the NAR hash is deterministic.
+  #
+  # `babashka` is required at build time even though we never invoke `bb`
+  # directly: nbb-logseq's `nbb_deps.js` shells out to `bb uberjar` to pack
+  # the resolved deps before populating the cache. Removing it from
+  # nativeBuildInputs surfaces as `bb: not found` from execSync in the
+  # buildPhase log.
   cliVendor = stdenv.mkDerivation {
     pname = "logseq-cli-vendor";
     inherit version src;
@@ -108,13 +117,47 @@ let
       fi
       nbb_deps="''${cache_dirs[0]}nbb-deps"
 
-      mkdir -p $out
+      if [ ! -d "$nbb_deps" ]; then
+        echo "ERROR: missing $nbb_deps — upstream may have changed nbb-deps layout" >&2
+        exit 1
+      fi
+
+      # Copy every namespace subdir, not just upstream's current vendor
+      # allowlist. nbb's resolver may pull in new top-level deps in a future
+      # nightly (e.g. rewrite-clj); a hardcoded allowlist would silently drop
+      # them and re-trigger the namespace-resolution failure this FOD is
+      # meant to prevent. Loose top-level files like `data_readers.clj` /
+      # `data_readers.cljc` are intentionally skipped — they live at
+      # classpath root and Clojure auto-loads them, so vendoring them would
+      # alter runtime tagged-literal handling.
+      mkdir -p "$out"
+      shopt -s nullglob
+      copied=0
+      for entry in "$nbb_deps"/*/; do
+        name=$(basename "$entry")
+        cp -r "$entry" "$out/$name"
+        copied=$((copied + 1))
+      done
+      shopt -u nullglob
+      if [ "$copied" -eq 0 ]; then
+        echo "ERROR: $nbb_deps had no namespace subdirs — upstream nbb-deps layout may have changed" >&2
+        exit 1
+      fi
+
+      # Strip .git/ trees left behind by nbb's git-pinned deps. Their contents
+      # (pack files, refs) are not bit-stable across clones and would tank the
+      # FOD output hash even though the source files themselves are pinned.
+      find "$out" -name .git -type d -prune -exec rm -rf {} +
+
+      # Sanity check: upstream's `bb build:vendor-nbb-deps` always copies these
+      # four top-level namespaces into vendor/src. If any are missing, nbb's
+      # deps loader produced an unexpected layout and the rest of this build
+      # is suspect.
       for dir in logseq malli borkdude medley; do
-        if [ ! -d "$nbb_deps/$dir" ]; then
-          echo "ERROR: missing $nbb_deps/$dir — upstream may have changed nbb-deps layout" >&2
+        if [ ! -d "$out/$dir" ]; then
+          echo "ERROR: $out/$dir not found after copy — upstream nbb-deps layout may have changed" >&2
           exit 1
         fi
-        cp -r "$nbb_deps/$dir" "$out/$dir"
       done
 
       runHook postInstall
