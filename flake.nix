@@ -225,6 +225,7 @@
             cliSrcHash
             cliVersion
             cliPnpmDepsHash
+            cliVendorHash
             ;
         };
         logseqDesktop = pkgs.stdenv.mkDerivation {

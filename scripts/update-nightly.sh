@@ -42,8 +42,8 @@ CLI_VERSION=$(curl -fsSL \
 echo "  cliVersion=$CLI_VERSION"
 echo "::endgroup::"
 
-# ── Phase 4: Write manifest with placeholder pnpm hash ──────────────
-echo "::group::Phase 4: Write manifest (placeholder pnpm hash)"
+# ── Phase 4: Write manifest with placeholder hashes ─────────────────
+echo "::group::Phase 4: Write manifest (placeholder pnpm/vendor hashes)"
 PLACEHOLDER="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 jq -n \
   --arg tag "$NIGHTLY_TAG" \
@@ -54,6 +54,7 @@ jq -n \
   --arg logseqVersion "$LOGSEQ_VERSION" \
   --arg cliSrcHash "$CLI_SRC_HASH" \
   --arg cliPnpmDepsHash "$PLACEHOLDER" \
+  --arg cliVendorHash "$PLACEHOLDER" \
   --arg cliVersion "$CLI_VERSION" \
   '{
     tag: $tag,
@@ -64,40 +65,51 @@ jq -n \
     logseqVersion: $logseqVersion,
     cliSrcHash: $cliSrcHash,
     cliPnpmDepsHash: $cliPnpmDepsHash,
+    cliVendorHash: $cliVendorHash,
     cliVersion: $cliVersion
   }' >"$MANIFEST"
-echo "  Wrote $MANIFEST with placeholder cliPnpmDepsHash"
+echo "  Wrote $MANIFEST with placeholder cliPnpmDepsHash, cliVendorHash"
 echo "::endgroup::"
 
-# ── Phase 5: Double-build to extract pnpm deps hash ─────────────────
-echo "::group::Phase 5: Double-build for pnpm deps hash"
-set +e
-BUILD_OUTPUT=$(nix build .#logseq-cli 2>&1)
-BUILD_EXIT=$?
-set -e
+# Helper: build with placeholder, parse `got: sha256-...` from the failure.
+extract_hash_from_build_failure() {
+  local field="$1"
+  local key_attr="$2"
+  set +e
+  local output
+  output=$(nix build ".#${key_attr}" 2>&1)
+  local exit_code=$?
+  set -e
+  if [ "$exit_code" -eq 0 ]; then
+    echo "ERROR: build of $key_attr succeeded with placeholder $field — should not happen" >&2
+    return 1
+  fi
+  local hash
+  hash=$(echo "$output" | sed -n 's/.*got: *\(sha256-[A-Za-z0-9+/=]\{44\}\).*/\1/p' | head -1)
+  if [ -z "$hash" ]; then
+    echo "ERROR: could not extract $field from build output" >&2
+    echo "$output" >&2
+    return 1
+  fi
+  echo "$hash"
+}
 
-if [ "$BUILD_EXIT" -eq 0 ]; then
-  echo "ERROR: nix build succeeded with placeholder hash — this should not happen" >&2
-  exit 1
-fi
-
-# ── Phase 6: Extract real hash from error output ─────────────────────
-PNPM_HASH=$(echo "$BUILD_OUTPUT" | sed -n 's/.*got: *\(sha256-[A-Za-z0-9+/=]\{44\}\).*/\1/p' | head -1)
-
-if [ -z "$PNPM_HASH" ]; then
-  echo "ERROR: Could not extract pnpm deps hash from build output" >&2
-  echo "Full build output:" >&2
-  echo "$BUILD_OUTPUT" >&2
-  exit 1
-fi
+# ── Phase 5: Resolve cliPnpmDepsHash ────────────────────────────────
+echo "::group::Phase 5: Resolve cliPnpmDepsHash"
+PNPM_HASH=$(extract_hash_from_build_failure cliPnpmDepsHash logseq-cli)
 echo "  cliPnpmDepsHash=$PNPM_HASH"
-echo "::endgroup::"
-
-# ── Phase 7: Rewrite manifest with real pnpm hash ────────────────────
-echo "::group::Phase 7: Finalize manifest"
 jq --arg hash "$PNPM_HASH" '.cliPnpmDepsHash = $hash' "$MANIFEST" >"${MANIFEST}.tmp"
 mv "${MANIFEST}.tmp" "$MANIFEST"
-echo "  Updated $MANIFEST with real cliPnpmDepsHash"
+echo "::endgroup::"
+
+# ── Phase 6: Resolve cliVendorHash ──────────────────────────────────
+# cliVendor depends on cliPnpmDeps, so the pnpm hash above must already be
+# correct in the manifest before we trigger the vendor build.
+echo "::group::Phase 6: Resolve cliVendorHash"
+VENDOR_HASH=$(extract_hash_from_build_failure cliVendorHash logseq-cli)
+echo "  cliVendorHash=$VENDOR_HASH"
+jq --arg hash "$VENDOR_HASH" '.cliVendorHash = $hash' "$MANIFEST" >"${MANIFEST}.tmp"
+mv "${MANIFEST}.tmp" "$MANIFEST"
 echo "::endgroup::"
 
 # ── Summary ──────────────────────────────────────────────────────────
@@ -109,4 +121,5 @@ echo "  logseqVersion:    $LOGSEQ_VERSION"
 echo "  assetSha256:      $ASSET_HASH"
 echo "  cliSrcHash:       $CLI_SRC_HASH"
 echo "  cliPnpmDepsHash:  $PNPM_HASH"
+echo "  cliVendorHash:    $VENDOR_HASH"
 echo "  cliVersion:       $CLI_VERSION"

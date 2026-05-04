@@ -12,6 +12,7 @@ let
     "logseqVersion"
     "cliSrcHash"
     "cliPnpmDepsHash"
+    "cliVendorHash"
     "cliVersion"
   ];
   missing = lib.filter (key: !hasAttr key parsed) requiredKeys;
@@ -26,5 +27,6 @@ throwIf (missing != [ ]) "Manifest missing required keys: ${concatStringsSep ", 
     "assetSha256"
     "cliSrcHash"
     "cliPnpmDepsHash"
+    "cliVendorHash"
   ]
 )
