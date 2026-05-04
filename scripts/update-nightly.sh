@@ -71,17 +71,22 @@ jq -n \
 echo "  Wrote $MANIFEST with placeholder cliPnpmDepsHash, cliVendorHash"
 echo "::endgroup::"
 
-# Helper: build with placeholder, parse `got: sha256-...` from the failure.
+# Helper: build a single FOD with a placeholder hash, parse the real
+# `got: sha256-...` line from the failure. Targets one FOD attr at a
+# time so the parsed hash is unambiguous even if Nix were to schedule
+# unrelated builds in parallel (`logseq-cli` transitively pulls in
+# both cliPnpmDeps and cliVendor; building one passthru attr forces
+# Nix to evaluate only that subgraph).
 extract_hash_from_build_failure() {
   local field="$1"
-  local key_attr="$2"
+  local target="$2"
   set +e
   local output
-  output=$(nix build ".#${key_attr}" 2>&1)
+  output=$(nix build ".#${target}" 2>&1)
   local exit_code=$?
   set -e
   if [ "$exit_code" -eq 0 ]; then
-    echo "ERROR: build of $key_attr succeeded with placeholder $field — should not happen" >&2
+    echo "ERROR: build of $target succeeded with placeholder $field — should not happen" >&2
     return 1
   fi
   local hash
@@ -96,7 +101,7 @@ extract_hash_from_build_failure() {
 
 # ── Phase 5: Resolve cliPnpmDepsHash ────────────────────────────────
 echo "::group::Phase 5: Resolve cliPnpmDepsHash"
-PNPM_HASH=$(extract_hash_from_build_failure cliPnpmDepsHash logseq-cli)
+PNPM_HASH=$(extract_hash_from_build_failure cliPnpmDepsHash logseq-cli.cliPnpmDeps)
 echo "  cliPnpmDepsHash=$PNPM_HASH"
 jq --arg hash "$PNPM_HASH" '.cliPnpmDepsHash = $hash' "$MANIFEST" >"${MANIFEST}.tmp"
 mv "${MANIFEST}.tmp" "$MANIFEST"
@@ -106,7 +111,7 @@ echo "::endgroup::"
 # cliVendor depends on cliPnpmDeps, so the pnpm hash above must already be
 # correct in the manifest before we trigger the vendor build.
 echo "::group::Phase 6: Resolve cliVendorHash"
-VENDOR_HASH=$(extract_hash_from_build_failure cliVendorHash logseq-cli)
+VENDOR_HASH=$(extract_hash_from_build_failure cliVendorHash logseq-cli.cliVendor)
 echo "  cliVendorHash=$VENDOR_HASH"
 jq --arg hash "$VENDOR_HASH" '.cliVendorHash = $hash' "$MANIFEST" >"${MANIFEST}.tmp"
 mv "${MANIFEST}.tmp" "$MANIFEST"
