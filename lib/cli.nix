@@ -37,15 +37,16 @@ let
     pnpm = pnpm_10;
     fetcherVersion = 3;
     hash = cliPnpmDepsHash;
-    # nixpkgs fetchPnpmDeps disables pnpm's auto-switch via `pushd ..; pnpm
-    # config set ...`, but `..` is still inside the upstream repo, whose root
-    # package.json pins `packageManager: pnpm@10.33.0`. pnpm walks up, finds it,
-    # and tries to self-install before applying the setting. Place an .npmrc at
-    # the pushd target so the setting is read first.
-    postPatch = ''
-      chmod +w ..
-      echo "manage-package-manager-versions=false" >> ../.npmrc
-    '';
+    # Both source/package.json and source/deps/cli/package.json pin
+    # `packageManager: pnpm@<exact version>`. When the nixpkgs-provided pnpm
+    # doesn't match exactly (e.g. patch-level bump), pnpm self-installs the
+    # requested version into $HOME/.local/share before running any command —
+    # failing in the build sandbox. fetchPnpmDeps tries to suppress this with
+    # `pushd ..; pnpm config set manage-package-manager-versions false`, but
+    # that runs from `source/deps/`, where pnpm walks up to `source/package.json`
+    # and triggers the auto-switch *during* the config-set itself. The env var
+    # is consulted before any package.json walk, so it short-circuits cleanly.
+    env.npm_config_manage_package_manager_versions = "false";
   };
 
   # Build the CLI from an offline pnpm store.
@@ -71,7 +72,12 @@ let
     pnpmDeps = cliPnpmDeps;
     pnpmRoot = "cli";
 
-    env.npm_config_nodedir = nodejs_22;
+    env = {
+      npm_config_nodedir = nodejs_22;
+      # Same rationale as on cliPnpmDeps: pin packageManager mismatch would
+      # otherwise trigger pnpm's auto-switch during `pnpm rebuild`.
+      npm_config_manage_package_manager_versions = "false";
+    };
 
     buildPhase = ''
       runHook preBuild
