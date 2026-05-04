@@ -286,24 +286,41 @@
           # Runtime smoke test: invoking the CLI exercises nbb-logseq's
           # classpath (cli/src + cli/vendor/src). Any missing vendor
           # namespace (the regression class fixed in PR #21) crashes here
-          # on the first loadFile, so a passing `--help` is a strong
+          # on the first loadFile, so passing both probes is a strong
           # signal that the FOD copy still produces a working tree.
           logseq-cli-help = pkgs.runCommand "logseq-cli-help-check" { } ''
             export HOME=$TMPDIR
             export XDG_CACHE_HOME=$TMPDIR/cache
-            output=$(${cli}/bin/logseq-cli --help 2>&1)
-            status=$?
-            if [ "$status" -ne 0 ]; then
-              echo "logseq-cli --help exited $status" >&2
-              echo "$output" >&2
+
+            # Probe 1: --help exercises the help renderer's namespace.
+            help_output=$(${cli}/bin/logseq-cli --help 2>&1)
+            help_status=$?
+            if [ "$help_status" -ne 0 ]; then
+              echo "logseq-cli --help exited $help_status" >&2
+              echo "$help_output" >&2
               exit 1
             fi
             # `Usage:` and `mcp-server` are stable substrings of the help
             # output produced by the upstream CLI; require both so a future
             # silent fallthrough (e.g. nbb prints a stack trace but still
             # exits 0) doesn't get rubber-stamped.
-            echo "$output" | ${pkgs.gnugrep}/bin/grep -q '^Usage:'
-            echo "$output" | ${pkgs.gnugrep}/bin/grep -q 'mcp-server'
+            echo "$help_output" | ${pkgs.gnugrep}/bin/grep -q '^Usage:'
+            echo "$help_output" | ${pkgs.gnugrep}/bin/grep -q 'mcp-server'
+
+            # Probe 2: `list` against an empty HOME forces the
+            # graph-discovery namespace (the original regression site —
+            # `logseq.common.graph-dir`) to load. With no graphs present
+            # the CLI emits a stable warning string and exits 0; a missing
+            # vendor namespace would crash before reaching that point.
+            list_output=$(${cli}/bin/logseq-cli list 2>&1)
+            list_status=$?
+            if [ "$list_status" -ne 0 ]; then
+              echo "logseq-cli list exited $list_status" >&2
+              echo "$list_output" >&2
+              exit 1
+            fi
+            echo "$list_output" | ${pkgs.gnugrep}/bin/grep -qF 'database version'
+
             touch $out
           '';
           pre-commit-check = preCommit;
