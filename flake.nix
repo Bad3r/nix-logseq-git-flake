@@ -288,6 +288,17 @@
           # namespace (the regression class fixed in PR #21) crashes here
           # on the first loadFile, so passing both probes is a strong
           # signal that the FOD copy still produces a working tree.
+          #
+          # Both probes assert on stable upstream substrings (`Usage:`,
+          # `mcp-server`, `database version`). If upstream rewords any of
+          # these, the grep fails closed — that's the right direction for
+          # a regression guard, and the failing line in the build log
+          # points at the exact substring to update.
+          #
+          # Probe order matters: probe 1 (`--help`) populates
+          # `NBB_CACHE_DIR` before probe 2 (`list`) reuses it. That keeps
+          # probe 2 fast at the cost of not independently verifying empty-
+          # cache population — probe 1 covers that case implicitly.
           logseq-cli-help = pkgs.runCommand "logseq-cli-help-check" { } ''
             export HOME=$TMPDIR
             export XDG_CACHE_HOME=$TMPDIR/cache
