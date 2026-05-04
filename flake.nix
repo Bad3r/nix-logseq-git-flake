@@ -283,6 +283,29 @@
             ${pkgs.coreutils}/bin/test -x ${cli}/bin/logseq-cli
             touch $out
           '';
+          # Runtime smoke test: invoking the CLI exercises nbb-logseq's
+          # classpath (cli/src + cli/vendor/src). Any missing vendor
+          # namespace (the regression class fixed in PR #21) crashes here
+          # on the first loadFile, so a passing `--help` is a strong
+          # signal that the FOD copy still produces a working tree.
+          logseq-cli-help = pkgs.runCommand "logseq-cli-help-check" { } ''
+            export HOME=$TMPDIR
+            export XDG_CACHE_HOME=$TMPDIR/cache
+            output=$(${cli}/bin/logseq-cli --help 2>&1)
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "logseq-cli --help exited $status" >&2
+              echo "$output" >&2
+              exit 1
+            fi
+            # `Usage:` and `mcp-server` are stable substrings of the help
+            # output produced by the upstream CLI; require both so a future
+            # silent fallthrough (e.g. nbb prints a stack trace but still
+            # exits 0) doesn't get rubber-stamped.
+            echo "$output" | ${pkgs.gnugrep}/bin/grep -q '^Usage:'
+            echo "$output" | ${pkgs.gnugrep}/bin/grep -q 'mcp-server'
+            touch $out
+          '';
           pre-commit-check = preCommit;
         };
         devShells =
