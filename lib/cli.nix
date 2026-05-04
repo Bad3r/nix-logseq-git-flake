@@ -6,6 +6,9 @@
   fetchFromGitHub,
   fetchPnpmDeps,
   writeShellScript,
+  babashka,
+  cacert,
+  git,
   nodejs_22,
   pnpm_10,
   pnpmConfigHook,
@@ -19,6 +22,7 @@
   cliSrcHash,
   cliVersion,
   cliPnpmDepsHash,
+  cliVendorHash,
 }:
 
 let
@@ -47,6 +51,76 @@ let
     # and triggers the auto-switch *during* the config-set itself. The env var
     # is consulted before any package.json walk, so it short-circuits cleanly.
     env.npm_config_manage_package_manager_versions = "false";
+  };
+
+  # Replicate upstream's `bb build:vendor-nbb-deps` task. nbb-logseq is an
+  # interpreter, not a compiler, so the CLI needs the source of every
+  # transitively-required namespace at runtime. Upstream collects them under
+  # deps/cli/vendor/src/ before publishing to npm; we have to do the same
+  # before the runtime classpath (cli/src + cli/vendor/src) can resolve
+  # `logseq.common.graph-dir` and friends.
+  #
+  # Implemented as a fixed-output derivation: `pnpm exec nbb-logseq -e
+  # :load-deps` fetches sha-pinned git/maven deps over the network. The output
+  # is just CLJS sources keyed by namespace, so the NAR hash is deterministic.
+  cliVendor = stdenv.mkDerivation {
+    pname = "logseq-cli-vendor";
+    inherit version src;
+    sourceRoot = "${src.name}/deps";
+
+    nativeBuildInputs = [
+      babashka
+      cacert
+      git
+      nodejs_22
+      pnpm_10
+      pnpmConfigHook
+    ];
+
+    pnpmDeps = cliPnpmDeps;
+    pnpmRoot = "cli";
+
+    env.npm_config_manage_package_manager_versions = "false";
+
+    # FOD: allow network for nbb's git/maven fetches.
+    impureEnvVars = lib.fetchers.proxyImpureEnvVars;
+    outputHashMode = "recursive";
+    outputHashAlgo = "sha256";
+    outputHash = cliVendorHash;
+
+    buildPhase = ''
+      runHook preBuild
+      pushd cli
+      pnpm exec nbb-logseq -e :load-deps
+      popd
+      runHook postBuild
+    '';
+
+    installPhase = ''
+      runHook preInstall
+
+      shopt -s nullglob
+      cache_dirs=(cli/.nbb/.cache/*/)
+      shopt -u nullglob
+      if [ ''${#cache_dirs[@]} -ne 1 ]; then
+        echo "ERROR: expected exactly one nbb cache dir, got ''${#cache_dirs[@]}" >&2
+        exit 1
+      fi
+      nbb_deps="''${cache_dirs[0]}nbb-deps"
+
+      mkdir -p $out
+      for dir in logseq malli borkdude medley; do
+        if [ ! -d "$nbb_deps/$dir" ]; then
+          echo "ERROR: missing $nbb_deps/$dir — upstream may have changed nbb-deps layout" >&2
+          exit 1
+        fi
+        cp -r "$nbb_deps/$dir" "$out/$dir"
+      done
+
+      runHook postInstall
+    '';
+
+    dontFixup = true;
   };
 
   # Build the CLI from an offline pnpm store.
@@ -95,6 +169,14 @@ let
       # Install the full deps tree (cli + sibling local deps)
       mkdir -p $out
       cp -r . $out/
+
+      # Wire up vendor sources next to cli/src so nbb-logseq can resolve
+      # logseq.common.graph-dir etc. at runtime. The bb task also drops
+      # nbb.edn so the runtime doesn't try to re-resolve deps from network.
+      mkdir -p $out/cli/vendor/src
+      cp -r ${cliVendor}/. $out/cli/vendor/src/
+      chmod -R u+w $out/cli/vendor
+      rm -f $out/cli/nbb.edn
 
       # Patch nbb_deps.js to use NBB_CACHE_DIR env var if set. The file is
       # minified, so upstream regularly renames local symbols while keeping the
