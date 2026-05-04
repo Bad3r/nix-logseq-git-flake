@@ -279,6 +279,16 @@ stdenv.mkDerivation {
     chmod +x $out/bin/logseq-cli
   '';
 
+  # Expose the FODs so `scripts/update-nightly.sh` can target them
+  # individually (`nix build .#logseq-cli.cliPnpmDeps` and
+  # `.cliVendor`) instead of building the full CLI just to surface a
+  # placeholder hash mismatch. Building only one FOD at a time also
+  # rules out any parallel-build interleaving in the hash-extraction
+  # `sed` even when `--max-jobs` > 1.
+  passthru = {
+    inherit cliPnpmDeps cliVendor;
+  };
+
   meta = {
     description = "Logseq CLI for DB graphs - MCP server and graph management";
     homepage = "https://github.com/logseq/logseq/tree/master/deps/cli";
