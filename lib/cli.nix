@@ -122,43 +122,29 @@ let
         exit 1
       fi
 
-      # Copy every namespace subdir, not just upstream's current vendor
-      # allowlist. nbb's resolver may pull in new top-level deps in a future
-      # nightly (e.g. rewrite-clj); a hardcoded allowlist would silently drop
-      # them and re-trigger the namespace-resolution failure this FOD is
-      # meant to prevent. Loose top-level files like `data_readers.clj` /
-      # `data_readers.cljc` are intentionally skipped — they live at
-      # classpath root and Clojure auto-loads them, so vendoring them would
-      # alter runtime tagged-literal handling.
+      # Mirror upstream's `bb build:vendor-nbb-deps` allowlist exactly.
+      # These are the four namespace prefixes the CLI's runtime classpath
+      # actually requires (logseq sibling deps + malli + borkdude + medley);
+      # nbb's full `nbb-deps/` cache also contains transitive deps like
+      # `clj-kondo.exports/` that ship compiled JARs/classfiles, which add
+      # bytes we don't need and risk introducing FOD hash variance.
+      # Maintenance contract: if a future upstream nightly extends
+      # upstream's bb task copy list (currently in
+      # `deps/cli/bb.edn :: build:vendor-nbb-deps`), update this loop and
+      # `cliVendorHash` together.
       mkdir -p "$out"
-      shopt -s nullglob
-      copied=0
-      for entry in "$nbb_deps"/*/; do
-        name=$(basename "$entry")
-        cp -r "$entry" "$out/$name"
-        copied=$((copied + 1))
+      for dir in logseq malli borkdude medley; do
+        if [ ! -d "$nbb_deps/$dir" ]; then
+          echo "ERROR: missing $nbb_deps/$dir — upstream may have changed nbb-deps layout" >&2
+          exit 1
+        fi
+        cp -r "$nbb_deps/$dir" "$out/$dir"
       done
-      shopt -u nullglob
-      if [ "$copied" -eq 0 ]; then
-        echo "ERROR: $nbb_deps had no namespace subdirs — upstream nbb-deps layout may have changed" >&2
-        exit 1
-      fi
 
       # Strip .git/ trees left behind by nbb's git-pinned deps. Their contents
       # (pack files, refs) are not bit-stable across clones and would tank the
       # FOD output hash even though the source files themselves are pinned.
       find "$out" -name .git -type d -prune -exec rm -rf {} +
-
-      # Sanity check: upstream's `bb build:vendor-nbb-deps` always copies these
-      # four top-level namespaces into vendor/src. If any are missing, nbb's
-      # deps loader produced an unexpected layout and the rest of this build
-      # is suspect.
-      for dir in logseq malli borkdude medley; do
-        if [ ! -d "$out/$dir" ]; then
-          echo "ERROR: $out/$dir not found after copy — upstream nbb-deps layout may have changed" >&2
-          exit 1
-        fi
-      done
 
       runHook postInstall
     '';
