@@ -4,8 +4,8 @@ pkgs.runCommand "logseq-cli-help-check" { } ''
   export XDG_CACHE_HOME=$TMPDIR/cache
 
   # Probe 1: --help exercises the help renderer's namespace.
-  help_output=$(${cli}/bin/logseq-cli --help 2>&1)
-  help_status=$?
+  help_status=0
+  help_output=$(${cli}/bin/logseq-cli --help 2>&1) || help_status=$?
   if [ "$help_status" -ne 0 ]; then
     echo "logseq-cli --help exited $help_status" >&2
     echo "$help_output" >&2
@@ -19,8 +19,8 @@ pkgs.runCommand "logseq-cli-help-check" { } ''
 
   # Probe 2: `list` against an empty HOME forces graph-discovery namespaces
   # to load and catches missing vendored nbb runtime sources.
-  list_output=$(${cli}/bin/logseq-cli list 2>&1)
-  list_status=$?
+  list_status=0
+  list_output=$(${cli}/bin/logseq-cli list 2>&1) || list_status=$?
   if [ "$list_status" -ne 0 ]; then
     echo "logseq-cli list exited $list_status" >&2
     echo "$list_output" >&2
