@@ -55,7 +55,7 @@ IMPORTANT GUIDELINES:
 - DO NOT post any comments to the issue
 - Your ONLY action should be to apply labels using gh issue edit
 - Apply a label only when the issue clearly matches it; when in doubt, skip it
-- Use faceted labels from `docs/reference/github-labels.md` when available
+- Treat the `gh label list` output as the authoritative label set
 - Always apply exactly one `type(...)` label if applying labels
 - Apply area labels only when the component or workflow surface is explicit
 - Apply priority labels only when severity is clearly stated or obvious, such as a broken release pipeline for `priority(p1)`
