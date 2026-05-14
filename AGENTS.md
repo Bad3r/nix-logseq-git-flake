@@ -15,8 +15,8 @@ This file provides guidance to coding agents when working with this repository.
 - `flake.nix` is the small flake-parts/import-tree entrypoint.
 - `modules/` contains auto-imported flake-parts modules for packages, checks, formatter, dev shells, hooks, overlays, and supported systems.
 - `modules/_packages/`, `_checks/`, and `_hooks/` are helper trees ignored by import-tree because their paths include `/_`.
-- `modules/_packages/scope.nix` assembles the private package scope exposed to flake modules as `logseqNightly`.
-- `modules/_packages/desktop/scope.nix` wires the desktop payload, upstream source, FHS wrapper, launcher, icon, and final desktop derivation.
+- `modules/_packages/logseq-nightly.nix` assembles the private package set exposed to flake modules as `logseqNightly`.
+- `modules/_packages/desktop/assembly.nix` wires the desktop payload, upstream source, FHS wrapper, launcher, icon, and final desktop derivation.
 - `modules/_packages/desktop/package.nix` is the actual desktop derivation.
 - `data/logseq-nightly.json` is a validated manifest, not loose config.
 - `lib/` contains generic helpers shared by flake modules, including manifest validation and runtime library lists.
@@ -45,7 +45,7 @@ The manifest is the single source of truth for downstream consumers. Adding a fi
 
 ### Manifest fan-out inside flake modules
 
-- `modules/logseq-scope.nix` loads `data/logseq-nightly.json` through `lib/loadManifest.nix` and exposes the shared package scope as a per-system module argument.
+- `modules/logseq-scope.nix` loads `data/logseq-nightly.json` through `lib/loadManifest.nix` and exposes the shared package set as a per-system module argument.
 - `modules/_packages/desktop/payload.nix` fetches the desktop bundle from `manifest.assetUrl` with `manifest.assetSha256`.
 - `modules/_packages/desktop/upstream-source.nix` fetches `logseq/logseq` at `manifest.logseqRev` with `manifest.cliSrcHash`; this source is shared by the desktop icon and CLI build.
 - `modules/_packages/logseq-cli/` also reads `cliPnpmDepsHash`, `cliVendorHash`, and `cliVersion`. The pnpm hash feeds the offline pnpm store; the vendor hash pins the fixed-output nbb dependency source tree copied into `cli/vendor/src`.
