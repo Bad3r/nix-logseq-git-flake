@@ -121,6 +121,8 @@ claude mcp add logseq -- logseq-cli mcp-server -g MyGraph -s
 
 ## Development
 
+The flake is composed with `flake-parts` and `import-tree`. `flake.nix` only wires inputs and imports `nix/flake-modules/`; helper files live under underscore directories such as `nix/flake-modules/_packages/` so they are not imported as modules.
+
 ```bash
 nix build .#logseq        # desktop app
 nix build .#logseq-cli    # CLI tool
