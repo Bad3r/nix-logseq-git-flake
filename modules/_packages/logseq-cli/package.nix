@@ -1,0 +1,101 @@
+{
+  babashka,
+  cacert,
+  cliPnpmDepsHash,
+  cliSrcHash,
+  cliVendorHash,
+  cliVersion,
+  fetchFromGitHub,
+  fetchPnpmDeps,
+  gcc,
+  git,
+  gnumake,
+  lib,
+  logseqRev,
+  nodejs_22,
+  pkg-config,
+  pnpm_10,
+  pnpmConfigHook,
+  python3,
+  sqlite,
+  stdenv,
+  writeShellScript,
+}:
+let
+  version = cliVersion;
+  src = import ./source.nix {
+    inherit fetchFromGitHub cliSrcHash logseqRev;
+  };
+  cliPnpmDeps = import ./pnpm-deps.nix {
+    inherit
+      cliPnpmDepsHash
+      fetchPnpmDeps
+      pnpm_10
+      src
+      version
+      ;
+  };
+  cliVendor = import ./vendor.nix {
+    inherit
+      babashka
+      cacert
+      cliPnpmDeps
+      cliVendorHash
+      git
+      lib
+      nodejs_22
+      pnpm_10
+      pnpmConfigHook
+      src
+      stdenv
+      version
+      ;
+  };
+  cliBuilt = import ./build.nix {
+    inherit
+      cliPnpmDeps
+      cliVendor
+      gcc
+      gnumake
+      nodejs_22
+      pkg-config
+      pnpm_10
+      pnpmConfigHook
+      python3
+      sqlite
+      src
+      stdenv
+      version
+      ;
+  };
+  wrapper = import ./wrapper.nix {
+    inherit cliBuilt nodejs_22 writeShellScript;
+  };
+in
+stdenv.mkDerivation {
+  pname = "logseq-cli";
+  inherit version;
+
+  dontUnpack = true;
+
+  installPhase = ''
+    mkdir -p $out/bin $out/lib
+    ln -s ${cliBuilt} $out/lib/logseq-cli
+    cp ${wrapper} $out/bin/logseq-cli
+    chmod +x $out/bin/logseq-cli
+  '';
+
+  # Expose the FODs so `scripts/update-nightly.sh` can target them
+  # individually (`nix build .#logseq-cli.cliPnpmDeps` and `.cliVendor`).
+  passthru = {
+    inherit cliPnpmDeps cliVendor;
+  };
+
+  meta = {
+    description = "Logseq CLI for DB graphs - MCP server and graph management";
+    homepage = "https://github.com/logseq/logseq/tree/master/deps/cli";
+    license = lib.licenses.agpl3Plus;
+    mainProgram = "logseq-cli";
+    platforms = lib.platforms.linux;
+  };
+}
