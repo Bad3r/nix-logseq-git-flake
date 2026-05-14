@@ -29,5 +29,5 @@ let
 in
 desktop
 // {
-  inherit cli manifest runtimeLibs;
+  inherit cli;
 }
