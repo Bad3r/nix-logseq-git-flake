@@ -4,11 +4,11 @@
   pkgs,
 }:
 let
-  manifest = import ../../../lib/loadManifest.nix {
+  manifest = import ../../lib/loadManifest.nix {
     inherit lib manifestPath;
   };
 
-  runtimeLibs = import ../../../lib/runtime-libs.nix;
+  runtimeLibs = import ../../lib/runtime-libs.nix;
   desktop = import ./desktop.nix {
     inherit
       lib
@@ -17,7 +17,7 @@ let
       runtimeLibs
       ;
   };
-  cli = pkgs.callPackage ../../../lib/cli.nix {
+  cli = pkgs.callPackage ../../lib/cli.nix {
     inherit (manifest)
       cliPnpmDepsHash
       cliSrcHash

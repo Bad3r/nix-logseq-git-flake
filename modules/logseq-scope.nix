@@ -4,7 +4,7 @@ _: {
     {
       _module.args.logseqNightly = import ./_packages {
         inherit lib pkgs;
-        manifestPath = ../../data/logseq-nightly.json;
+        manifestPath = ../data/logseq-nightly.json;
       };
     };
 }

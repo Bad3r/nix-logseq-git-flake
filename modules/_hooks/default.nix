@@ -86,7 +86,7 @@ let
     "\\.patch$"
   ];
   preCommit = git-hooks.lib.${system}.run {
-    src = ../../..;
+    src = ../..;
 
     hooks = {
       treefmt = {

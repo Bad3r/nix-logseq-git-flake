@@ -1,6 +1,6 @@
 { self, ... }:
 {
-  flake.overlays.default = import ../../overlays {
+  flake.overlays.default = import ../overlays {
     inherit (self) packages;
   };
 }
