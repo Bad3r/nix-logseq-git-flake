@@ -60,7 +60,7 @@ When a nightly fails, first check whether upstream renamed a path, changed the p
 
 ### Desktop FHS wrapper
 
-The desktop package is wrapped in `pkgs.buildFHSEnv` because Electron expects a traditional `/lib`, `/usr/lib` filesystem layout for its Chromium runtime. `lib/runtime-libs.nix` lists the injected libraries — extend it only when a runtime-load failure points to a missing `.so`. The `launcher` shell script in `flake.nix` additionally sets NVIDIA PRIME and Mesa driver paths before execing the FHS env; GPU-related regressions belong there, not in `runtime-libs.nix`.
+The desktop package is wrapped in `pkgs.buildFHSEnv` because Electron expects a traditional `/lib`, `/usr/lib` filesystem layout for its Chromium runtime. `lib/runtime-libs.nix` lists the injected libraries — extend it only when a runtime-load failure points to a missing `.so`. The `launcher` shell script in `nix/flake-modules/_packages/launcher.nix` additionally sets NVIDIA PRIME and Mesa driver paths before execing the FHS env; GPU-related regressions belong there, not in `runtime-libs.nix`.
 
 ## Core Commands
 
