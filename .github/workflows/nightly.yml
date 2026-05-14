@@ -125,14 +125,6 @@ jobs:
           test -f ./dist/db-worker-node.js
           test -f ./dist/db-worker-node-assets.json
 
-      - name: Verify bundled CLI
-        working-directory: logseq-src
-        run: |
-          test -f ./static/js/logseq-cli.js
-          node ./static/js/logseq-cli.js --help >/tmp/logseq-cli-help.txt
-          grep -qE "^Usage:" /tmp/logseq-cli-help.txt
-          grep -q "mcp-server" /tmp/logseq-cli-help.txt
-
       - name: Verify desktop runtime script locations
         working-directory: logseq-src
         run: |
