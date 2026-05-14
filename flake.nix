@@ -406,7 +406,7 @@
                   in_pair && /optional: true/ {
                     optional = 1
                   }
-                  in_pair && /^[[:space:]]*},/ {
+                  in_pair && /^[[:space:]]*}[,]?[[:space:]]*$/ {
                     if (!optional) {
                       print path
                     }
