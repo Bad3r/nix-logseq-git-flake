@@ -17,7 +17,7 @@ let
       runtimeLibs
       ;
   };
-  cli = pkgs.callPackage ../../lib/cli.nix {
+  cli = pkgs.callPackage ./logseq-cli/package.nix {
     inherit (manifest)
       cliPnpmDepsHash
       cliSrcHash

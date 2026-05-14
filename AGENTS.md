@@ -8,7 +8,7 @@ This file provides guidance to coding agents when working with this repository.
 
 - This repo packages Logseq nightly builds as a Nix flake for Linux `x86_64-linux`.
 - Main outputs are `logseq` (desktop), `logseq-cli` (CLI), and `default` (both).
-- Most implementation work happens in `modules/`, `lib/logseq-cli/`, `lib/loadManifest.nix`, `lib/runtime-libs.nix`, `scripts/update-nightly.sh`, `scripts/render-nightly-release-notes.sh`, and `.github/workflows/nightly.yml`.
+- Most implementation work happens in `modules/`, `lib/loadManifest.nix`, `lib/runtime-libs.nix`, `scripts/update-nightly.sh`, `scripts/render-nightly-release-notes.sh`, and `.github/workflows/nightly.yml`.
 
 ## Repo Map
 
@@ -16,9 +16,10 @@ This file provides guidance to coding agents when working with this repository.
 - `modules/` contains auto-imported flake-parts modules for packages, checks, formatter, dev shells, hooks, overlays, and supported systems.
 - `modules/_packages/`, `_checks/`, and `_hooks/` are helper trees ignored by import-tree because their paths include `/_`.
 - `data/logseq-nightly.json` is a validated manifest, not loose config.
+- `lib/` contains generic helpers shared by flake modules, including manifest validation and runtime library lists.
 - `lib/loadManifest.nix` enforces required keys and `sha256-` SRI hashes.
-- `lib/cli.nix` is the compatibility entrypoint for the CLI package; `lib/logseq-cli/` builds the upstream CLI from the Logseq monorepo with offline pnpm deps and a vendored nbb runtime source tree.
 - `lib/runtime-libs.nix` feeds the desktop FHS wrapper; `overlays/default.nix` stays intentionally small.
+- `modules/_packages/logseq-cli/` builds the upstream CLI from the Logseq monorepo with offline pnpm deps and a vendored nbb runtime source tree.
 - `scripts/update-nightly.sh` regenerates manifest fields, CLI source/dependency hashes, and the CLI vendor hash.
 - `scripts/render-nightly-release-notes.sh` renders release notes from the cloned upstream Logseq repo.
 - `.actrc` is tracked local `act` configuration; `.act/` is runtime state and stays ignored.
@@ -44,7 +45,7 @@ The manifest is the single source of truth for downstream consumers. Adding a fi
 - `modules/logseq-scope.nix` loads `data/logseq-nightly.json` through `lib/loadManifest.nix` and exposes the shared package scope as a per-system module argument.
 - `modules/_packages/payload.nix` fetches the desktop bundle from `manifest.assetUrl` with `manifest.assetSha256`.
 - `modules/_packages/upstream-source.nix` fetches `logseq/logseq` at `manifest.logseqRev` with `manifest.cliSrcHash`; this source is shared by the desktop icon and CLI build.
-- `lib/logseq-cli/` also reads `cliPnpmDepsHash`, `cliVendorHash`, and `cliVersion`. The pnpm hash feeds the offline pnpm store; the vendor hash pins the fixed-output nbb dependency source tree copied into `cli/vendor/src`.
+- `modules/_packages/logseq-cli/` also reads `cliPnpmDepsHash`, `cliVendorHash`, and `cliVersion`. The pnpm hash feeds the offline pnpm store; the vendor hash pins the fixed-output nbb dependency source tree copied into `cli/vendor/src`.
 
 ### Upstream layout assumptions
 
@@ -148,7 +149,7 @@ Required env vars for `scripts/update-nightly.sh`: `LOGSEQ_REV`, `LOGSEQ_VERSION
 ## What To Run After Common Changes
 
 - `flake.nix` or `modules/**`: run `nix fmt`, `nix flake show --all-systems --accept-flake-config`, and at least one targeted build or check attr.
-- `lib/cli.nix` or `lib/logseq-cli/**`: run `nix build .#logseq-cli` or `nix build .#checks.x86_64-linux.logseq-cli-help`; the smoke check exercises the vendored nbb runtime path.
+- `modules/_packages/logseq-cli/**`: run `nix build .#logseq-cli` or `nix build .#checks.x86_64-linux.logseq-cli-help`; the smoke check exercises the vendored nbb runtime path.
 - `lib/loadManifest.nix` or `data/logseq-nightly.json`: run `nix build .#checks.x86_64-linux.logseq-runtime-assets` for desktop ASAR layout changes, or `nix flake check` for broader manifest/load-path changes.
 - `.github/workflows/*.yml` or `scripts/*.sh`: run the relevant formatter, then `nix develop -c pre-commit run --all-files` if practical. Use the long-running local `act` build only when the workflow or script change materially affects the nightly build path and smaller checks cannot cover it.
 - Hook config changes: run `nix build .#checks.x86_64-linux.pre-commit-check`; for pre-push-only hooks, also run the specific hook with `nix develop -c pre-commit run <hook> --hook-stage pre-push --all-files`.
@@ -216,7 +217,7 @@ Required env vars for `scripts/update-nightly.sh`: `LOGSEQ_REV`, `LOGSEQ_VERSION
 - Do not edit the `result` symlink; it is a build artifact.
 - Treat `data/logseq-nightly.json` as generated data unless the task is specifically about manifest format or manifest values.
 - When updating the CLI source revision flow, expect to update `cliSrcHash`, `cliPnpmDepsHash`, and `cliVendorHash`.
-- When changing the CLI dependency/vendor flow, keep `lib/cli.nix`, `lib/logseq-cli/`, `scripts/update-nightly.sh`, `lib/loadManifest.nix`, and `data/logseq-nightly.json` in sync.
+- When changing the CLI dependency/vendor flow, keep `modules/_packages/logseq-cli/`, `scripts/update-nightly.sh`, `lib/loadManifest.nix`, and `data/logseq-nightly.json` in sync.
 - For local `act` runs, inspect jobs with `act -l -W .github/workflows/nightly.yml`; default to the safe `build` job unless the user explicitly wants the side-effectful `publish-release` path.
 - `publish-release` creates/releases assets and can auto-commit a manifest bump back to `main`; after a successful live run, the local checkout may need `git pull --ff-only origin main`.
 - The fastest trustworthy feedback is usually a targeted `nix build` or one check attr, not a full `nix flake check`.
