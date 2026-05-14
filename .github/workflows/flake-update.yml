@@ -61,7 +61,7 @@ jobs:
 
       - name: Check Nix flake Nixpkgs inputs
         if: steps.changes.outputs.changed == 'true'
-        uses: DeterminateSystems/flake-checker-action@main
+        uses: DeterminateSystems/flake-checker-action@v12
         with:
           send-statistics: false
           fail-mode: true
