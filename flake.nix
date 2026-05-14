@@ -27,7 +27,7 @@
       git-hooks,
     }:
     let
-      systems = flake-utils.lib.defaultSystems;
+      systems = [ "x86_64-linux" ];
     in
     flake-utils.lib.eachSystem systems (
       system:
@@ -55,20 +55,9 @@
         logseqTree = pkgs.runCommand "logseq-tree" { } ''
           mkdir -p $out/share/logseq
           src="${payload}"
-          if [ -d "$src/Logseq-linux-x64" ]; then
-            cp -r "$src/Logseq-linux-x64/." $out/share/logseq/
-          else
-            cp -r "$src/." $out/share/logseq/
-          fi
-          # electron-builder (upstream after logseq#12517) names the exe
-          # lowercase `logseq`; older electron-forge nightlies shipped `Logseq`.
-          # Expose both so the launcher and `runScript` work either way.
-          cd $out/share/logseq
-          if [ -x logseq ] && [ ! -e Logseq ]; then
-            ln -s logseq Logseq
-          elif [ -x Logseq ] && [ ! -e logseq ]; then
-            ln -s Logseq logseq
-          fi
+          cp -r "$src/." $out/share/logseq/
+          test -x "$out/share/logseq/logseq" \
+            || { echo "logseq executable missing at expected path" >&2; exit 1; }
         '';
         fhsBase =
           {
@@ -111,6 +100,74 @@
           cp ${logseqSrc}/resources/icon.png \
             $out/share/icons/hicolor/512x512/apps/logseq.png
         '';
+        dprintPlugins = pkgs.dprint-plugins.getPluginList (
+          plugins: with plugins; [
+            dprint-plugin-json
+            dprint-plugin-markdown
+            dprint-plugin-toml
+            g-plane-pretty_yaml
+            g-plane-markup_fmt
+          ]
+        );
+        dprintConfig = pkgs.writeText "dprint.json" (
+          builtins.toJSON {
+            plugins = dprintPlugins;
+          }
+        );
+        dprintWithPlugins = pkgs.writeShellApplication {
+          name = "dprint";
+          runtimeInputs = [ pkgs.dprint ];
+          text = ''
+            if [ "$#" -eq 0 ]; then
+              exec ${lib.getExe pkgs.dprint} --config ${dprintConfig}
+            fi
+
+            subcommand="$1"
+            shift
+            exec ${lib.getExe pkgs.dprint} "$subcommand" --config ${dprintConfig} "$@"
+          '';
+        };
+        hookStatix = pkgs.writeShellApplication {
+          name = "hook-statix";
+          runtimeInputs = [ pkgs.statix ];
+          text = ''
+            status=0
+            for path in "$@"; do
+              if [ -e "$path" ]; then
+                statix check --format errfmt "$path" || status=$?
+              fi
+            done
+            exit "$status"
+          '';
+        };
+        hookNixParse = pkgs.writeShellApplication {
+          name = "hook-nix-parse";
+          runtimeInputs = [ pkgs.nix ];
+          text = ''
+            paths=()
+            for path in "$@"; do
+              if [ -e "$path" ]; then
+                paths+=("$path")
+              fi
+            done
+
+            if [ "''${#paths[@]}" -eq 0 ]; then
+              exit 0
+            fi
+
+            exec nix-instantiate --parse "''${paths[@]}" >/dev/null
+          '';
+        };
+        hookGitleaks = pkgs.writeShellApplication {
+          name = "hook-gitleaks";
+          runtimeInputs = [
+            pkgs.git
+            pkgs.gitleaks
+          ];
+          text = ''
+            exec gitleaks git . --redact --no-banner
+          '';
+        };
         launcher = pkgs.writeShellScriptBin "logseq" ''
                     base_ld="${runtimeLibPath}"
                     if [ -n "''${LD_LIBRARY_PATH-}" ]; then
@@ -143,6 +200,7 @@
         afterLinters = [
           "deadnix"
           "statix"
+          "nix-parse"
           "actionlint"
           "shellcheck"
         ];
@@ -156,6 +214,7 @@
           hooks = {
             treefmt = {
               enable = true;
+              require_serial = true;
               settings = {
                 fail-on-change = true;
                 # NOTE: This applies to both local hooks and `nix flake check`.
@@ -163,8 +222,7 @@
                 no-cache = true;
                 formatters = [
                   pkgs.nixfmt
-                  pkgs.biome
-                  pkgs.prettier
+                  dprintWithPlugins
                   pkgs.shfmt
                 ];
               };
@@ -177,17 +235,54 @@
 
             statix = {
               enable = true;
+              # Built-in statix hook doesn't pass filenames; keep staged-only behavior.
+              pass_filenames = true;
+              entry = "${hookStatix}/bin/hook-statix";
+              after = afterFormatting;
+            };
+
+            nix-parse = {
+              enable = true;
+              name = "nix-parse";
+              description = "Parse staged Nix files with nix-instantiate --parse.";
+              entry = "${hookNixParse}/bin/hook-nix-parse";
+              pass_filenames = true;
+              require_serial = true;
+              files = "\\.nix$";
               after = afterFormatting;
             };
 
             actionlint = {
               enable = true;
               after = afterFormatting;
+              stages = [
+                "pre-commit"
+                "pre-push"
+                "manual"
+              ];
             };
 
             shellcheck = {
               enable = true;
               after = afterFormatting;
+              stages = [
+                "pre-commit"
+                "pre-push"
+                "manual"
+              ];
+            };
+
+            gitleaks = {
+              enable = true;
+              name = "gitleaks";
+              description = "Detect hardcoded secrets in repository history.";
+              entry = "${hookGitleaks}/bin/hook-gitleaks";
+              pass_filenames = false;
+              always_run = true;
+              stages = [
+                "pre-push"
+                "manual"
+              ];
             };
 
             trim-trailing-whitespace = {
@@ -275,6 +370,101 @@
           };
         };
         checks = {
+          logseq-runtime-assets =
+            pkgs.runCommand "logseq-runtime-assets-check"
+              {
+                nativeBuildInputs = [
+                  pkgs.asar
+                  pkgs.gawk
+                  pkgs.gnugrep
+                  pkgs.gnused
+                ];
+              }
+              ''
+                asar_path="${payload}/resources/app.asar"
+                prepare_script="${logseqSrc}/scripts/prepare-desktop-runtime-js.mjs"
+                if [ ! -f "$asar_path" ]; then
+                  echo "missing desktop ASAR at $asar_path" >&2
+                  exit 1
+                fi
+                if [ ! -f "$prepare_script" ]; then
+                  echo "missing upstream desktop runtime staging script: $prepare_script" >&2
+                  exit 1
+                fi
+
+                asar list "$asar_path" > entries
+
+                awk '
+                  /to: path\.join\(staticJsDir,/ {
+                    if (match($0, /staticJsDir,[[:space:]]*"[^"]+"/)) {
+                      pair = substr($0, RSTART, RLENGTH)
+                      match(pair, /"[^"]+"/)
+                      path = substr(pair, RSTART + 1, RLENGTH - 2)
+                      optional = 0
+                      in_pair = 1
+                    }
+                    next
+                  }
+                  in_pair && /optional: true/ {
+                    optional = 1
+                  }
+                  in_pair && /^[[:space:]]*}[,]?[[:space:]]*$/ {
+                    if (!optional) {
+                      print path
+                    }
+                    path = ""
+                    optional = 0
+                    in_pair = 0
+                  }
+                ' "$prepare_script" > required-runtime-names
+
+                sed -nE 's/.*fs\.rm\(path\.join\(staticDir, "([^"]+)".*/\/\1/p' \
+                  "$prepare_script" > forbidden-root-entries
+
+                if [ ! -s required-runtime-names ]; then
+                  echo "could not derive required runtime entries from $prepare_script" >&2
+                  exit 1
+                fi
+                if [ ! -s forbidden-root-entries ]; then
+                  echo "could not derive removed root runtime entries from $prepare_script" >&2
+                  exit 1
+                fi
+
+                status=0
+                while IFS= read -r name; do
+                  static_entry="/js/$name"
+                  root_entry="/$name"
+                  if ! grep -qxF "$static_entry" entries && ! grep -qxF "$root_entry" entries; then
+                    echo "missing required ASAR runtime entry derived from prepare-desktop-runtime-js.mjs: $static_entry or $root_entry" >&2
+                    status=1
+                  fi
+                done < required-runtime-names
+
+                while IFS= read -r path; do
+                  name="''${path#/}"
+                  if grep -qxF "/js/$name" entries && grep -qxF "$path" entries; then
+                    echo "stale root-level ASAR runtime entry duplicates staged static/js entry: $path" >&2
+                    status=1
+                  fi
+                done < forbidden-root-entries
+
+                if [ "$status" -ne 0 ]; then
+                  echo "expected runtime entries in current static/js or legacy root layout:" >&2
+                  while IFS= read -r name; do
+                    echo "  /js/$name or /$name" >&2
+                  done < required-runtime-names
+                  echo "root-level runtime entries checked for duplicate cleanup:" >&2
+                  sed 's/^/  /' forbidden-root-entries >&2
+                  echo "matching runtime entries found in ASAR:" >&2
+                  while IFS= read -r name; do
+                    grep -xF "/$name" entries >&2 || true
+                    grep -xF "/js/$name" entries >&2 || true
+                  done < required-runtime-names
+                  exit 1
+                fi
+
+                touch $out
+              '';
           logseq = pkgs.runCommand "logseq-check" { } ''
             ${pkgs.coreutils}/bin/test -x ${logseqDesktop}/bin/logseq
             touch $out
@@ -352,7 +542,7 @@
             # Compatibility alias for older docs/scripts: `nix develop .#hooks`.
             hooks = hookShell;
           };
-        formatter = pkgs.nixfmt-tree;
+        formatter = preCommit.config.hooks.treefmt.package;
       }
     )
     // {

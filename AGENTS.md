@@ -1,23 +1,25 @@
-# CLAUDE.md
+# AGENTS.md / CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents when working with this repository.
 
-(Also read via the `AGENTS.md` symlink by other coding agents; keep content tool-agnostic.)
+`CLAUDE.md` is a symlink to this file for Claude Code compatibility; keep the content tool-agnostic.
 
 ## Scope
 
 - This repo packages Logseq nightly builds as a Nix flake for Linux `x86_64-linux`.
 - Main outputs are `logseq` (desktop), `logseq-cli` (CLI), and `default` (both).
-- Most implementation work happens in `flake.nix`, `lib/cli.nix`, `lib/loadManifest.nix`, `lib/runtime-libs.nix`, and `scripts/update-nightly.sh`.
+- Most implementation work happens in `flake.nix`, `lib/cli.nix`, `lib/loadManifest.nix`, `lib/runtime-libs.nix`, `scripts/update-nightly.sh`, `scripts/render-nightly-release-notes.sh`, and `.github/workflows/nightly.yml`.
 
 ## Repo Map
 
 - `flake.nix` defines packages, checks, formatter, dev shells, and hook config.
 - `data/logseq-nightly.json` is a validated manifest, not loose config.
 - `lib/loadManifest.nix` enforces required keys and `sha256-` SRI hashes.
-- `lib/cli.nix` builds the upstream CLI from the Logseq monorepo with offline Yarn deps.
+- `lib/cli.nix` builds the upstream CLI from the Logseq monorepo with offline pnpm deps and a vendored nbb runtime source tree.
 - `lib/runtime-libs.nix` feeds the desktop FHS wrapper; `overlays/default.nix` stays intentionally small.
-- `scripts/update-nightly.sh` regenerates manifest fields and CLI hashes.
+- `scripts/update-nightly.sh` regenerates manifest fields, CLI source/dependency hashes, and the CLI vendor hash.
+- `scripts/render-nightly-release-notes.sh` renders release notes from the cloned upstream Logseq repo.
+- `.actrc` is tracked local `act` configuration; `.act/` is runtime state and stays ignored.
 - `.github/workflows/validate.yml` is the clearest snapshot of CI expectations.
 
 ## Architecture
@@ -28,9 +30,9 @@ The flake does **not** build Logseq Desktop from source. It consumes a pre-packa
 
 End-to-end data flow:
 
-1. `.github/workflows/nightly.yml` → `build` job runs on a GitHub-hosted Ubuntu runner **without** Nix. It clones upstream `logseq/logseq`, installs upstream pnpm dependencies, runs `pnpm gulp:build && pnpm cljs:release-electron && pnpm webpack-app-build` to populate `static/`, then runs `pnpm electron:make` (electron-builder) in `static/` to produce `static/dist/linux-unpacked/`. That directory is tarred as `logseq-linux-x64-<version>.tar.gz` and uploaded as an artifact.
+1. `.github/workflows/nightly.yml` → `build` job runs on a GitHub-hosted Ubuntu runner **without** Nix. It clones upstream `logseq/logseq`, installs upstream pnpm dependencies, runs `pnpm gulp:build && pnpm cljs:release-electron && pnpm db-worker-node:bundle && pnpm webpack-app-build && pnpm desktop:prepare-runtime-js` to populate `static/` and stage runtime JS under `static/js/`, then runs `pnpm electron:make` (electron-builder) in `static/` to produce `static/dist/linux-unpacked/`. That directory is tarred as `logseq-linux-x64-<version>.tar.gz` and uploaded as an artifact.
 2. `.github/workflows/nightly.yml` → `publish-release` job installs Nix + Cachix, publishes the tarball as a GitHub Release tagged `nightly-<YYYYMMDD>`, then runs `bash scripts/update-nightly.sh`.
-3. `scripts/update-nightly.sh` rewrites `data/logseq-nightly.json` with the new release URL, SRI hash, upstream rev, and CLI version. It extracts `cliPnpmDepsHash` via a deliberate double-build: build with a placeholder hash, parse the resulting "got: sha256-…" error from stderr, rewrite the manifest with the real hash.
+3. `scripts/update-nightly.sh` rewrites `data/logseq-nightly.json` with the new release URL, SRI hash, upstream rev, and CLI version. It resolves `cliPnpmDepsHash` and `cliVendorHash` with deliberate placeholder fixed-output builds, parsing the resulting `got: sha256-...` error from stderr and rewriting the manifest after each hash.
 4. `nix flake check` validates the updated manifest through `lib/loadManifest.nix`, rebuilds both packages, then the `logseq-nightly-bot` auto-commits the manifest bump to `main`.
 
 The manifest is the single source of truth for downstream consumers. Adding a field requires updating **both** `scripts/update-nightly.sh` (producer) **and** `lib/loadManifest.nix` (validator) in the same change.
@@ -39,7 +41,7 @@ The manifest is the single source of truth for downstream consumers. Adding a fi
 
 - `payload = fetchzip { url = manifest.assetUrl; hash = manifest.assetSha256; }` — the desktop bundle.
 - `logseqSrc = fetchFromGitHub { rev = manifest.logseqRev; hash = manifest.cliSrcHash; }` — shared between the icon derivation (in `flake.nix`) and the CLI build (in `lib/cli.nix`). Two sites, one hash.
-- `lib/cli.nix` also reads `cliPnpmDepsHash` for the offline pnpm store and `cliVersion` for the derivation's `version` attr.
+- `lib/cli.nix` also reads `cliPnpmDepsHash`, `cliVendorHash`, and `cliVersion`. The pnpm hash feeds the offline pnpm store; the vendor hash pins the fixed-output nbb dependency source tree copied into `cli/vendor/src`.
 
 ### Upstream layout assumptions
 
@@ -49,7 +51,7 @@ The bundle's internal layout is dictated by upstream's packaging tool and change
 - `resources/app.asar` (app sources sealed — no unpacked `resources/app/` tree).
 - Chromium runtime libs, locales, swiftshader, etc.
 
-`logseqTree` in `flake.nix` creates a reciprocal symlink so both `Logseq` and `logseq` resolve, keeping old and new nightlies working. The icon is fetched from `logseqSrc` (upstream repo at pinned rev), not extracted from the tarball — because asar-packed resources aren't filesystem-accessible.
+`logseqTree` in `flake.nix` currently expects the flat electron-builder payload and copies it directly; the FHS `runScript` executes `share/logseq/logseq`. If upstream reintroduces a nested bundle root or renames the executable, fix the tree normalization and launcher together. The icon is fetched from `logseqSrc` (upstream repo at pinned rev), not extracted from the tarball, because asar-packed resources aren't filesystem-accessible.
 
 When a nightly fails, first check whether upstream renamed a path, changed the packaging tool, or moved an expected file. The cleanest signal is usually a diff of upstream's `.github/workflows/build-desktop-release.yml` around the failing step.
 
@@ -80,18 +82,35 @@ nix develop -c pre-commit run --all-files
 ## Smallest Useful Checks
 
 ```bash
+nix build .#checks.x86_64-linux.logseq-runtime-assets
 nix build .#checks.x86_64-linux.logseq
 nix build .#checks.x86_64-linux.logseq-cli
+nix build .#checks.x86_64-linux.logseq-cli-help
 nix build .#checks.x86_64-linux.pre-commit-check
 nix build .#logseq
 nix build .#logseq-cli
 ```
+
+## Long-Running Local Workflow Check (takes over 25min)
+
+Use this `act` command only when the user explicitly asks for local nightly workflow validation, or when changes materially affect the `nightly.yml` `build` job, `workflow_dispatch` inputs, dependency installation, cache/artifact paths, packaging, release-asset generation, or upstream desktop-build commands in a way that targeted Nix checks cannot cover. Do not run it eagerly after docs-only edits, formatting-only edits, manifest-only edits, metadata/comment-only edits, or small Nix/package changes that can be validated with the smaller checks above.
+
+```bash
+GITHUB_TOKEN="$(gh auth token)" \
+  act workflow_dispatch -W .github/workflows/nightly.yml -j build \
+  --input logseq_branch=master -s GITHUB_TOKEN \
+  2>&1 | tee ".act/logs/nightly-build-$(date -u +%Y%m%dT%H%M%SZ).log"
+```
+
+Prefer the lightest tightly scoped validation first: formatter for touched files, a relevant `nix build .#checks.x86_64-linux.<name>` attr, `nix flake check` for manifest/load-path changes, or one package build. Treat the `act` build as an expensive end-to-end confidence check, not the default finish step.
 
 ## Direct Lint Commands
 
 ```bash
 nix run nixpkgs#deadnix -- --fail
 nix run nixpkgs#statix -- check
+nix-instantiate --parse path/to/file.nix >/dev/null
+nix develop -c pre-commit run gitleaks --hook-stage manual
 ```
 
 ## One-File Formatting Commands
@@ -100,9 +119,9 @@ nix run nixpkgs#statix -- check
 
 ```bash
 nixfmt path/to/file.nix
-biome format --write path/to/file.json
-prettier --write path/to/file.md
-prettier --write path/to/workflow.yml
+dprint fmt path/to/file.json
+dprint fmt path/to/file.md
+dprint fmt path/to/file.toml
 shfmt -s -w -i 2 path/to/script.sh
 ```
 
@@ -126,9 +145,10 @@ Required env vars for `scripts/update-nightly.sh`: `LOGSEQ_REV`, `LOGSEQ_VERSION
 ## What To Run After Common Changes
 
 - `flake.nix`: run `nix fmt` and at least one targeted build or check attr.
-- `lib/cli.nix`: run `nix build .#logseq-cli` or `nix build .#checks.x86_64-linux.logseq-cli`.
-- `lib/loadManifest.nix` or `data/logseq-nightly.json`: run `nix flake check`.
-- `.github/workflows/*.yml` or `scripts/*.sh`: run the relevant formatter, then `nix develop -c pre-commit run --all-files` if practical.
+- `lib/cli.nix`: run `nix build .#logseq-cli` or `nix build .#checks.x86_64-linux.logseq-cli-help`; the smoke check exercises the vendored nbb runtime path.
+- `lib/loadManifest.nix` or `data/logseq-nightly.json`: run `nix build .#checks.x86_64-linux.logseq-runtime-assets` for desktop ASAR layout changes, or `nix flake check` for broader manifest/load-path changes.
+- `.github/workflows/*.yml` or `scripts/*.sh`: run the relevant formatter, then `nix develop -c pre-commit run --all-files` if practical. Use the long-running local `act` build only when the workflow or script change materially affects the nightly build path and smaller checks cannot cover it.
+- Hook config changes: run `nix build .#checks.x86_64-linux.pre-commit-check`; for pre-push-only hooks, also run the specific hook with `nix develop -c pre-commit run <hook> --hook-stage pre-push --all-files`.
 
 ## Code Style Guidelines
 
@@ -175,12 +195,15 @@ Required env vars for `scripts/update-nightly.sh`: `LOGSEQ_REV`, `LOGSEQ_VERSION
 - Prefer temporary files plus `mv` for rewrites and structure longer scripts into labeled phases.
 - Keep shell indentation compatible with `shfmt -i 2`.
 - Preserve the existing GitHub Actions style: explicit timeouts, concurrency groups, scoped permissions, and current major-pinned action versions.
-- PRs touching `.github/workflows/*` or `flake.lock` trigger a policy check that requires the `security-review-approved` label.
+- PRs touching `.github/workflows/*` or `flake.lock` trigger a policy check that requires the `status(security-review-approved)` label.
 
 ### JSON, Markdown, and YAML
 
-- Let `biome` format JSON.
-- Let `prettier` format Markdown and YAML.
+- Let `dprint` format JSON, Markdown, TOML, YAML, and XML.
+- Do not format `.github/workflows/**` with `dprint`; rely on YAML validation and `actionlint` for workflow files.
+- `statix` is wrapped to receive staged Nix filenames; do not switch it back to the built-in whole-tree hook unless that behavior is intentional.
+- `nix-parse` runs `nix-instantiate --parse` on staged Nix files.
+- `gitleaks` runs on `pre-push` and `manual`, not ordinary `pre-commit`.
 - Keep manifest keys in lowerCamelCase.
 - Do not hand-wrap files against formatter output.
 
@@ -188,6 +211,9 @@ Required env vars for `scripts/update-nightly.sh`: `LOGSEQ_REV`, `LOGSEQ_VERSION
 
 - Do not edit the `result` symlink; it is a build artifact.
 - Treat `data/logseq-nightly.json` as generated data unless the task is specifically about manifest format or manifest values.
-- When updating the CLI source revision flow, expect to update both `cliSrcHash` and `cliPnpmDepsHash`.
+- When updating the CLI source revision flow, expect to update `cliSrcHash`, `cliPnpmDepsHash`, and `cliVendorHash`.
+- When changing the CLI dependency/vendor flow, keep `lib/cli.nix`, `scripts/update-nightly.sh`, `lib/loadManifest.nix`, and `data/logseq-nightly.json` in sync.
+- For local `act` runs, inspect jobs with `act -l -W .github/workflows/nightly.yml`; default to the safe `build` job unless the user explicitly wants the side-effectful `publish-release` path.
+- `publish-release` creates/releases assets and can auto-commit a manifest bump back to `main`; after a successful live run, the local checkout may need `git pull --ff-only origin main`.
 - The fastest trustworthy feedback is usually a targeted `nix build` or one check attr, not a full `nix flake check`.
 - Before finishing, prefer `nix fmt` plus the smallest relevant build or check for the files you changed.

@@ -1,13 +1,14 @@
 [global]
+tree-root-file = "flake.nix"
 excludes = [
-    "*.lock",
-    "*.patch",
-    "package-lock.json",
-    "go.mod",
-    "go.sum",
-    ".gitmodules",
-    ".hgignore",
-    ".svnignore",
+  "*.lock",
+  "*.patch",
+  "package-lock.json",
+  "go.mod",
+  "go.sum",
+  ".gitmodules",
+  ".hgignore",
+  ".svnignore",
 ]
 on-unmatched = "warn"
 
@@ -15,38 +16,22 @@ on-unmatched = "warn"
 command = "nixfmt"
 includes = ["*.nix"]
 
-[formatter.biome]
-command = "biome"
+[formatter.dprint]
+command = "dprint"
 includes = [
-    "*.js",
-    "*.mjs",
-    "*.cjs",
-    "*.ts",
-    "*.mts",
-    "*.cts",
-    "*.d.ts",
-    "*.d.mts",
-    "*.d.cts",
-    "*.jsx",
-    "*.tsx",
-    "*.json",
-    "*.jsonc",
-    "*.css",
-    "*.graphql",
-    "*.gql",
-    "*.html",
+  "*.json",
+  "*.jsonc",
+  "*.md",
+  "*.markdown",
+  "*.toml",
+  "*.yaml",
+  "*.yml",
+  "*.xml",
 ]
-options = ["format", "--write"]
-
-[formatter.prettier]
-command = "prettier"
-includes = [
-    "*.md",
-    "*.mdx",
-    "*.yaml",
-    "*.yml",
+excludes = [
+  ".github/workflows/**",
 ]
-options = ["--write"]
+options = ["fmt"]
 
 [formatter.shfmt]
 command = "shfmt"

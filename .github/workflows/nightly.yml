@@ -115,7 +115,21 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm gulp:build
           pnpm cljs:release-electron
+          pnpm db-worker-node:bundle
           pnpm webpack-app-build
+          pnpm desktop:prepare-runtime-js
+
+      - name: Verify bundled db-worker-node runtime
+        working-directory: logseq-src
+        run: |
+          test -f ./dist/db-worker-node.js
+          test -f ./dist/db-worker-node-assets.json
+
+      - name: Verify desktop runtime script locations
+        working-directory: logseq-src
+        run: |
+          test -f ./static/js/db-worker-node.js
+          test -f ./static/js/logseq-cli.js
 
       - name: Update APP Version
         run: |
@@ -178,7 +192,7 @@ jobs:
         run: bash ../scripts/render-nightly-release-notes.sh
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: linux-build
           path: |
@@ -269,6 +283,7 @@ jobs:
         env:
           ISSUE_TITLE: Nightly build automation failing
           ISSUE_MARKER: <!-- nightly-build-failure -->
+          FAILURE_LABELS: type(bug),area(ci),area(automation),area(nightly),status(needs-manual-review),priority(p2),origin(automated)
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           BUILD_RESULT: ${{ needs.build.result }}
           PUBLISH_RESULT: ${{ needs['publish-release'].result }}
@@ -278,6 +293,7 @@ jobs:
             const repo = context.repo.repo;
             const title = process.env.ISSUE_TITLE;
             const marker = process.env.ISSUE_MARKER;
+            const failureLabels = process.env.FAILURE_LABELS.split(",").filter(Boolean);
             const runUrl = process.env.RUN_URL;
             const buildResult = process.env.BUILD_RESULT;
             const publishResult = process.env.PUBLISH_RESULT;
@@ -320,13 +336,20 @@ jobs:
                 issue_number: existing.number,
                 body: commentBody
               });
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: existing.number,
+                labels: failureLabels
+              });
               core.info(`Updated existing issue #${existing.number}`);
             } else {
               const created = await github.rest.issues.create({
                 owner,
                 repo,
                 title,
-                body
+                body,
+                labels: failureLabels
               });
               core.info(`Created issue #${created.data.number}`);
             }
@@ -343,7 +366,7 @@ jobs:
         env:
           ISSUE_TITLE: Nightly build automation failing
           ISSUE_MARKER: <!-- nightly-build-failure -->
-          RECOVERED_LABEL: recovered
+          RECOVERED_LABEL: status(recovered)
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
@@ -386,18 +409,28 @@ jobs:
               ].join("\n")
             });
 
+            await github.rest.issues.removeLabel({
+              owner,
+              repo,
+              issue_number: existing.number,
+              name: "status(needs-manual-review)"
+            }).catch((error) => {
+              if (error.status !== 404) {
+                throw error;
+              }
+            });
+
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: existing.number,
+              labels: [recoveredLabel]
+            });
+
             await github.rest.issues.update({
               owner,
               repo,
               issue_number: existing.number,
-              labels: Array.from(
-                new Set([
-                  ...(existing.labels || []).map((label) =>
-                    typeof label === "string" ? label : label.name
-                  ),
-                  recoveredLabel
-                ])
-              ),
               state: "closed"
             });
             core.info(`Closed issue #${existing.number}`);

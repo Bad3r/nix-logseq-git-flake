@@ -49,14 +49,14 @@ jobs:
             duplicate bot comments. If a deduplication comment already exists, do nothing.
 
             If you find a TRUE duplicate (100% certainty):
-            - Apply a "duplicate" label to the new issue
+            - Apply a `status(duplicate)` label to the new issue
             - Add ONE comment linking to the original issue(s)
             - Be polite and explain why it's a duplicate
             - Suggest the user follow the original issue for updates
 
             If you find a POSSIBLE duplicate (related but not identical):
             - Post a comment like: "This might be related to #X. Please check if that issue describes your problem."
-            - Do NOT apply the "duplicate" label
+            - Do NOT apply the `status(duplicate)` label
 
             If it's NOT a duplicate or you're unsure:
             - Don't add any comments

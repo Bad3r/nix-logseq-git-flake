@@ -46,32 +46,46 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v22
+      - name: Check Nix flake Nixpkgs inputs
+        id: flake-checker-attempt-1
+        uses: DeterminateSystems/flake-checker-action@v12
+        continue-on-error: true
         with:
-          determinate: false
-          extra-conf: |
-            experimental-features = nix-command flakes
+          send-statistics: false
+          fail-mode: true
+          check-outdated: true
+          check-owner: true
+          check-supported: true
 
-      - name: Audit flake inputs
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            if nix run nixpkgs#flake-checker -- \
-              --no-telemetry \
-              --fail-mode \
-              --check-outdated \
-              --check-owner \
-              --check-supported \
-              flake.lock; then
-              exit 0
-            fi
-            if [ "$attempt" -lt 3 ]; then
-              echo "flake-checker attempt ${attempt} failed; retrying..." >&2
-              sleep 5
-            fi
-          done
-          exit 1
+      - name: Wait before flake checker retry
+        if: steps.flake-checker-attempt-1.outcome == 'failure'
+        run: sleep 5
+
+      - name: Check Nix flake Nixpkgs inputs retry
+        if: steps.flake-checker-attempt-1.outcome == 'failure'
+        id: flake-checker-attempt-2
+        uses: DeterminateSystems/flake-checker-action@v12
+        continue-on-error: true
+        with:
+          send-statistics: false
+          fail-mode: true
+          check-outdated: true
+          check-owner: true
+          check-supported: true
+
+      - name: Wait before final flake checker retry
+        if: steps.flake-checker-attempt-2.outcome == 'failure'
+        run: sleep 15
+
+      - name: Check Nix flake Nixpkgs inputs final retry
+        if: steps.flake-checker-attempt-2.outcome == 'failure'
+        uses: DeterminateSystems/flake-checker-action@v12
+        with:
+          send-statistics: false
+          fail-mode: true
+          check-outdated: true
+          check-owner: true
+          check-supported: true
 
   sensitive-change-policy:
     if: github.event_name == 'pull_request'
@@ -119,7 +133,7 @@ jobs:
           MATCHED_FILES: ${{ steps.detect.outputs.matched_files }}
         with:
           script: |
-            const requiredLabel = "security-review-approved";
+            const requiredLabel = "status(security-review-approved)";
             const labels = (context.payload.pull_request.labels || []).map((label) => label.name);
             if (!labels.includes(requiredLabel)) {
               const changed = process.env.MATCHED_FILES;

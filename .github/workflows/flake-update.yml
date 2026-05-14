@@ -4,11 +4,6 @@ on:
   schedule:
     - cron: "0 0 * * 0" # Weekly on Sunday
   workflow_dispatch:
-    inputs:
-      update_inputs:
-        description: "Space-separated flake inputs to update (empty = all)"
-        required: false
-        default: ""
 
 permissions:
   contents: write
@@ -30,22 +25,7 @@ jobs:
             accept-flake-config = true
 
       - name: Update flake inputs
-        env:
-          UPDATE_INPUTS: ${{ github.event.inputs.update_inputs || '' }}
-        run: |
-          set -euo pipefail
-          update_inputs=()
-          if [ -n "$UPDATE_INPUTS" ]; then
-            read -r -a update_inputs <<< "$UPDATE_INPUTS"
-          fi
-
-          if [ "${#update_inputs[@]}" -eq 0 ]; then
-            nix flake update
-          else
-            for input in "${update_inputs[@]}"; do
-              nix flake lock --update-input "$input"
-            done
-          fi
+        run: nix flake update
 
       - name: Format
         run: nix fmt
@@ -58,6 +38,16 @@ jobs:
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Check Nix flake Nixpkgs inputs
+        if: steps.changes.outputs.changed == 'true'
+        uses: DeterminateSystems/flake-checker-action@v12
+        with:
+          send-statistics: false
+          fail-mode: true
+          check-outdated: true
+          check-owner: true
+          check-supported: true
 
       - name: Validate flake
         if: steps.changes.outputs.changed == 'true'
@@ -83,8 +73,9 @@ jobs:
       - name: Create or update failure issue
         uses: actions/github-script@v9
         env:
-          ISSUE_TITLE: Flake update automation failing
+          ISSUE_TITLE: "ci(flake): update automation failing"
           ISSUE_MARKER: <!-- flake-update-failure -->
+          FAILURE_LABELS: type(bug),area(ci),area(automation),area(flake),area(deps),input(nixpkgs),status(needs-manual-review),priority(p2),origin(automated)
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
@@ -92,6 +83,7 @@ jobs:
             const repo = context.repo.repo;
             const title = process.env.ISSUE_TITLE;
             const marker = process.env.ISSUE_MARKER;
+            const failureLabels = process.env.FAILURE_LABELS.split(",").filter(Boolean);
             const runUrl = process.env.RUN_URL;
             const timestamp = new Date().toISOString();
 
@@ -131,13 +123,20 @@ jobs:
                 issue_number: existing.number,
                 body: commentBody
               });
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: existing.number,
+                labels: failureLabels
+              });
               core.info(`Updated existing issue #${existing.number}`);
             } else {
               const created = await github.rest.issues.create({
                 owner,
                 repo,
                 title,
-                body
+                body,
+                labels: failureLabels
               });
               core.info(`Created issue #${created.data.number}`);
             }
@@ -150,9 +149,9 @@ jobs:
       - name: Close failure issue after recovery
         uses: actions/github-script@v9
         env:
-          ISSUE_TITLE: Flake update automation failing
+          ISSUE_TITLE: "ci(flake): update automation failing"
           ISSUE_MARKER: <!-- flake-update-failure -->
-          RECOVERED_LABEL: recovered
+          RECOVERED_LABEL: status(recovered)
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
@@ -195,18 +194,28 @@ jobs:
               ].join("\n")
             });
 
+            await github.rest.issues.removeLabel({
+              owner,
+              repo,
+              issue_number: existing.number,
+              name: "status(needs-manual-review)"
+            }).catch((error) => {
+              if (error.status !== 404) {
+                throw error;
+              }
+            });
+
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: existing.number,
+              labels: [recoveredLabel]
+            });
+
             await github.rest.issues.update({
               owner,
               repo,
               issue_number: existing.number,
-              labels: Array.from(
-                new Set([
-                  ...(existing.labels || []).map((label) =>
-                    typeof label === "string" ? label : label.name
-                  ),
-                  recoveredLabel
-                ])
-              ),
               state: "closed"
             });
             core.info(`Closed issue #${existing.number}`);
