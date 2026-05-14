@@ -7,9 +7,8 @@ pkgs.runCommand "logseq-runtime-assets-check"
   {
     nativeBuildInputs = [
       pkgs.asar
-      pkgs.gawk
       pkgs.gnugrep
-      pkgs.gnused
+      pkgs.python3
     ];
   }
   ''
@@ -26,32 +25,61 @@ pkgs.runCommand "logseq-runtime-assets-check"
 
     asar list "$asar_path" > entries
 
-    awk '
-      /to: path\.join\(staticJsDir,/ {
-        if (match($0, /staticJsDir,[[:space:]]*"[^"]+"/)) {
-          pair = substr($0, RSTART, RLENGTH)
-          match(pair, /"[^"]+"/)
-          path = substr(pair, RSTART + 1, RLENGTH - 2)
-          optional = 0
-          in_pair = 1
-        }
-        next
-      }
-      in_pair && /optional: true/ {
-        optional = 1
-      }
-      in_pair && /^[[:space:]]*}[,]?[[:space:]]*$/ {
-        if (!optional) {
-          print path
-        }
-        path = ""
-        optional = 0
-        in_pair = 0
-      }
-    ' "$prepare_script" > required-runtime-names
+    PREPARE_SCRIPT="$prepare_script" python3 <<'PY'
+    import os
+    import re
+    from pathlib import Path
 
-    sed -nE 's/.*fs\.rm\(path\.join\(staticDir, "([^"]+)".*/\/\1/p' \
-      "$prepare_script" > forbidden-root-entries
+    prepare_script = Path(os.environ["PREPARE_SCRIPT"])
+    source = prepare_script.read_text()
+
+    js_string = r"""(?:"(?P<dq>(?:\\.|[^"\\])*)"|'(?P<sq>(?:\\.|[^'\\])*)'|`(?P<bq>(?:\\.|[^`\\])*)`)"""
+    copy_to_static_js = re.compile(
+        r"to\s*:\s*path\.join\(\s*staticJsDir\s*,\s*" + js_string + r"\s*\)",
+        re.DOTALL,
+    )
+    remove_from_static_root = re.compile(
+        r"fs\.rm\(\s*path\.join\(\s*staticDir\s*,\s*" + js_string + r"\s*\)",
+        re.DOTALL,
+    )
+    optional_true = re.compile(r"\boptional\s*:\s*true\b")
+
+    def js_string_value(match):
+        for group in ("dq", "sq", "bq"):
+            value = match.group(group)
+            if value is not None:
+                return re.sub(r"\\([\"'`\\])", r"\1", value)
+        raise ValueError("matched JavaScript string without a value")
+
+    def unique(items):
+        seen = set()
+        result = []
+        for item in items:
+            if item not in seen:
+                seen.add(item)
+                result.append(item)
+        return result
+
+    required_runtime_names = []
+    for match in copy_to_static_js.finditer(source):
+        object_start = source.rfind("{", 0, match.start())
+        object_end = source.find("}", match.end())
+        object_source = source[object_start:object_end] if object_start != -1 and object_end != -1 else ""
+        if not optional_true.search(object_source):
+            required_runtime_names.append(js_string_value(match))
+
+    forbidden_root_entries = [
+        "/" + js_string_value(match).lstrip("/")
+        for match in remove_from_static_root.finditer(source)
+    ]
+
+    Path("required-runtime-names").write_text(
+        "".join(f"{name}\n" for name in unique(required_runtime_names))
+    )
+    Path("forbidden-root-entries").write_text(
+        "".join(f"{path}\n" for path in unique(forbidden_root_entries))
+    )
+    PY
 
     if [ ! -s required-runtime-names ]; then
       echo "could not derive required runtime entries from $prepare_script" >&2
