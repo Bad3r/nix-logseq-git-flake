@@ -82,6 +82,7 @@ nix develop -c pre-commit run --all-files
 ## Smallest Useful Checks
 
 ```bash
+nix build .#checks.x86_64-linux.logseq-runtime-assets
 nix build .#checks.x86_64-linux.logseq
 nix build .#checks.x86_64-linux.logseq-cli
 nix build .#checks.x86_64-linux.logseq-cli-help
@@ -145,7 +146,7 @@ Required env vars for `scripts/update-nightly.sh`: `LOGSEQ_REV`, `LOGSEQ_VERSION
 
 - `flake.nix`: run `nix fmt` and at least one targeted build or check attr.
 - `lib/cli.nix`: run `nix build .#logseq-cli` or `nix build .#checks.x86_64-linux.logseq-cli-help`; the smoke check exercises the vendored nbb runtime path.
-- `lib/loadManifest.nix` or `data/logseq-nightly.json`: run `nix flake check`.
+- `lib/loadManifest.nix` or `data/logseq-nightly.json`: run `nix build .#checks.x86_64-linux.logseq-runtime-assets` for desktop ASAR layout changes, or `nix flake check` for broader manifest/load-path changes.
 - `.github/workflows/*.yml` or `scripts/*.sh`: run the relevant formatter, then `nix develop -c pre-commit run --all-files` if practical. Use the long-running local `act` build only when the workflow or script change materially affects the nightly build path and smaller checks cannot cover it.
 - Hook config changes: run `nix build .#checks.x86_64-linux.pre-commit-check`; for pre-push-only hooks, also run the specific hook with `nix develop -c pre-commit run <hook> --hook-stage pre-push --all-files`.
 

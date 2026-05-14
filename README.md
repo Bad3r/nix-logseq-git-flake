@@ -124,6 +124,7 @@ claude mcp add logseq -- logseq-cli mcp-server -g MyGraph -s
 ```bash
 nix build .#logseq        # desktop app
 nix build .#logseq-cli    # CLI tool
+nix build .#checks.x86_64-linux.logseq-runtime-assets
 nix flake check           # build checks + evaluate flake
 nix fmt                   # format all Nix files (nixfmt)
 ```

@@ -373,6 +373,95 @@
           };
         };
         checks = {
+          logseq-runtime-assets =
+            pkgs.runCommand "logseq-runtime-assets-check"
+              {
+                nativeBuildInputs = [
+                  pkgs.asar
+                  pkgs.gawk
+                  pkgs.gnugrep
+                  pkgs.gnused
+                ];
+              }
+              ''
+                asar_path="${payload}/resources/app.asar"
+                prepare_script="${logseqSrc}/scripts/prepare-desktop-runtime-js.mjs"
+                if [ ! -f "$asar_path" ]; then
+                  echo "missing desktop ASAR at $asar_path" >&2
+                  exit 1
+                fi
+                if [ ! -f "$prepare_script" ]; then
+                  echo "missing upstream desktop runtime staging script: $prepare_script" >&2
+                  exit 1
+                fi
+
+                asar list "$asar_path" > entries
+
+                awk '
+                  /to: path\.join\(staticJsDir,/ {
+                    if (match($0, /"[^"]+"/)) {
+                      path = substr($0, RSTART + 1, RLENGTH - 2)
+                      optional = 0
+                      in_pair = 1
+                    }
+                    next
+                  }
+                  in_pair && /optional: true/ {
+                    optional = 1
+                  }
+                  in_pair && /^[[:space:]]*},/ {
+                    if (!optional) {
+                      print "/js/" path
+                    }
+                    path = ""
+                    optional = 0
+                    in_pair = 0
+                  }
+                ' "$prepare_script" > required-js-entries
+
+                sed -nE 's/.*fs\.rm\(path\.join\(staticDir, "([^"]+)".*/\/\1/p' \
+                  "$prepare_script" > forbidden-root-entries
+
+                if [ ! -s required-js-entries ]; then
+                  echo "could not derive required static/js runtime entries from $prepare_script" >&2
+                  exit 1
+                fi
+                if [ ! -s forbidden-root-entries ]; then
+                  echo "could not derive removed root runtime entries from $prepare_script" >&2
+                  exit 1
+                fi
+
+                status=0
+                while IFS= read -r path; do
+                  if ! grep -qxF "$path" entries; then
+                    echo "missing required ASAR runtime entry derived from prepare-desktop-runtime-js.mjs: $path" >&2
+                    status=1
+                  fi
+                done < required-js-entries
+
+                while IFS= read -r path; do
+                  if grep -qxF "$path" entries; then
+                    echo "stale root-level ASAR runtime entry should have been removed by prepare-desktop-runtime-js.mjs: $path" >&2
+                    status=1
+                  fi
+                done < forbidden-root-entries
+
+                if [ "$status" -ne 0 ]; then
+                  echo "expected static/js runtime entries:" >&2
+                  sed 's/^/  /' required-js-entries >&2
+                  echo "root-level runtime entries expected to be absent:" >&2
+                  sed 's/^/  /' forbidden-root-entries >&2
+                  echo "matching runtime entries found in ASAR:" >&2
+                  while IFS= read -r path; do
+                    name="''${path#/js/}"
+                    grep -xF "/$name" entries >&2 || true
+                    grep -xF "/js/$name" entries >&2 || true
+                  done < required-js-entries
+                  exit 1
+                fi
+
+                touch $out
+              '';
           logseq = pkgs.runCommand "logseq-check" { } ''
             ${pkgs.coreutils}/bin/test -x ${logseqDesktop}/bin/logseq
             touch $out
