@@ -396,8 +396,10 @@
 
                 awk '
                   /to: path\.join\(staticJsDir,/ {
-                    if (match($0, /"[^"]+"/)) {
-                      path = substr($0, RSTART + 1, RLENGTH - 2)
+                    if (match($0, /staticJsDir,[[:space:]]*"[^"]+"/)) {
+                      pair = substr($0, RSTART, RLENGTH)
+                      match(pair, /"[^"]+"/)
+                      path = substr(pair, RSTART + 1, RLENGTH - 2)
                       optional = 0
                       in_pair = 1
                     }
