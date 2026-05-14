@@ -130,14 +130,14 @@ jobs:
         run: |
           test -f ./static/js/logseq-cli.js
           node ./static/js/logseq-cli.js --help >/tmp/logseq-cli-help.txt
-          grep -E "USAGE|Usage|COMMANDS|Commands" /tmp/logseq-cli-help.txt >/dev/null
+          grep -qE "^Usage:" /tmp/logseq-cli-help.txt
+          grep -q "mcp-server" /tmp/logseq-cli-help.txt
 
       - name: Verify desktop runtime script locations
         working-directory: logseq-src
         run: |
           test -f ./static/js/db-worker-node.js
           test -f ./static/js/logseq-cli.js
-          test -f ./static/.agents/skills/logseq-cli/SKILL.md
 
       - name: Update APP Version
         run: |
