@@ -14,8 +14,16 @@ pkgs.runCommand "logseq-cli-help-check" { } ''
   # `Usage:` and `mcp-server` are stable substrings of the help output
   # produced by the upstream CLI; require both so a future silent fallthrough
   # doesn't get rubber-stamped.
-  echo "$help_output" | ${pkgs.gnugrep}/bin/grep -q '^Usage:'
-  echo "$help_output" | ${pkgs.gnugrep}/bin/grep -q 'mcp-server'
+  if ! echo "$help_output" | ${pkgs.gnugrep}/bin/grep -q '^Usage:'; then
+    echo "logseq-cli --help output missing expected 'Usage:' substring:" >&2
+    echo "$help_output" >&2
+    exit 1
+  fi
+  if ! echo "$help_output" | ${pkgs.gnugrep}/bin/grep -q 'mcp-server'; then
+    echo "logseq-cli --help output missing expected 'mcp-server' substring:" >&2
+    echo "$help_output" >&2
+    exit 1
+  fi
 
   # Probe 2: `list` against an empty HOME forces graph-discovery namespaces
   # to load and catches missing vendored nbb runtime sources.
@@ -26,7 +34,11 @@ pkgs.runCommand "logseq-cli-help-check" { } ''
     echo "$list_output" >&2
     exit 1
   fi
-  echo "$list_output" | ${pkgs.gnugrep}/bin/grep -qF 'database version'
+  if ! echo "$list_output" | ${pkgs.gnugrep}/bin/grep -qF 'database version'; then
+    echo "logseq-cli list output missing expected 'database version' substring:" >&2
+    echo "$list_output" >&2
+    exit 1
+  fi
 
   touch $out
 ''
