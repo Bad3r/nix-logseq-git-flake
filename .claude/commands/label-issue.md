@@ -26,16 +26,21 @@ TASK OVERVIEW:
 
 3. Analyze the issue content, considering:
    - The issue title and description
-   - The type of issue (bug report, feature request, question, etc.)
-   - Technical areas mentioned (nix, logseq, electron, cli, flake, ci, gpu, etc.)
-   - Severity or priority indicators (P1 = critical/blocking, P2 = important but not blocking, P3 = nice to have)
-   - Components affected (desktop-app, cli, packaging, nightly-build, etc.)
-   - Whether the issue originates upstream in Logseq itself (use `upstream` label)
+   - The type of issue: `type(bug)`, `type(enhancement)`, `type(question)`, `type(docs)`, `type(refactor)`, or `type(deps)`
+   - Technical areas mentioned: `area(nix)`, `area(flake)`, `area(desktop)`, `area(cli)`, `area(ci)`, `area(automation)`, `area(nightly)`, `area(packages)`, `area(hooks)`, `area(gpu)`, `area(scripts)`, or `area(deps)`
+   - Relevant flake inputs: `input(nixpkgs)`, `input(flake-utils)`, or `input(git-hooks)`
+   - Severity or priority indicators: `priority(p1)` is critical/blocking, `priority(p2)` is important but not blocking, and `priority(p3)` is low-priority cleanup or polish
+   - Special focus labels such as `focus(security)`, `focus(hardening)`, `focus(hash-mismatch)`, `focus(performance)`, or `focus(validation)`
+   - Whether the issue originates upstream in Logseq itself: use `origin(upstream)`
+   - Whether the issue was created or maintained by automation: use `origin(automated)`
 
 4. Select appropriate labels from the available labels list:
    - Choose labels that accurately reflect the issue's nature
    - Be specific but comprehensive
-   - Do NOT apply the "duplicate" label — duplicate detection is handled by a separate workflow.
+   - Apply exactly one `type(...)` label whenever any label is applied
+   - Apply at most one `status(...)` label and at most one `priority(...)` label
+   - Apply any relevant `area(...)`, `input(...)`, `focus(...)`, and `origin(...)` labels
+   - Do NOT apply `status(duplicate)` - duplicate detection is handled by a separate workflow.
 
 5. Apply the selected labels:
    - Use `gh issue edit` to apply your selected labels
@@ -49,7 +54,8 @@ IMPORTANT GUIDELINES:
 - Only select labels from the provided list above
 - DO NOT post any comments to the issue
 - Your ONLY action should be to apply labels using gh issue edit
-- Apply a label only when the issue clearly matches it — when in doubt, skip it
-- Always apply exactly one type label (bug, enhancement, question, or documentation)
-- Apply component labels (nix, flake, desktop-app, cli, ci, etc.) only when explicitly mentioned
-- Apply priority labels only when severity is clearly stated or obvious (e.g. crash = P1)
+- Apply a label only when the issue clearly matches it; when in doubt, skip it
+- Use faceted labels from `docs/reference/github-labels.md` when available
+- Always apply exactly one `type(...)` label if applying labels
+- Apply area labels only when the component or workflow surface is explicit
+- Apply priority labels only when severity is clearly stated or obvious, such as a broken release pipeline for `priority(p1)`
