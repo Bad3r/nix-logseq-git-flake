@@ -34,9 +34,6 @@ jobs:
       - name: Check formatting
         run: nix fmt -- --ci
 
-      - name: Check desktop runtime asset layout
-        run: nix build .#checks.x86_64-linux.logseq-runtime-assets
-
       - name: Run nix flake check
         run: nix flake check
 
