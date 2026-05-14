@@ -352,9 +352,6 @@
         packages = {
           logseq = logseqDesktop;
           logseq-cli = cli;
-          hook-gitleaks = hookGitleaks;
-          hook-nix-parse = hookNixParse;
-          hook-statix = hookStatix;
           default = pkgs.symlinkJoin {
             name = "logseq-nightly";
             paths = [
