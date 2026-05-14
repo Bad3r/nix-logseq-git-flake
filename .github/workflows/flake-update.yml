@@ -194,18 +194,17 @@ jobs:
               ].join("\n")
             });
 
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: existing.number,
+              labels: [recoveredLabel]
+            });
+
             await github.rest.issues.update({
               owner,
               repo,
               issue_number: existing.number,
-              labels: Array.from(
-                new Set([
-                  ...(existing.labels || []).map((label) =>
-                    typeof label === "string" ? label : label.name
-                  ),
-                  recoveredLabel
-                ])
-              ),
               state: "closed"
             });
             core.info(`Closed issue #${existing.number}`);
