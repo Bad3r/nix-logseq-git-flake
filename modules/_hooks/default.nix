@@ -193,11 +193,5 @@ let
   };
 in
 {
-  inherit
-    dprintWithPlugins
-    hookGitleaks
-    hookNixParse
-    hookStatix
-    preCommit
-    ;
+  inherit preCommit;
 }
