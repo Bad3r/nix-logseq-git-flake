@@ -123,18 +123,11 @@ jobs:
                 issue_number: existing.number,
                 body: commentBody
               });
-              await github.rest.issues.update({
+              await github.rest.issues.addLabels({
                 owner,
                 repo,
                 issue_number: existing.number,
-                labels: Array.from(
-                  new Set([
-                    ...(existing.labels || []).map((label) =>
-                      typeof label === "string" ? label : label.name
-                    ),
-                    ...failureLabels
-                  ])
-                )
+                labels: failureLabels
               });
               core.info(`Updated existing issue #${existing.number}`);
             } else {
