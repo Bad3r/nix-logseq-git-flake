@@ -117,12 +117,12 @@
           runtimeInputs = [ pkgs.dprint ];
           text = ''
             if [ "$#" -eq 0 ]; then
-              exec dprint --config ${dprintConfig}
+              exec ${lib.getExe pkgs.dprint} --config ${dprintConfig}
             fi
 
             subcommand="$1"
             shift
-            exec dprint "$subcommand" --config ${dprintConfig} "$@"
+            exec ${lib.getExe pkgs.dprint} "$subcommand" --config ${dprintConfig} "$@"
           '';
         };
         hookStatix = pkgs.writeShellApplication {
