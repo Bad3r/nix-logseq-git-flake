@@ -409,6 +409,17 @@ jobs:
               ].join("\n")
             });
 
+            await github.rest.issues.removeLabel({
+              owner,
+              repo,
+              issue_number: existing.number,
+              name: "status(needs-manual-review)"
+            }).catch((error) => {
+              if (error.status !== 404) {
+                throw error;
+              }
+            });
+
             await github.rest.issues.addLabels({
               owner,
               repo,
