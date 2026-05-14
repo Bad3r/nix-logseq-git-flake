@@ -9,7 +9,7 @@ let
   };
 
   runtimeLibs = import ../../lib/runtime-libs.nix;
-  desktop = import ./desktop.nix {
+  desktopScope = import ./desktop/scope.nix {
     inherit
       lib
       manifest
@@ -27,7 +27,7 @@ let
       ;
   };
 in
-desktop
+desktopScope
 // {
   inherit cli;
 }

@@ -31,7 +31,7 @@ let
       runtimeLibPath
       ;
   };
-  logseqDesktop = import ./desktop-package.nix {
+  logseqDesktop = import ./package.nix {
     inherit
       desktopEntry
       fhsBase

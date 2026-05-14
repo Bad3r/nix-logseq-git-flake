@@ -15,6 +15,9 @@ This file provides guidance to coding agents when working with this repository.
 - `flake.nix` is the small flake-parts/import-tree entrypoint.
 - `modules/` contains auto-imported flake-parts modules for packages, checks, formatter, dev shells, hooks, overlays, and supported systems.
 - `modules/_packages/`, `_checks/`, and `_hooks/` are helper trees ignored by import-tree because their paths include `/_`.
+- `modules/_packages/scope.nix` assembles the private package scope exposed to flake modules as `logseqNightly`.
+- `modules/_packages/desktop/scope.nix` wires the desktop payload, upstream source, FHS wrapper, launcher, icon, and final desktop derivation.
+- `modules/_packages/desktop/package.nix` is the actual desktop derivation.
 - `data/logseq-nightly.json` is a validated manifest, not loose config.
 - `lib/` contains generic helpers shared by flake modules, including manifest validation and runtime library lists.
 - `lib/loadManifest.nix` enforces required keys and `sha256-` SRI hashes.
@@ -43,8 +46,8 @@ The manifest is the single source of truth for downstream consumers. Adding a fi
 ### Manifest fan-out inside flake modules
 
 - `modules/logseq-scope.nix` loads `data/logseq-nightly.json` through `lib/loadManifest.nix` and exposes the shared package scope as a per-system module argument.
-- `modules/_packages/payload.nix` fetches the desktop bundle from `manifest.assetUrl` with `manifest.assetSha256`.
-- `modules/_packages/upstream-source.nix` fetches `logseq/logseq` at `manifest.logseqRev` with `manifest.cliSrcHash`; this source is shared by the desktop icon and CLI build.
+- `modules/_packages/desktop/payload.nix` fetches the desktop bundle from `manifest.assetUrl` with `manifest.assetSha256`.
+- `modules/_packages/desktop/upstream-source.nix` fetches `logseq/logseq` at `manifest.logseqRev` with `manifest.cliSrcHash`; this source is shared by the desktop icon and CLI build.
 - `modules/_packages/logseq-cli/` also reads `cliPnpmDepsHash`, `cliVendorHash`, and `cliVersion`. The pnpm hash feeds the offline pnpm store; the vendor hash pins the fixed-output nbb dependency source tree copied into `cli/vendor/src`.
 
 ### Upstream layout assumptions
@@ -55,13 +58,13 @@ The bundle's internal layout is dictated by upstream's packaging tool and change
 - `resources/app.asar` (app sources sealed — no unpacked `resources/app/` tree).
 - Chromium runtime libs, locales, swiftshader, etc.
 
-`logseqTree` in `modules/_packages/tree.nix` currently expects the flat electron-builder payload and copies it directly; the FHS `runScript` executes `share/logseq/logseq`. If upstream reintroduces a nested bundle root or renames the executable, fix the tree normalization and launcher together. The icon is fetched from `logseqSrc` (upstream repo at pinned rev), not extracted from the tarball, because asar-packed resources aren't filesystem-accessible.
+`logseqTree` in `modules/_packages/desktop/tree.nix` currently expects the flat electron-builder payload and copies it directly; the FHS `runScript` executes `share/logseq/logseq`. If upstream reintroduces a nested bundle root or renames the executable, fix the tree normalization and launcher together. The icon is fetched from `logseqSrc` (upstream repo at pinned rev), not extracted from the tarball, because asar-packed resources aren't filesystem-accessible.
 
 When a nightly fails, first check whether upstream renamed a path, changed the packaging tool, or moved an expected file. The cleanest signal is usually a diff of upstream's `.github/workflows/build-desktop-release.yml` around the failing step.
 
 ### Desktop FHS wrapper
 
-The desktop package is wrapped in `pkgs.buildFHSEnv` because Electron expects a traditional `/lib`, `/usr/lib` filesystem layout for its Chromium runtime. `lib/runtime-libs.nix` lists the injected libraries — extend it only when a runtime-load failure points to a missing `.so`. The `launcher` shell script in `modules/_packages/launcher.nix` additionally sets NVIDIA PRIME and Mesa driver paths before execing the FHS env; GPU-related regressions belong there, not in `runtime-libs.nix`.
+The desktop package is wrapped in `pkgs.buildFHSEnv` because Electron expects a traditional `/lib`, `/usr/lib` filesystem layout for its Chromium runtime. `lib/runtime-libs.nix` lists the injected libraries — extend it only when a runtime-load failure points to a missing `.so`. The `launcher` shell script in `modules/_packages/desktop/launcher.nix` additionally sets NVIDIA PRIME and Mesa driver paths before execing the FHS env; GPU-related regressions belong there, not in `runtime-libs.nix`.
 
 ## Core Commands
 
