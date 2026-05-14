@@ -47,16 +47,8 @@ let
 in
 {
   inherit
-    desktopEntry
-    fhsBase
-    icon
-    launcher
     logseqDesktop
-    logseqFhs
     logseqSrc
-    logseqTree
     payload
-    runtimeLibList
-    runtimeLibPath
     ;
 }
