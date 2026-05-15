@@ -5,7 +5,7 @@
   cliVendorHash,
   git,
   lib,
-  nodejs_22,
+  logseqNodejs,
   pnpm_10,
   pnpmConfigHook,
   src,
@@ -21,7 +21,7 @@ stdenv.mkDerivation {
     babashka
     cacert
     git
-    nodejs_22
+    logseqNodejs
     pnpm_10
     pnpmConfigHook
   ];

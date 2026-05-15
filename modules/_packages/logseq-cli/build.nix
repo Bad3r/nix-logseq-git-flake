@@ -3,7 +3,7 @@
   cliVendor,
   gcc,
   gnumake,
-  nodejs_22,
+  logseqNodejs,
   pkg-config,
   pnpm_10,
   pnpmConfigHook,
@@ -19,7 +19,7 @@ stdenv.mkDerivation {
   sourceRoot = "${src.name}/deps";
 
   nativeBuildInputs = [
-    nodejs_22
+    logseqNodejs
     pnpm_10
     pnpmConfigHook
     python3
@@ -34,7 +34,7 @@ stdenv.mkDerivation {
   pnpmRoot = "cli";
 
   env = {
-    npm_config_nodedir = nodejs_22;
+    npm_config_nodedir = logseqNodejs;
     npm_config_manage_package_manager_versions = "false";
   };
 

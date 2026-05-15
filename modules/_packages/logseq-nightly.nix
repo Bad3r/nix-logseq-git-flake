@@ -9,6 +9,7 @@ let
   };
 
   runtimeLibs = import ../../lib/runtime-libs.nix;
+  logseqNodejs = pkgs.nodejs_24;
   desktopAssembly = import ./desktop/assembly.nix {
     inherit
       lib
@@ -25,6 +26,7 @@ let
       cliVersion
       logseqRev
       ;
+    inherit logseqNodejs;
   };
 in
 desktopAssembly

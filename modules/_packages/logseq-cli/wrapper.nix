@@ -1,6 +1,6 @@
 {
   cliBuilt,
-  nodejs_22,
+  logseqNodejs,
   writeShellScript,
 }:
 writeShellScript "logseq-cli-wrapper" ''
@@ -8,5 +8,5 @@ writeShellScript "logseq-cli-wrapper" ''
   export NBB_CACHE_DIR="''${XDG_CACHE_HOME:-$HOME/.cache}/logseq-cli/nbb"
   mkdir -p "$NBB_CACHE_DIR"
 
-  exec ${nodejs_22}/bin/node "${cliBuilt}/cli/cli.mjs" "$@"
+  exec ${logseqNodejs}/bin/node "${cliBuilt}/cli/cli.mjs" "$@"
 ''

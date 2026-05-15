@@ -11,8 +11,8 @@
   git,
   gnumake,
   lib,
+  logseqNodejs,
   logseqRev,
-  nodejs_22,
   pkg-config,
   pnpm_10,
   pnpmConfigHook,
@@ -43,7 +43,7 @@ let
       cliVendorHash
       git
       lib
-      nodejs_22
+      logseqNodejs
       pnpm_10
       pnpmConfigHook
       src
@@ -57,7 +57,7 @@ let
       cliVendor
       gcc
       gnumake
-      nodejs_22
+      logseqNodejs
       pkg-config
       pnpm_10
       pnpmConfigHook
@@ -69,7 +69,7 @@ let
       ;
   };
   wrapper = import ./wrapper.nix {
-    inherit cliBuilt nodejs_22 writeShellScript;
+    inherit cliBuilt logseqNodejs writeShellScript;
   };
 in
 stdenv.mkDerivation {
