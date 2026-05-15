@@ -38,11 +38,45 @@ stdenv.mkDerivation {
     npm_config_manage_package_manager_versions = "false";
   };
 
+  prePnpmInstall = ''
+    python <<'PY'
+    import json
+    from pathlib import Path
+
+    path = Path("package.json")
+    metadata = json.loads(path.read_text())
+
+    if "better-sqlite3" not in metadata.get("dependencies", {}):
+        raise SystemExit("expected @logseq/cli to depend on better-sqlite3")
+
+    pnpm = metadata.setdefault("pnpm", {})
+    ignored = pnpm.get("ignoredBuiltDependencies", [])
+    if "better-sqlite3" in ignored:
+        raise SystemExit("better-sqlite3 cannot be both ignored and approved")
+
+    approved = pnpm.setdefault("onlyBuiltDependencies", [])
+    if "better-sqlite3" not in approved:
+        approved.append("better-sqlite3")
+
+    path.write_text(json.dumps(metadata, indent=2) + "\n")
+    PY
+  '';
+
   buildPhase = ''
     runHook preBuild
 
     pushd cli
-    pnpm rebuild
+    pnpm rebuild better-sqlite3
+    ignored_builds=$(pnpm ignored-builds)
+    echo "$ignored_builds"
+    if ! grep -q "  None" <<<"$ignored_builds"; then
+      echo "pnpm still reports ignored dependency build scripts" >&2
+      exit 1
+    fi
+    if ! find node_modules/.pnpm -path '*/better-sqlite3/build/Release/better_sqlite3.node' -print -quit | grep -q .; then
+      echo "better-sqlite3 native binding was not built" >&2
+      exit 1
+    fi
     popd
 
     runHook postBuild
