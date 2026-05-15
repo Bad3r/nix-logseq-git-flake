@@ -108,20 +108,17 @@ jobs:
 
           path = Path("src/electron/electron/core.cljs")
           source = path.read_text()
-          old = """           (db/ensure-graphs-dir!)
-           (install-cli-launcher!)
-
-           ;; Windows/Linux: handle deeplink URL passed on first launch via argv
-          """
-          new = """           (db/ensure-graphs-dir!)
-
-           ;; Windows/Linux: handle deeplink URL passed on first launch via argv
-          """
-          patched = source.replace(old, new)
-          if patched == source:
-              raise SystemExit("expected to remove one desktop CLI launcher install call")
-          if patched.count("(install-cli-launcher!)") != source.count("(install-cli-launcher!)") - 1:
-              raise SystemExit("unexpected desktop CLI launcher install patch count")
+          lines = source.splitlines(keepends=True)
+          patched_lines = [
+              line for line in lines
+              if line.strip() != "(install-cli-launcher!)"
+          ]
+          removed = len(lines) - len(patched_lines)
+          if removed > 1:
+              raise SystemExit(f"expected at most one desktop CLI launcher install call, got {removed}")
+          if removed == 0:
+              print("desktop CLI launcher install call already absent")
+          patched = "".join(patched_lines)
           path.write_text(patched)
           PY
         working-directory: logseq-src
