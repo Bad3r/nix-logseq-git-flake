@@ -101,6 +101,26 @@ jobs:
           sed -i 's/defonce version ".*"/defonce version "${{ steps.version.outputs.value }}"/g' src/main/frontend/version.cljs
         working-directory: logseq-src
 
+      - name: Disable bundled desktop CLI launcher
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path("src/electron/electron/core.cljs")
+          source = path.read_text()
+          lines = source.splitlines(keepends=True)
+          patched_lines = [
+              line for line in lines
+              if line.strip() != "(install-cli-launcher!)"
+          ]
+          removed = len(lines) - len(patched_lines)
+          if removed != 1:
+              raise SystemExit(f"expected exactly one desktop CLI launcher install call, got {removed}")
+          patched = "".join(patched_lines)
+          path.write_text(patched)
+          PY
+        working-directory: logseq-src
+
       - name: Record source revision
         id: revision
         run: echo "rev=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
