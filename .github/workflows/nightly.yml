@@ -114,10 +114,8 @@ jobs:
               if line.strip() != "(install-cli-launcher!)"
           ]
           removed = len(lines) - len(patched_lines)
-          if removed > 1:
-              raise SystemExit(f"expected at most one desktop CLI launcher install call, got {removed}")
-          if removed == 0:
-              print("desktop CLI launcher install call already absent")
+          if removed != 1:
+              raise SystemExit(f"expected exactly one desktop CLI launcher install call, got {removed}")
           patched = "".join(patched_lines)
           path.write_text(patched)
           PY
