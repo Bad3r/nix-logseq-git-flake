@@ -1,19 +1,21 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
-name: "Claude: PR Review"
+# Mirror of anthropics/claude-code-action examples/pr-review-comprehensive.yml.
+# Diff against upstream when bumping the action version.
+name: PR Review with Progress Tracking
 
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
 
 concurrency:
-  group: pr-review-${{ github.event.pull_request.number }}
+  group: claude-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   review-with-tracking:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     if: >-
       github.event.pull_request.draft == false &&
       github.event.pull_request.head.repo.full_name == github.repository
@@ -25,26 +27,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Run PR review
+      - name: PR Review with Progress Tracking
         id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           track_progress: true
           use_sticky_comment: true
+          allowed_bots: "dependabot[bot]"
+
+          # yamllint disable rule:line-length
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
 
             Review this pull request. Report problems that need fixing and concrete enhancements worth making. Skip everything else.
 
-            This repository packages Logseq nightly builds as a Nix flake. Prioritize issues in Nix packaging behavior, flake outputs and checks, fixed-output hashes, manifest producer/validator sync, desktop FHS wrapper/runtime libraries, CLI offline pnpm/vendor flow, shell scripts, and GitHub Actions nightly release behavior.
-
             Tag every comment with one of these in brackets:
 
-            1. [ISSUE] something the author should fix: correctness bug, security hole, data corruption or loss risk, broken build, broken flake evaluation, regression in existing package behavior, logic flaw, race condition, wrong abstraction, hidden coupling, unsafe default, missing input validation at a trust boundary, missing test/check for new branching logic, missing docs for a new public package/check/script/workflow input/env var.
+            1. [ISSUE] something the author should fix: correctness bug, security hole, data corruption or loss risk, broken build, broken module evaluation, regression in existing behavior, logic flaw, off-by-one, race condition, wrong abstraction, hidden coupling, unsafe default, missing input validation at a trust boundary, missing test for new branching logic, missing docs for a new public option/API/CLI flag/env var.
             2. [ENHANCEMENT] non-blocking improvement with measurable impact: performance, maintainability, security hardening, error-handling robustness, reduced complexity, clearer error messages, safer defaults, better ergonomics, reduced foot-gun, simpler call sites.
 
             The tag conveys what the author should do. The specific defect type (bug / logic / approach / etc.) belongs in the comment prose, not in the tag.
@@ -61,7 +64,7 @@ jobs:
             - No speculative concerns ("this might break if X happens later"). Comment only on problems that are concretely identifiable in the code as it stands.
             - Do not flag issues that depend on unstated assumptions about the codebase or the author's intent.
             - Every comment must propose a concrete fix or specific change. Vague "consider X" is not allowed; state what to change and why.
-            - Testing and documentation gaps count only when substantive: new public package/check/script/workflow input/env var without docs, new branching logic without tests/checks, new failure mode without coverage. Otherwise skip.
+            - Testing and documentation gaps count only when substantive: new public API without docs, new branching logic without tests, new failure mode without coverage. Otherwise skip.
             - Do not restate the issue title in the body. Do not append a closing line summarizing the comment.
 
             Output format:
@@ -88,3 +91,5 @@ jobs:
               issue_number: context.payload.pull_request.number,
               body: `PR review failed. [Workflow run](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}).`
             });
+
+          # yamllint enable rule:line-length
