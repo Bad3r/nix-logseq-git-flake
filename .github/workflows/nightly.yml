@@ -22,7 +22,21 @@ env:
   LOGSEQ_BRANCH: ${{ github.event.inputs.logseq_branch || 'master' }}
 
 jobs:
+  resolve-revision:
+    runs-on: ubuntu-latest
+    outputs:
+      rev: ${{ steps.resolve.outputs.rev }}
+    steps:
+      - name: Resolve upstream revision
+        id: resolve
+        run: |
+          set -euo pipefail
+          rev="$(git ls-remote https://github.com/logseq/logseq.git "refs/heads/${LOGSEQ_BRANCH}" | head -1 | cut -f1)"
+          test -n "$rev" || { echo "Could not resolve refs/heads/${LOGSEQ_BRANCH}" >&2; exit 1; }
+          echo "rev=${rev}" >>"$GITHUB_OUTPUT"
+
   build:
+    needs: resolve-revision
     strategy:
       fail-fast: false
       matrix:
@@ -36,7 +50,15 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Clone Logseq source
-        run: git clone --depth 1 --branch "${LOGSEQ_BRANCH}" https://github.com/logseq/logseq.git logseq-src
+        env:
+          LOGSEQ_REV: ${{ needs.resolve-revision.outputs.rev }}
+        run: |
+          set -euo pipefail
+          git init -q logseq-src
+          cd logseq-src
+          git remote add origin https://github.com/logseq/logseq.git
+          git fetch -q --depth 1 origin "${LOGSEQ_REV}"
+          git checkout -q FETCH_HEAD
 
       - name: Set nightly metadata
         id: metadata
@@ -193,9 +215,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out
-          src_dir="dist/linux-unpacked"
-          if [ ! -d "$src_dir" ]; then
-            echo "Could not locate packaged Logseq bundle at $src_dir" >&2
+          src_dir="$(find dist -maxdepth 1 -type d -name 'linux*-unpacked' | head -1)"
+          if [ -z "$src_dir" ] || [ ! -d "$src_dir" ]; then
+            echo "Could not locate packaged Logseq bundle under dist/linux*-unpacked" >&2
             find dist -maxdepth 2 -mindepth 1 -print >&2 || true
             exit 1
           fi
