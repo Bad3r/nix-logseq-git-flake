@@ -2,11 +2,13 @@
 # update-nightly.sh — Compute all hashes and write data/logseq-nightly.json
 #
 # Required environment variables:
-#   LOGSEQ_REV      — upstream commit SHA
-#   LOGSEQ_VERSION  — version string (e.g. 2.0.0-alpha+nightly.20260127)
-#   ASSET_URL       — tarball download URL
-#   ASSET_HASH      — SRI hash of the desktop tarball
-#   NIGHTLY_TAG     — release tag (e.g. nightly-20260127)
+#   LOGSEQ_REV             — upstream commit SHA
+#   LOGSEQ_VERSION         — version string (e.g. 2.0.0-alpha+nightly.20260127)
+#   ASSET_URL_X86_64       — x86_64 desktop tarball download URL
+#   ASSET_SHA256_X86_64    — SRI hash of the x86_64 desktop tarball
+#   ASSET_URL_AARCH64      — aarch64 desktop tarball download URL
+#   ASSET_SHA256_AARCH64   — SRI hash of the aarch64 desktop tarball
+#   NIGHTLY_TAG            — release tag (e.g. nightly-20260127)
 
 set -euo pipefail
 
@@ -16,8 +18,10 @@ MANIFEST="data/logseq-nightly.json"
 echo "::group::Phase 1: Validate inputs"
 : "${LOGSEQ_REV:?must be set}"
 : "${LOGSEQ_VERSION:?must be set}"
-: "${ASSET_URL:?must be set}"
-: "${ASSET_HASH:?must be set}"
+: "${ASSET_URL_X86_64:?must be set}"
+: "${ASSET_SHA256_X86_64:?must be set}"
+: "${ASSET_URL_AARCH64:?must be set}"
+: "${ASSET_SHA256_AARCH64:?must be set}"
 : "${NIGHTLY_TAG:?must be set}"
 PUBLISHED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 echo "All inputs validated"
@@ -48,8 +52,10 @@ PLACEHOLDER="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 jq -n \
   --arg tag "$NIGHTLY_TAG" \
   --arg publishedAt "$PUBLISHED_AT" \
-  --arg assetUrl "$ASSET_URL" \
-  --arg assetSha256 "$ASSET_HASH" \
+  --arg urlX86_64 "$ASSET_URL_X86_64" \
+  --arg sha256X86_64 "$ASSET_SHA256_X86_64" \
+  --arg urlAarch64 "$ASSET_URL_AARCH64" \
+  --arg sha256Aarch64 "$ASSET_SHA256_AARCH64" \
   --arg logseqRev "$LOGSEQ_REV" \
   --arg logseqVersion "$LOGSEQ_VERSION" \
   --arg cliSrcHash "$CLI_SRC_HASH" \
@@ -59,8 +65,10 @@ jq -n \
   '{
     tag: $tag,
     publishedAt: $publishedAt,
-    assetUrl: $assetUrl,
-    assetSha256: $assetSha256,
+    assets: {
+      "x86_64-linux": { url: $urlX86_64, sha256: $sha256X86_64 },
+      "aarch64-linux": { url: $urlAarch64, sha256: $sha256Aarch64 }
+    },
     logseqRev: $logseqRev,
     logseqVersion: $logseqVersion,
     cliSrcHash: $cliSrcHash,
@@ -123,7 +131,8 @@ echo "=== Manifest updated ==="
 echo "  tag:              $NIGHTLY_TAG"
 echo "  logseqRev:        $LOGSEQ_REV"
 echo "  logseqVersion:    $LOGSEQ_VERSION"
-echo "  assetSha256:      $ASSET_HASH"
+echo "  assetSha256(x64): $ASSET_SHA256_X86_64"
+echo "  assetSha256(arm): $ASSET_SHA256_AARCH64"
 echo "  cliSrcHash:       $CLI_SRC_HASH"
 echo "  cliPnpmDepsHash:  $PNPM_HASH"
 echo "  cliVendorHash:    $VENDOR_HASH"

@@ -37,6 +37,47 @@ jobs:
       - name: Run nix flake check
         run: nix flake check
 
+  validate-aarch64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v22
+        with:
+          determinate: false
+          extra-conf: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Build and smoke-test logseq-cli (aarch64)
+        run: |
+          nix build --accept-flake-config --print-build-logs .#packages.aarch64-linux.logseq-cli
+          nix build --accept-flake-config --print-build-logs .#checks.aarch64-linux.logseq-cli-help
+
+      - name: Detect aarch64 desktop asset readiness
+        id: asset
+        run: |
+          set -euo pipefail
+          sha="$(jq -r '.assets["aarch64-linux"].sha256' data/logseq-nightly.json)"
+          placeholder="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          if [ "$sha" = "$placeholder" ]; then
+            echo "ready=false" >>"$GITHUB_OUTPUT"
+            echo "::warning::aarch64 desktop asset is still a placeholder; skipping desktop build until the nightly publishes logseq-linux-arm64-*.tar.gz."
+          else
+            echo "ready=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and smoke-test logseq desktop (aarch64)
+        if: steps.asset.outputs.ready == 'true'
+        run: |
+          nix build --accept-flake-config --print-build-logs .#packages.aarch64-linux.logseq
+          nix build --accept-flake-config --print-build-logs .#checks.aarch64-linux.logseq
+
   audit-flake-inputs:
     runs-on: ubuntu-latest
     timeout-minutes: 10

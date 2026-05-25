@@ -6,7 +6,7 @@ This file provides guidance to coding agents when working with this repository.
 
 ## Scope
 
-- This repo packages Logseq nightly builds as a Nix flake for Linux `x86_64-linux`.
+- This repo packages Logseq nightly builds as a Nix flake for Linux `x86_64-linux` and `aarch64-linux`.
 - Main outputs are `logseq` (desktop), `logseq-cli` (CLI), and `default` (both).
 - Most implementation work happens in `modules/`, `lib/loadManifest.nix`, `lib/runtime-libs.nix`, `scripts/update-nightly.sh`, `scripts/render-nightly-release-notes.sh`, and `.github/workflows/nightly.yml`.
 
@@ -32,13 +32,13 @@ This file provides guidance to coding agents when working with this repository.
 
 ### Nightly pipeline
 
-The flake does **not** build Logseq Desktop from source. It consumes a pre-packaged binary tarball from a GitHub Release, wraps it in an FHS env, and layers a desktop entry + icon. Only the CLI is built from source inside Nix.
+The flake does **not** build Logseq Desktop from source inside Nix. It consumes per-architecture pre-packaged binary tarballs (`x86_64` and `aarch64`) from a GitHub Release, wraps the one matching the build system in an FHS env, and layers a desktop entry + icon. The CLI is built from source inside Nix on both architectures.
 
 End-to-end data flow:
 
-1. `.github/workflows/nightly.yml` → `build` job runs on a GitHub-hosted Ubuntu runner **without** Nix. It clones upstream `logseq/logseq`, installs upstream pnpm dependencies, runs `pnpm gulp:build && pnpm cljs:release-electron && pnpm db-worker-node:bundle && pnpm webpack-app-build && pnpm desktop:prepare-runtime-js` to populate `static/` and stage runtime JS under `static/js/`, then runs `pnpm electron:make` (electron-builder) in `static/` to produce `static/dist/linux-unpacked/`. That directory is tarred as `logseq-linux-x64-<version>.tar.gz` and uploaded as an artifact.
-2. `.github/workflows/nightly.yml` → `publish-release` job installs Nix + Cachix, publishes the tarball as a GitHub Release tagged `nightly-<YYYYMMDD>`, then runs `bash scripts/update-nightly.sh`.
-3. `scripts/update-nightly.sh` rewrites `data/logseq-nightly.json` with the new release URL, SRI hash, upstream rev, and CLI version. It resolves `cliPnpmDepsHash` and `cliVendorHash` with deliberate placeholder fixed-output builds, parsing the resulting `got: sha256-...` error from stderr and rewriting the manifest after each hash.
+1. `.github/workflows/nightly.yml` → `build` job runs as a `strategy.matrix` over `{x64: ubuntu-latest, arm64: ubuntu-24.04-arm}`, **without** Nix. Each leg clones upstream `logseq/logseq`, installs upstream pnpm dependencies, runs `pnpm gulp:build && pnpm cljs:release-electron && pnpm db-worker-node:bundle && pnpm webpack-app-build && pnpm desktop:prepare-runtime-js` to populate `static/` and stage runtime JS under `static/js/`, then runs `pnpm electron:make` (electron-builder) in `static/` to produce `static/dist/linux-unpacked/` for that runner's architecture. The directory is tarred as `logseq-linux-<arch>-<version>.tar.gz` and uploaded as a per-arch artifact (`linux-build-<arch>`). Each leg also writes its SRI hash to `hash-<arch>.txt`; the x64 leg additionally writes shared `meta.txt` (version/revision/datestring) and the rendered release notes, because matrix job `outputs` are unreliable.
+2. `.github/workflows/nightly.yml` → `publish-release` job downloads both artifacts, resolves shared metadata + per-arch hashes from those files, installs Nix + Cachix, publishes **both** tarballs as a GitHub Release tagged `nightly-<YYYYMMDD>`, then runs `bash scripts/update-nightly.sh`.
+3. `scripts/update-nightly.sh` rewrites `data/logseq-nightly.json` with the per-architecture release URLs + SRI hashes (under `assets.<system>`), upstream rev, and CLI version. It resolves `cliPnpmDepsHash` and `cliVendorHash` with deliberate placeholder fixed-output builds, parsing the resulting `got: sha256-...` error from stderr and rewriting the manifest after each hash.
 4. `nix flake check` validates the updated manifest through `lib/loadManifest.nix`, rebuilds both packages, then the `logseq-nightly-bot` auto-commits the manifest bump to `main`.
 
 The manifest is the single source of truth for downstream consumers. Adding a field requires updating **both** `scripts/update-nightly.sh` (producer) **and** `lib/loadManifest.nix` (validator) in the same change.
@@ -46,9 +46,9 @@ The manifest is the single source of truth for downstream consumers. Adding a fi
 ### Manifest fan-out inside flake modules
 
 - `modules/logseq-scope.nix` loads `data/logseq-nightly.json` through `lib/loadManifest.nix` and exposes the shared package set as a per-system module argument.
-- `modules/_packages/desktop/payload.nix` fetches the desktop bundle from `manifest.assetUrl` with `manifest.assetSha256`.
+- `modules/_packages/desktop/payload.nix` selects the per-system desktop bundle from `manifest.assets.<system>` (`url` + `sha256`), keyed by `pkgs.stdenv.hostPlatform.system`, and throws on an unsupported system.
 - `modules/_packages/desktop/upstream-source.nix` fetches `logseq/logseq` at `manifest.logseqRev` with `manifest.cliSrcHash`; this source is shared by the desktop icon and CLI build.
-- `modules/_packages/logseq-cli/` also reads `cliPnpmDepsHash`, `cliVendorHash`, and `cliVersion`. The pnpm hash feeds the offline pnpm store; the vendor hash pins the fixed-output nbb dependency source tree copied into `cli/vendor/src`.
+- `modules/_packages/logseq-cli/` also reads `cliPnpmDepsHash`, `cliVendorHash`, and `cliVersion`. The pnpm hash feeds the offline pnpm store; the vendor hash pins the fixed-output nbb dependency source tree copied into `cli/vendor/src`. The CLI builds from source on both `x86_64-linux` and `aarch64-linux`; these two hashes are currently shared across architectures (the vendor tree is pure ClojureScript source, and the pnpm fetch is expected to be platform-independent). If an aarch64 build ever reports a pnpm hash mismatch, split `cliPnpmDepsHash` per system in the manifest, validator, and producer together.
 
 ### Upstream layout assumptions
 
