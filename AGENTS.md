@@ -36,7 +36,7 @@ The flake does **not** build Logseq Desktop from source inside Nix. It consumes 
 
 End-to-end data flow:
 
-1. `.github/workflows/nightly.yml` → `build` job runs as a `strategy.matrix` over `{x64: ubuntu-latest, arm64: ubuntu-24.04-arm}`, **without** Nix. Each leg clones upstream `logseq/logseq`, installs upstream pnpm dependencies, runs `pnpm gulp:build && pnpm cljs:release-electron && pnpm db-worker-node:bundle && pnpm webpack-app-build && pnpm desktop:prepare-runtime-js` to populate `static/` and stage runtime JS under `static/js/`, then runs `pnpm electron:make` (electron-builder) in `static/` to produce `static/dist/linux-unpacked/` for that runner's architecture. The directory is tarred as `logseq-linux-<arch>-<version>.tar.gz` and uploaded as a per-arch artifact (`linux-build-<arch>`). Each leg also writes its SRI hash to `hash-<arch>.txt`; the x64 leg additionally writes shared `meta.txt` (version/revision/datestring) and the rendered release notes, because matrix job `outputs` are unreliable.
+1. `.github/workflows/nightly.yml` → `build` job runs as a `strategy.matrix` over `{x64: ubuntu-latest, arm64: ubuntu-24.04-arm}`, **without** Nix. Each leg clones upstream `logseq/logseq`, installs upstream pnpm dependencies, runs `pnpm gulp:build && pnpm cljs:release-electron && pnpm db-worker-node:bundle && pnpm webpack-app-build && pnpm desktop:prepare-runtime-js` to populate `static/` and stage runtime JS under `static/js/`, then runs `pnpm electron:make` (electron-builder) in `static/` to produce the unpacked bundle for that runner's architecture under `static/dist/` (`linux-unpacked` on x64, `linux-arm64-unpacked` on arm64). The directory is tarred as `logseq-linux-<arch>-<version>.tar.gz` and uploaded as a per-arch artifact (`linux-build-<arch>`). Each leg also writes its SRI hash to `hash-<arch>.txt`; the x64 leg additionally writes shared `meta.txt` (version/revision/datestring) and the rendered release notes, because matrix job `outputs` are unreliable.
 2. `.github/workflows/nightly.yml` → `publish-release` job downloads both artifacts, resolves shared metadata + per-arch hashes from those files, installs Nix + Cachix, publishes **both** tarballs as a GitHub Release tagged `nightly-<YYYYMMDD>`, then runs `bash scripts/update-nightly.sh`.
 3. `scripts/update-nightly.sh` rewrites `data/logseq-nightly.json` with the per-architecture release URLs + SRI hashes (under `assets.<system>`), upstream rev, and CLI version. It resolves `cliPnpmDepsHash` and `cliVendorHash` with deliberate placeholder fixed-output builds, parsing the resulting `got: sha256-...` error from stderr and rewriting the manifest after each hash.
 4. `nix flake check` validates the updated manifest through `lib/loadManifest.nix`, rebuilds both packages, then the `logseq-nightly-bot` auto-commits the manifest bump to `main`.
@@ -147,7 +147,7 @@ nix run nixpkgs#flake-checker -- \
 bash scripts/update-nightly.sh
 ```
 
-Required env vars for `scripts/update-nightly.sh`: `LOGSEQ_REV`, `LOGSEQ_VERSION`, `ASSET_URL`, `ASSET_HASH`, `NIGHTLY_TAG`.
+Required env vars for `scripts/update-nightly.sh`: `LOGSEQ_REV`, `LOGSEQ_VERSION`, `ASSET_URL_X86_64`, `ASSET_SHA256_X86_64`, `ASSET_URL_AARCH64`, `ASSET_SHA256_AARCH64`, `NIGHTLY_TAG`.
 
 ## What To Run After Common Changes
 
