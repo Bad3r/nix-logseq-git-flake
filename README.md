@@ -3,7 +3,7 @@
 Nix flake packaging **Logseq Desktop** (nightly) and **Logseq CLI** (DB graph management / MCP server) from upstream `master`.
 
 > [!NOTE]
-> Linux only: `x86_64-linux` and `aarch64-linux`. [Open an issue](https://github.com/Bad3r/nix-logseq-git-flake/issues) to request macOS support. 
+> Linux only: `x86_64-linux` and `aarch64-linux`. [Open an issue](https://github.com/Bad3r/nix-logseq-git-flake/issues) to request macOS support.
 
 ## Packages
 
