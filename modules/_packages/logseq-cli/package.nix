@@ -7,7 +7,6 @@
   cliVersion,
   fetchFromGitHub,
   fetchPnpmDeps,
-  gcc,
   git,
   gnumake,
   lib,
@@ -55,7 +54,6 @@ let
     inherit
       cliPnpmDeps
       cliVendor
-      gcc
       gnumake
       logseqNodejs
       pkg-config
@@ -96,6 +94,6 @@ stdenv.mkDerivation {
     homepage = "https://github.com/logseq/logseq/tree/master/deps/cli";
     license = lib.licenses.agpl3Plus;
     mainProgram = "logseq-cli";
-    platforms = lib.platforms.linux;
+    platforms = lib.platforms.linux ++ [ "aarch64-darwin" ];
   };
 }

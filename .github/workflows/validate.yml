@@ -101,6 +101,80 @@ jobs:
           nix build --accept-flake-config --print-build-logs .#packages.aarch64-linux.logseq
           nix build --accept-flake-config --print-build-logs .#checks.aarch64-linux.logseq
 
+  validate-aarch64-darwin:
+    runs-on: macos-14
+    needs: validate
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v22
+        with:
+          determinate: false
+          extra-conf: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v17
+        with:
+          name: nix-logseq-git-flake
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build and smoke-test logseq-cli (aarch64-darwin)
+        run: |
+          nix build --accept-flake-config --print-build-logs .#packages.aarch64-darwin.logseq-cli
+          nix build --accept-flake-config --print-build-logs .#checks.aarch64-darwin.logseq-cli-help
+
+      - name: Detect aarch64-darwin desktop asset readiness
+        id: asset
+        run: |
+          set -euo pipefail
+          sha="$(jq -r '.assets["aarch64-darwin"].sha256' data/logseq-nightly.json)"
+          placeholder="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          if [ "$sha" = "$placeholder" ]; then
+            echo "ready=false" >>"$GITHUB_OUTPUT"
+            echo "::warning::aarch64-darwin desktop asset is still a placeholder; skipping desktop build until the nightly publishes logseq-darwin-arm64-*.tar.gz."
+          else
+            echo "ready=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and smoke-test logseq desktop (aarch64-darwin)
+        if: steps.asset.outputs.ready == 'true'
+        run: |
+          nix build --accept-flake-config --print-build-logs .#packages.aarch64-darwin.logseq
+          nix build --accept-flake-config --print-build-logs .#checks.aarch64-darwin.logseq
+          nix build --accept-flake-config --print-build-logs .#checks.aarch64-darwin.logseq-runtime-assets
+
+      - name: Verify and launch Logseq.app (aarch64-darwin)
+        if: steps.asset.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          app="$(nix path-info --accept-flake-config .#packages.aarch64-darwin.logseq)/Applications/Logseq.app"
+          codesign --verify --deep --strict "$app"
+          log="$RUNNER_TEMP/logseq-darwin-launch.log"
+          "$app/Contents/MacOS/Logseq" --disable-gpu >"$log" 2>&1 &
+          pid=$!
+          sleep 20
+          if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid"
+            set +e
+            wait "$pid" 2>/dev/null
+            set -e
+            exit 0
+          fi
+          status=0
+          wait "$pid" || status=$?
+          if [ "$status" -ne 0 ]; then
+            echo "Logseq launch probe exited $status" >&2
+            cat "$log" >&2
+            exit "$status"
+          fi
+
   audit-flake-inputs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

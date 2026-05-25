@@ -1,7 +1,6 @@
 {
   cliPnpmDeps,
   cliVendor,
-  gcc,
   gnumake,
   logseqNodejs,
   pkg-config,
@@ -24,7 +23,7 @@ stdenv.mkDerivation {
     pnpmConfigHook
     python3
     gnumake
-    gcc
+    stdenv.cc
     pkg-config
   ];
 

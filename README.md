@@ -3,13 +3,13 @@
 Nix flake packaging **Logseq Desktop** (nightly) and **Logseq CLI** (DB graph management / MCP server) from upstream `master`.
 
 > [!NOTE]
-> Linux only: `x86_64-linux` and `aarch64-linux`. [Open an issue](https://github.com/Bad3r/nix-logseq-git-flake/issues) to request macOS support.
+> Supported systems: `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`. The `aarch64-darwin` desktop package is experimental until a published Darwin nightly has passed the macOS launch probe.
 
 ## Packages
 
 | Package      | Binary       | Description                                  |
 | ------------ | ------------ | -------------------------------------------- |
-| `logseq`     | `logseq`     | Desktop app with FHS wrapper                 |
+| `logseq`     | `logseq`     | Desktop app package                          |
 | `logseq-cli` | `logseq-cli` | CLI for DB graphs: query, export, MCP server |
 | `default`    | both         | Desktop app + CLI combined                   |
 
@@ -47,7 +47,7 @@ Passing `--accept-flake-config` in commands above enables these settings from th
     ];
   };
 
-  # in your NixOS module:
+  # in your system or user configuration:
   environment.systemPackages = [
     inputs.logseq-nightly.packages.${pkgs.system}.logseq
     inputs.logseq-nightly.packages.${pkgs.system}.logseq-cli

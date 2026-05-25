@@ -1,6 +1,14 @@
 {
   perSystem =
-    { pkgs, logseqNightly, ... }:
+    {
+      lib,
+      pkgs,
+      logseqNightly,
+      ...
+    }:
+    let
+      inherit (pkgs.stdenv.hostPlatform) isDarwin;
+    in
     {
       checks = {
         logseq-runtime-assets = import ./_checks/runtime-assets.nix {
@@ -8,10 +16,34 @@
           inherit (logseqNightly) payload logseqSrc;
         };
 
-        logseq = pkgs.runCommand "logseq-check" { } ''
-          ${pkgs.coreutils}/bin/test -x ${logseqNightly.logseqDesktop}/bin/logseq
-          touch $out
-        '';
+        logseq =
+          pkgs.runCommand "logseq-check"
+            {
+              nativeBuildInputs = lib.optionals isDarwin [
+                pkgs.darwin.sigtool
+              ];
+            }
+            (
+              if isDarwin then
+                ''
+                  app="${logseqNightly.logseqDesktop}/Applications/Logseq.app"
+                  ${pkgs.coreutils}/bin/test -d "$app"
+                  ${pkgs.coreutils}/bin/test -x "$app/Contents/MacOS/Logseq"
+                  ${pkgs.coreutils}/bin/test -f "$app/Contents/Resources/app.asar"
+                  ${pkgs.coreutils}/bin/test -x ${logseqNightly.logseqDesktop}/bin/logseq
+                  if [ -x /usr/bin/codesign ]; then
+                    /usr/bin/codesign --verify --deep --strict "$app"
+                  else
+                    codesign --verify --deep --strict "$app"
+                  fi
+                  touch $out
+                ''
+              else
+                ''
+                  ${pkgs.coreutils}/bin/test -x ${logseqNightly.logseqDesktop}/bin/logseq
+                  touch $out
+                ''
+            );
 
         logseq-cli = pkgs.runCommand "logseq-cli-check" { } ''
           ${pkgs.coreutils}/bin/test -x ${logseqNightly.cli}/bin/logseq-cli
