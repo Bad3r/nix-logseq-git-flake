@@ -309,6 +309,15 @@ jobs:
       - name: Update nightly manifest and CLI hashes
         run: bash scripts/update-nightly.sh
 
+      # Realize the architecture-independent CLI FODs with their freshly
+      # resolved hashes so Cachix uploads them; the aarch64 build substitutes
+      # these instead of running nbb's resolver, which fails on arm64.
+      - name: Seed CLI fixed-output derivations to Cachix
+        run: |
+          nix build --accept-flake-config --print-build-logs \
+            .#logseq-cli.cliVendor \
+            .#logseq-cli.cliPnpmDeps
+
       - name: Configure git
         run: |
           git config user.name "logseq-nightly-bot"

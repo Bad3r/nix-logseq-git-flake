@@ -31,14 +31,31 @@ jobs:
             experimental-features = nix-command flakes
             accept-flake-config = true
 
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v17
+        with:
+          name: nix-logseq-git-flake
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
       - name: Check formatting
         run: nix fmt -- --ci
 
       - name: Run nix flake check
         run: nix flake check
 
+      # nix flake check caches only check markers, not these intermediate FODs.
+      # Build them explicitly so Cachix uploads them: the aarch64 runner cannot
+      # run nbb's dep resolver, so it must substitute these content-addressed,
+      # architecture-independent paths instead of rebuilding them.
+      - name: Seed CLI fixed-output derivations for aarch64 substitution
+        run: |
+          nix build --accept-flake-config --print-build-logs \
+            .#logseq-cli.cliVendor \
+            .#logseq-cli.cliPnpmDeps
+
   validate-aarch64:
     runs-on: ubuntu-24.04-arm
+    needs: validate
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -53,6 +70,12 @@ jobs:
           extra-conf: |
             experimental-features = nix-command flakes
             accept-flake-config = true
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v17
+        with:
+          name: nix-logseq-git-flake
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build and smoke-test logseq-cli (aarch64)
         run: |
