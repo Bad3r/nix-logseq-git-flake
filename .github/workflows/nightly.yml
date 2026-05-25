@@ -23,7 +23,7 @@ env:
 
 jobs:
   resolve-revision:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       rev: ${{ steps.resolve.outputs.rev }}
     steps:
@@ -42,7 +42,7 @@ jobs:
       matrix:
         include:
           - arch: x64
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
@@ -257,7 +257,7 @@ jobs:
           if-no-files-found: error
 
   publish-release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     concurrency:
       group: repo-main-writer
@@ -367,7 +367,7 @@ jobs:
     needs:
       - build
       - publish-release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Create or update failure issue
         uses: actions/github-script@v9
@@ -450,7 +450,7 @@ jobs:
     needs:
       - build
       - publish-release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Close failure issue after recovery
         uses: actions/github-script@v9

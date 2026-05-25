@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   update:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     concurrency:
       group: repo-main-writer
       cancel-in-progress: false
@@ -68,7 +68,7 @@ jobs:
   report-failure:
     if: ${{ always() && github.event_name == 'schedule' && needs.update.result == 'failure' }}
     needs: update
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Create or update failure issue
         uses: actions/github-script@v9
@@ -144,7 +144,7 @@ jobs:
   report-recovery:
     if: ${{ always() && github.event_name == 'schedule' && needs.update.result == 'success' }}
     needs: update
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Close failure issue after recovery
         uses: actions/github-script@v9
