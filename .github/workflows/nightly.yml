@@ -22,18 +22,43 @@ env:
   LOGSEQ_BRANCH: ${{ github.event.inputs.logseq_branch || 'master' }}
 
 jobs:
-  build:
+  resolve-revision:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.value }}
-      revision: ${{ steps.revision.outputs.rev }}
-      datestring: ${{ steps.metadata.outputs.date }}
-      hash: ${{ steps.package.outputs.hash }}
+      rev: ${{ steps.resolve.outputs.rev }}
+    steps:
+      - name: Resolve upstream revision
+        id: resolve
+        run: |
+          set -euo pipefail
+          rev="$(git ls-remote https://github.com/logseq/logseq.git "refs/heads/${LOGSEQ_BRANCH}" | head -1 | cut -f1)"
+          test -n "$rev" || { echo "Could not resolve refs/heads/${LOGSEQ_BRANCH}" >&2; exit 1; }
+          echo "rev=${rev}" >>"$GITHUB_OUTPUT"
+
+  build:
+    needs: resolve-revision
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
 
       - name: Clone Logseq source
-        run: git clone --depth 1 --branch "${LOGSEQ_BRANCH}" https://github.com/logseq/logseq.git logseq-src
+        env:
+          LOGSEQ_REV: ${{ needs.resolve-revision.outputs.rev }}
+        run: |
+          set -euo pipefail
+          git init -q logseq-src
+          cd logseq-src
+          git remote add origin https://github.com/logseq/logseq.git
+          git fetch -q --depth 1 origin "${LOGSEQ_REV}"
+          git checkout -q FETCH_HEAD
 
       - name: Set nightly metadata
         id: metadata
@@ -58,9 +83,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ steps.pnpm-store-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-pnpm-
+            ${{ runner.os }}-${{ runner.arch }}-pnpm-
 
       - name: Cache Electron downloads
         uses: actions/cache@v5
@@ -68,9 +93,9 @@ jobs:
           path: |
             ~/.cache/electron
             ~/.cache/electron-builder
-          key: ${{ runner.os }}-electron-${{ hashFiles('logseq-src/resources/package.json', 'logseq-src/resources/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-electron-${{ hashFiles('logseq-src/resources/package.json', 'logseq-src/resources/pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-electron-
+            ${{ runner.os }}-${{ runner.arch }}-electron-
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -84,7 +109,7 @@ jobs:
           path: |
             ~/.m2/repository
             ~/.gitlibs
-          key: ${{ runner.os }}-clojure-${{ hashFiles('logseq-src/**/deps.edn') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-clojure-${{ hashFiles('logseq-src/**/deps.edn') }}
 
       - name: Setup Clojure CLI
         uses: DeLaGuardo/setup-clojure@13
@@ -186,24 +211,37 @@ jobs:
             accept-flake-config = true
 
       - name: Create tarball artifact
-        id: package
         working-directory: logseq-src/static
         run: |
           set -euo pipefail
           mkdir -p out
-          src_dir="dist/linux-unpacked"
-          if [ ! -d "$src_dir" ]; then
-            echo "Could not locate packaged Logseq bundle at $src_dir" >&2
+          src_dir="$(find dist -maxdepth 1 -type d -name 'linux*-unpacked' | head -1)"
+          if [ -z "$src_dir" ] || [ ! -d "$src_dir" ]; then
+            echo "Could not locate packaged Logseq bundle under dist/linux*-unpacked" >&2
             find dist -maxdepth 2 -mindepth 1 -print >&2 || true
             exit 1
           fi
-          tarball="out/logseq-linux-x64-${{ steps.version.outputs.value }}.tar.gz"
+          arch="${{ matrix.arch }}"
+          version="${{ steps.version.outputs.value }}"
+          tarball="out/logseq-linux-${arch}-${version}.tar.gz"
           tar -C "$src_dir" -czf "$tarball" .
-          printf '%s\n' "${{ steps.version.outputs.value }}" > out/VERSION
+          printf '%s\n' "$version" >out/VERSION
           hash=$(nix hash path --type sha256 --sri "$src_dir")
-          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$hash" >"out/hash-${arch}.txt"
+
+      - name: Write build metadata
+        if: matrix.arch == 'x64'
+        working-directory: logseq-src/static
+        run: |
+          set -euo pipefail
+          {
+            echo "version=${{ steps.version.outputs.value }}"
+            echo "revision=${{ steps.revision.outputs.rev }}"
+            echo "datestring=${{ steps.metadata.outputs.date }}"
+          } >out/meta.txt
 
       - name: Render release notes
+        if: matrix.arch == 'x64'
         working-directory: logseq-src
         env:
           LOGSEQ_REV: ${{ steps.revision.outputs.rev }}
@@ -214,11 +252,9 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: linux-build
-          path: |
-            logseq-src/static/out/logseq-linux-x64-${{ steps.version.outputs.value }}.tar.gz
-            logseq-src/static/out/VERSION
-            logseq-src/static/out/release-notes.md
+          name: linux-build-${{ matrix.arch }}
+          path: logseq-src/static/out/*
+          if-no-files-found: error
 
   publish-release:
     runs-on: ubuntu-latest
@@ -229,10 +265,44 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Download packaged build
+      - name: Download packaged builds
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh run download "${{ github.run_id }}" --repo "${{ github.repository }}" --name linux-build --dir builds
+        run: gh run download "${{ github.run_id }}" --repo "${{ github.repository }}" --dir builds
+
+      - name: Resolve build metadata
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          meta="$(find builds -name meta.txt | head -1)"
+          x64_tar="$(find builds -name 'logseq-linux-x64-*.tar.gz' | head -1)"
+          arm64_tar="$(find builds -name 'logseq-linux-arm64-*.tar.gz' | head -1)"
+          notes="$(find builds -name release-notes.md | head -1)"
+          x64_hash_file="$(find builds -name 'hash-x64.txt' | head -1)"
+          arm64_hash_file="$(find builds -name 'hash-arm64.txt' | head -1)"
+          for f in "$meta" "$x64_tar" "$arm64_tar" "$notes" "$x64_hash_file" "$arm64_hash_file"; do
+            test -n "$f" || { echo "Required artifact file missing" >&2; exit 1; }
+          done
+          # meta.txt holds trusted build-step outputs (version/revision/datestring).
+          version="$(grep -E '^version=' "$meta" | cut -d= -f2-)"
+          revision="$(grep -E '^revision=' "$meta" | cut -d= -f2-)"
+          datestring="$(grep -E '^datestring=' "$meta" | cut -d= -f2-)"
+          tag="nightly-${datestring}"
+          {
+            echo "LOGSEQ_VERSION=${version}"
+            echo "LOGSEQ_REV=${revision}"
+            echo "NIGHTLY_TAG=${tag}"
+            echo "RELEASE_TAG=${tag}"
+            echo "BUILD_REVISION=${revision}"
+            echo "X64_TARBALL=${x64_tar}"
+            echo "ARM64_TARBALL=${arm64_tar}"
+            echo "RELEASE_NOTES=${notes}"
+            echo "ASSET_URL_X86_64=https://github.com/${REPO}/releases/download/${tag}/$(basename "$x64_tar")"
+            echo "ASSET_SHA256_X86_64=$(cat "$x64_hash_file")"
+            echo "ASSET_URL_AARCH64=https://github.com/${REPO}/releases/download/${tag}/$(basename "$arm64_tar")"
+            echo "ASSET_SHA256_AARCH64=$(cat "$arm64_hash_file")"
+          } >>"$GITHUB_ENV"
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
@@ -250,24 +320,25 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="nightly-${{ needs.build.outputs.datestring }}"
-          rev="${{ needs.build.outputs.revision }}"
-          rev_short="${rev:0:7}"
-          gh release delete "$tag" -y || true
-          gh release create "$tag" builds/logseq-linux-x64-${{ needs.build.outputs.version }}.tar.gz \
+          set -euo pipefail
+          rev_short="${BUILD_REVISION:0:7}"
+          gh release delete "$RELEASE_TAG" -y || true
+          gh release create "$RELEASE_TAG" "$X64_TARBALL" "$ARM64_TARBALL" \
             --title "logseq-nightly-${rev_short}" \
-            --notes-file builds/release-notes.md \
+            --notes-file "$RELEASE_NOTES" \
             --target main
 
       - name: Update nightly manifest and CLI hashes
-        env:
-          LOGSEQ_REV: ${{ needs.build.outputs.revision }}
-          LOGSEQ_VERSION: ${{ needs.build.outputs.version }}
-          ASSET_URL: >-
-            https://github.com/${{ github.repository }}/releases/download/nightly-${{ needs.build.outputs.datestring }}/logseq-linux-x64-${{ needs.build.outputs.version }}.tar.gz
-          ASSET_HASH: ${{ needs.build.outputs.hash }}
-          NIGHTLY_TAG: nightly-${{ needs.build.outputs.datestring }}
         run: bash scripts/update-nightly.sh
+
+      # Realize the architecture-independent CLI FODs with their freshly
+      # resolved hashes so Cachix uploads them; the aarch64 build substitutes
+      # these instead of running nbb's resolver, which fails on arm64.
+      - name: Seed CLI fixed-output derivations to Cachix
+        run: |
+          nix build --accept-flake-config --print-build-logs \
+            .#logseq-cli.cliVendor \
+            .#logseq-cli.cliPnpmDeps
 
       - name: Configure git
         run: |

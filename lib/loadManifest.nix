@@ -1,13 +1,19 @@
 { lib, manifestPath }:
 let
-  inherit (builtins) fromJSON hasAttr readFile;
+  inherit (builtins)
+    attrNames
+    foldl'
+    fromJSON
+    hasAttr
+    isString
+    readFile
+    ;
   inherit (lib) concatStringsSep hasPrefix throwIf;
   parsed = fromJSON (readFile manifestPath);
   requiredKeys = [
     "tag"
     "publishedAt"
-    "assetUrl"
-    "assetSha256"
+    "assets"
     "logseqRev"
     "logseqVersion"
     "cliSrcHash"
@@ -16,17 +22,32 @@ let
     "cliVersion"
   ];
   missing = lib.filter (key: !hasAttr key parsed) requiredKeys;
+
   validateHash =
     acc: key:
     throwIf (
       !hasPrefix "sha256-" parsed.${key}
     ) "Manifest ${key} must begin with sha256- (Nix SRI)." acc;
+
+  # Each per-system desktop asset must carry a string url and an SRI sha256.
+  assetSystems = if hasAttr "assets" parsed then attrNames parsed.assets else [ ];
+  validateAsset =
+    acc: system:
+    let
+      entry = parsed.assets.${system};
+    in
+    throwIf (!(hasAttr "url" entry && isString entry.url))
+      "Manifest assets.${system}.url must be a string."
+      (
+        throwIf (
+          !(hasAttr "sha256" entry && hasPrefix "sha256-" entry.sha256)
+        ) "Manifest assets.${system}.sha256 must begin with sha256- (Nix SRI)." acc
+      );
 in
 throwIf (missing != [ ]) "Manifest missing required keys: ${concatStringsSep ", " missing}" (
-  builtins.foldl' validateHash parsed [
-    "assetSha256"
+  foldl' validateAsset (foldl' validateHash parsed [
     "cliSrcHash"
     "cliPnpmDepsHash"
     "cliVendorHash"
-  ]
+  ]) assetSystems
 )
