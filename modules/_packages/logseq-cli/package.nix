@@ -1,6 +1,7 @@
 {
   babashka,
   cacert,
+  cctools,
   cliPnpmDepsHash,
   cliSrcHash,
   cliVendorHash,
@@ -19,6 +20,7 @@
   sqlite,
   stdenv,
   writeShellScript,
+  xcbuild,
 }:
 let
   version = cliVersion;
@@ -54,7 +56,9 @@ let
     inherit
       cliPnpmDeps
       cliVendor
+      cctools
       gnumake
+      lib
       logseqNodejs
       pkg-config
       pnpm_10
@@ -64,6 +68,7 @@ let
       src
       stdenv
       version
+      xcbuild
       ;
   };
   wrapper = import ./wrapper.nix {
