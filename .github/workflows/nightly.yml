@@ -367,6 +367,8 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Download packaged builds
         env:
@@ -453,8 +455,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name "logseq-nightly-bot"
-          git config user.email "actions@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Format repository
         run: nix fmt
@@ -464,11 +466,16 @@ jobs:
           nix flake check
 
       - name: Commit nightly update
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           if ! git diff --quiet -- data/logseq-nightly.json; then
             git add data/logseq-nightly.json
             git commit -m "chore: bump nightly manifest"
-            git push
+            git fetch "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" main
+            git rebase FETCH_HEAD
+            git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main
           else
             echo "Manifest unchanged"
           fi
