@@ -379,6 +379,7 @@ jobs:
 
       - name: Resolve build metadata
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -409,6 +410,25 @@ jobs:
             echo "Darwin arm64 artifact missing; preserving existing manifest asset." >&2
             darwin_arm64_asset_url="$(jq -r '.assets["aarch64-darwin"].url' data/logseq-nightly.json)"
             darwin_arm64_asset_sha256="$(jq -r '.assets["aarch64-darwin"].sha256' data/logseq-nightly.json)"
+            preserved_release_prefix="https://github.com/${REPO}/releases/download/"
+            preserved_path="${darwin_arm64_asset_url#"$preserved_release_prefix"}"
+            if [ "$preserved_path" != "$darwin_arm64_asset_url" ]; then
+              preserved_tag="${preserved_path%%/*}"
+              preserved_asset="${preserved_path#*/}"
+              preserved_asset="${preserved_asset//%2B/+}"
+              preserved_asset="${preserved_asset//%2b/+}"
+              if [ "$preserved_tag" = "$tag" ]; then
+                echo "Preserved Darwin arm64 asset is on ${tag}; downloading it for re-upload." >&2
+                preserved_dir="builds/preserved-darwin-arm64"
+                mkdir -p "$preserved_dir"
+                gh release download "$tag" --repo "$REPO" --pattern "$preserved_asset" --dir "$preserved_dir"
+                darwin_arm64_tar="$(find "$preserved_dir" -maxdepth 1 -name 'logseq-darwin-arm64-*.tar.gz' | head -1)"
+                test -n "$darwin_arm64_tar" || {
+                  echo "Could not download preserved Darwin arm64 asset for ${tag}" >&2
+                  exit 1
+                }
+              fi
+            fi
           fi
           if [ -z "$darwin_arm64_asset_url" ] || [ "$darwin_arm64_asset_url" = "null" ] ||
              [ -z "$darwin_arm64_asset_sha256" ] || [ "$darwin_arm64_asset_sha256" = "null" ]; then
