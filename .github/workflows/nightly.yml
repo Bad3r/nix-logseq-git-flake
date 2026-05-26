@@ -193,7 +193,6 @@ jobs:
       - name: Compile Logseq assets
         working-directory: logseq-src
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
           LOGSEQ_SENTRY_DSN: ""
           LOGSEQ_POSTHOG_TOKEN: ""
         run: |
