@@ -11,7 +11,7 @@ on:
         default: master
       publish_release:
         description: "Publish release and commit manifest update"
-        required: false
+        required: true
         type: boolean
         default: true
 
@@ -50,18 +50,14 @@ jobs:
             arch: x64
             runner: ubuntu-24.04
             nix_system: x86_64-linux
-            experimental: false
           - os: linux
             arch: arm64
             runner: ubuntu-24.04-arm
             nix_system: aarch64-linux
-            experimental: false
           - os: darwin
             arch: arm64
             runner: macos-26
             nix_system: aarch64-darwin
-            experimental: false
-    continue-on-error: ${{ matrix.experimental }}
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
@@ -379,7 +375,6 @@ jobs:
 
       - name: Resolve build metadata
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -391,7 +386,7 @@ jobs:
           x64_hash_file="$(find builds -name 'hash-x64.txt' | head -1)"
           arm64_hash_file="$(find builds -name 'hash-arm64.txt' | head -1)"
           darwin_arm64_hash_file="$(find builds -name 'hash-darwin-arm64.txt' | head -1)"
-          for f in "$meta" "$x64_tar" "$arm64_tar" "$notes" "$x64_hash_file" "$arm64_hash_file"; do
+          for f in "$meta" "$x64_tar" "$arm64_tar" "$darwin_arm64_tar" "$notes" "$x64_hash_file" "$arm64_hash_file" "$darwin_arm64_hash_file"; do
             test -n "$f" || { echo "Required artifact file missing" >&2; exit 1; }
           done
           # meta.txt holds trusted build-step outputs (version/revision/datestring).
@@ -399,42 +394,8 @@ jobs:
           revision="$(grep -E '^revision=' "$meta" | cut -d= -f2-)"
           datestring="$(grep -E '^datestring=' "$meta" | cut -d= -f2-)"
           tag="nightly-${datestring}"
-          if [ -n "$darwin_arm64_tar" ] || [ -n "$darwin_arm64_hash_file" ]; then
-            if [ -z "$darwin_arm64_tar" ] || [ -z "$darwin_arm64_hash_file" ]; then
-              echo "Darwin artifact and hash file must either both exist or both be absent" >&2
-              exit 1
-            fi
-            darwin_arm64_asset_url="https://github.com/${REPO}/releases/download/${tag}/$(basename "$darwin_arm64_tar")"
-            darwin_arm64_asset_sha256="$(cat "$darwin_arm64_hash_file")"
-          else
-            echo "Darwin arm64 artifact missing; preserving existing manifest asset." >&2
-            darwin_arm64_asset_url="$(jq -r '.assets["aarch64-darwin"].url' data/logseq-nightly.json)"
-            darwin_arm64_asset_sha256="$(jq -r '.assets["aarch64-darwin"].sha256' data/logseq-nightly.json)"
-            preserved_release_prefix="https://github.com/${REPO}/releases/download/"
-            preserved_path="${darwin_arm64_asset_url#"$preserved_release_prefix"}"
-            if [ "$preserved_path" != "$darwin_arm64_asset_url" ]; then
-              preserved_tag="${preserved_path%%/*}"
-              preserved_asset="${preserved_path#*/}"
-              preserved_asset="${preserved_asset//%2B/+}"
-              preserved_asset="${preserved_asset//%2b/+}"
-              if [ "$preserved_tag" = "$tag" ]; then
-                echo "Preserved Darwin arm64 asset is on ${tag}; downloading it for re-upload." >&2
-                preserved_dir="builds/preserved-darwin-arm64"
-                mkdir -p "$preserved_dir"
-                gh release download "$tag" --repo "$REPO" --pattern "$preserved_asset" --dir "$preserved_dir"
-                darwin_arm64_tar="$(find "$preserved_dir" -maxdepth 1 -name 'logseq-darwin-arm64-*.tar.gz' | head -1)"
-                test -n "$darwin_arm64_tar" || {
-                  echo "Could not download preserved Darwin arm64 asset for ${tag}" >&2
-                  exit 1
-                }
-              fi
-            fi
-          fi
-          if [ -z "$darwin_arm64_asset_url" ] || [ "$darwin_arm64_asset_url" = "null" ] ||
-             [ -z "$darwin_arm64_asset_sha256" ] || [ "$darwin_arm64_asset_sha256" = "null" ]; then
-            echo "Existing manifest is missing aarch64-darwin asset data" >&2
-            exit 1
-          fi
+          darwin_arm64_asset_url="https://github.com/${REPO}/releases/download/${tag}/$(basename "$darwin_arm64_tar")"
+          darwin_arm64_asset_sha256="$(cat "$darwin_arm64_hash_file")"
           {
             echo "LOGSEQ_VERSION=${version}"
             echo "LOGSEQ_REV=${revision}"
@@ -471,10 +432,7 @@ jobs:
         run: |
           set -euo pipefail
           rev_short="${BUILD_REVISION:0:7}"
-          release_assets=("$X64_TARBALL" "$ARM64_TARBALL")
-          if [ -n "${DARWIN_ARM64_TARBALL:-}" ]; then
-            release_assets+=("$DARWIN_ARM64_TARBALL")
-          fi
+          release_assets=("$X64_TARBALL" "$ARM64_TARBALL" "$DARWIN_ARM64_TARBALL")
           gh release delete "$RELEASE_TAG" -y || true
           gh release create "$RELEASE_TAG" "${release_assets[@]}" \
             --title "logseq-nightly-${rev_short}" \
