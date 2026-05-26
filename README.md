@@ -80,6 +80,7 @@ Passing `--accept-flake-config` in commands above enables these settings from th
 | `logseq-cli export -g <graph>`               | Export as Markdown                         |
 | `logseq-cli export-edn -g <graph>`           | Export as EDN                              |
 | `logseq-cli import-edn -g <graph> -f <file>` | Import EDN into graph                      |
+| `logseq-cli append "<text>"`                 | Append text to the current page            |
 | `logseq-cli validate -g <graph>`             | Validate graph integrity                   |
 | `logseq-cli mcp-server -g <graph>`           | Start MCP server                           |
 
@@ -117,7 +118,7 @@ claude mcp add logseq -- logseq-cli mcp-server -g MyGraph -s
 ```
 
 > [!NOTE]
-> The first CLI run downloads ClojureScript dependencies (~30s). These are cached in `$XDG_CACHE_HOME/logseq-cli/nbb/` for subsequent runs.
+> The Nix package vendors the CLI runtime sources. The wrapper still uses `$XDG_CACHE_HOME/logseq-cli/nbb/` as a writable nbb cache.
 
 ## Development
 
