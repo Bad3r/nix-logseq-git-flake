@@ -3,13 +3,13 @@
 Nix flake packaging **Logseq Desktop** (nightly) and **Logseq CLI** (DB graph management / MCP server) from upstream `master`.
 
 > [!NOTE]
-> Linux only: `x86_64-linux` and `aarch64-linux`. [Open an issue](https://github.com/Bad3r/nix-logseq-git-flake/issues) to request macOS support.
+> Supported systems: `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`.
 
 ## Packages
 
 | Package      | Binary       | Description                                  |
 | ------------ | ------------ | -------------------------------------------- |
-| `logseq`     | `logseq`     | Desktop app with FHS wrapper                 |
+| `logseq`     | `logseq`     | Desktop app package                          |
 | `logseq-cli` | `logseq-cli` | CLI for DB graphs: query, export, MCP server |
 | `default`    | both         | Desktop app + CLI combined                   |
 
@@ -47,7 +47,7 @@ Passing `--accept-flake-config` in commands above enables these settings from th
     ];
   };
 
-  # in your NixOS module:
+  # in your system or user configuration:
   environment.systemPackages = [
     inputs.logseq-nightly.packages.${pkgs.system}.logseq
     inputs.logseq-nightly.packages.${pkgs.system}.logseq-cli
@@ -80,6 +80,7 @@ Passing `--accept-flake-config` in commands above enables these settings from th
 | `logseq-cli export -g <graph>`               | Export as Markdown                         |
 | `logseq-cli export-edn -g <graph>`           | Export as EDN                              |
 | `logseq-cli import-edn -g <graph> -f <file>` | Import EDN into graph                      |
+| `logseq-cli append "<text>"`                 | Append text to the current page            |
 | `logseq-cli validate -g <graph>`             | Validate graph integrity                   |
 | `logseq-cli mcp-server -g <graph>`           | Start MCP server                           |
 
@@ -117,7 +118,7 @@ claude mcp add logseq -- logseq-cli mcp-server -g MyGraph -s
 ```
 
 > [!NOTE]
-> The first CLI run downloads ClojureScript dependencies (~30s). These are cached in `$XDG_CACHE_HOME/logseq-cli/nbb/` for subsequent runs.
+> The Nix package vendors the CLI runtime sources. The wrapper still uses `$XDG_CACHE_HOME/logseq-cli/nbb/` as a writable nbb cache.
 
 ## Development
 

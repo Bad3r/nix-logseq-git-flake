@@ -24,12 +24,13 @@ TASK OVERVIEW:
      - Bash(gh issue edit:\*) - to apply labels to the issue
      - Bash(gh search:\*) - to search for similar issues
 
-3. Analyze the issue content, considering:
+3. Analyze the issue content, considering the live `gh label list` output as authoritative. The current repository taxonomy includes:
    - The issue title and description
-   - The type of issue: `type(bug)`, `type(enhancement)`, `type(question)`, `type(docs)`, `type(refactor)`, or `type(deps)`
-   - Technical areas mentioned: `area(nix)`, `area(flake)`, `area(desktop)`, `area(cli)`, `area(ci)`, `area(automation)`, `area(nightly)`, `area(packages)`, `area(hooks)`, `area(gpu)`, `area(scripts)`, or `area(deps)`
+   - The type of issue: `type(bug)`, `type(deps)`, `type(docs)`, `type(enhancement)`, `type(fix)`, `type(question)`, or `type(refactor)`
+   - Technical areas mentioned: `area(automation)`, `area(ci)`, `area(cli)`, `area(deps)`, `area(desktop)`, `area(docs)`, `area(flake)`, `area(gpu)`, `area(hooks)`, `area(nightly)`, `area(nix)`, `area(packages)`, or `area(scripts)`
    - Relevant flake inputs: `input(nixpkgs)`, `input(flake-utils)`, or `input(git-hooks)`
    - Severity or priority indicators: `priority(p1)` is critical/blocking, `priority(p2)` is important but not blocking, and `priority(p3)` is low-priority cleanup or polish
+   - Status labels such as `status(backlog)`, `status(good-first-issue)`, `status(help-wanted)`, `status(invalid)`, `status(needs-manual-review)`, `status(recovered)`, `status(security-review-approved)`, `status(WIP)`, or `status(wontfix)`
    - Special focus labels such as `focus(security)`, `focus(hardening)`, `focus(hash-mismatch)`, `focus(performance)`, or `focus(validation)`
    - Whether the issue originates upstream in Logseq itself: use `origin(upstream)`
    - Whether the issue was created or maintained by automation: use `origin(automated)`
@@ -51,7 +52,7 @@ TASK OVERVIEW:
 IMPORTANT GUIDELINES:
 
 - Be thorough in your analysis
-- Only select labels from the provided list above
+- Only select labels from the live `gh label list` output
 - DO NOT post any comments to the issue
 - Your ONLY action should be to apply labels using gh issue edit
 - Apply a label only when the issue clearly matches it; when in doubt, skip it

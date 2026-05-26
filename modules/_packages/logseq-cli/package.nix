@@ -1,13 +1,13 @@
 {
   babashka,
   cacert,
+  cctools,
   cliPnpmDepsHash,
   cliSrcHash,
   cliVendorHash,
   cliVersion,
   fetchFromGitHub,
   fetchPnpmDeps,
-  gcc,
   git,
   gnumake,
   lib,
@@ -20,6 +20,7 @@
   sqlite,
   stdenv,
   writeShellScript,
+  xcbuild,
 }:
 let
   version = cliVersion;
@@ -55,8 +56,9 @@ let
     inherit
       cliPnpmDeps
       cliVendor
-      gcc
+      cctools
       gnumake
+      lib
       logseqNodejs
       pkg-config
       pnpm_10
@@ -66,6 +68,7 @@ let
       src
       stdenv
       version
+      xcbuild
       ;
   };
   wrapper = import ./wrapper.nix {
@@ -96,6 +99,6 @@ stdenv.mkDerivation {
     homepage = "https://github.com/logseq/logseq/tree/master/deps/cli";
     license = lib.licenses.agpl3Plus;
     mainProgram = "logseq-cli";
-    platforms = lib.platforms.linux;
+    platforms = lib.platforms.linux ++ [ "aarch64-darwin" ];
   };
 }

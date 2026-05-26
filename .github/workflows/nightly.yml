@@ -9,6 +9,11 @@ on:
         description: "Logseq branch to build"
         required: false
         default: master
+      publish_release:
+        description: "Publish release and commit manifest update"
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -41,10 +46,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: x64
+          - os: linux
+            arch: x64
             runner: ubuntu-24.04
-          - arch: arm64
+            nix_system: x86_64-linux
+          - os: linux
+            arch: arm64
             runner: ubuntu-24.04-arm
+            nix_system: aarch64-linux
+          - os: darwin
+            arch: arm64
+            runner: macos-26
+            nix_system: aarch64-darwin
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
@@ -93,6 +106,8 @@ jobs:
           path: |
             ~/.cache/electron
             ~/.cache/electron-builder
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
           key: ${{ runner.os }}-${{ runner.arch }}-electron-${{ hashFiles('logseq-src/resources/package.json', 'logseq-src/resources/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-electron-
@@ -116,14 +131,34 @@ jobs:
         with:
           cli: ${{ env.CLOJURE_VERSION }}
 
+      - name: Setup Python
+        if: matrix.os == 'darwin'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - name: Determine nightly version
         id: version
         run: echo "value=$(node ./scripts/get-pkg-version.js nightly)" >> "$GITHUB_OUTPUT"
         working-directory: logseq-src
 
       - name: Update Nightly APP Version
+        env:
+          NIGHTLY_VERSION: ${{ steps.version.outputs.value }}
         run: |
-          sed -i 's/defonce version ".*"/defonce version "${{ steps.version.outputs.value }}"/g' src/main/frontend/version.cljs
+          node <<'NODE'
+          const fs = require("fs");
+          const path = "src/main/frontend/version.cljs";
+          const source = fs.readFileSync(path, "utf8");
+          const next = source.replace(
+            /defonce version ".*"/,
+            `defonce version "${process.env.NIGHTLY_VERSION}"`
+          );
+          if (next === source) {
+            throw new Error(`expected to patch Logseq version in ${path}`);
+          }
+          fs.writeFileSync(path, next);
+          NODE
         working-directory: logseq-src
 
       - name: Disable bundled desktop CLI launcher
@@ -177,24 +212,56 @@ jobs:
           test -f ./static/js/logseq-cli.js
 
       - name: Update APP Version
+        env:
+          NIGHTLY_VERSION: ${{ steps.version.outputs.value }}
         run: |
-          sed -i 's/"version": "0.0.1"/"version": "${{ steps.version.outputs.value }}"/g' ./package.json
+          node <<'NODE'
+          const fs = require("fs");
+          const path = "package.json";
+          const metadata = JSON.parse(fs.readFileSync(path, "utf8"));
+          metadata.version = process.env.NIGHTLY_VERSION;
+          fs.writeFileSync(path, `${JSON.stringify(metadata, null, 2)}\n`);
+          NODE
         working-directory: logseq-src/static
 
       - name: Save VERSION file
         run: echo "${{ steps.version.outputs.value }}" > ./VERSION
         working-directory: logseq-src/static
 
+      - name: Verify Darwin Electron scripts
+        if: matrix.os == 'darwin'
+        working-directory: logseq-src/static
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const metadata = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          for (const script of ["rebuild:all", "electron:make-macos-arm64"]) {
+            if (!metadata.scripts || !metadata.scripts[script]) {
+              throw new Error(`expected static/package.json to define ${script}`);
+            }
+          }
+          NODE
+
       - name: Prepare Electron package
         working-directory: logseq-src/static
         env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
           LOGSEQ_SENTRY_DSN: ""
           LOGSEQ_POSTHOG_TOKEN: ""
         run: |
           set -euo pipefail
-          pnpm install --frozen-lockfile
+          if [ "${{ matrix.os }}" = "darwin" ]; then
+            pnpm install --frozen-lockfile \
+              --config.supportedArchitectures.os=darwin \
+              --config.supportedArchitectures.cpu=arm64
+            pnpm rebuild:all
+            package_command=(pnpm electron:make-macos-arm64)
+          else
+            pnpm install --frozen-lockfile
+            package_command=(pnpm electron:make)
+          fi
           for attempt in 1 2 3; do
-            if pnpm electron:make; then
+            if "${package_command[@]}"; then
               exit 0
             fi
             if [ "$attempt" -eq 3 ]; then
@@ -215,19 +282,54 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out
-          src_dir="$(find dist -maxdepth 1 -type d -name 'linux*-unpacked' | head -1)"
-          if [ -z "$src_dir" ] || [ ! -d "$src_dir" ]; then
-            echo "Could not locate packaged Logseq bundle under dist/linux*-unpacked" >&2
-            find dist -maxdepth 2 -mindepth 1 -print >&2 || true
-            exit 1
-          fi
-          arch="${{ matrix.arch }}"
           version="${{ steps.version.outputs.value }}"
-          tarball="out/logseq-linux-${arch}-${version}.tar.gz"
-          tar -C "$src_dir" -czf "$tarball" .
+          case "${{ matrix.os }}:${{ matrix.arch }}" in
+            linux:*)
+              src_dir="$(find dist -maxdepth 1 -type d -name 'linux*-unpacked' | head -1)"
+              if [ -z "$src_dir" ] || [ ! -d "$src_dir" ]; then
+                echo "Could not locate packaged Logseq bundle under dist/linux*-unpacked" >&2
+                find dist -maxdepth 2 -mindepth 1 -print >&2 || true
+                exit 1
+              fi
+              arch="${{ matrix.arch }}"
+              tarball="out/logseq-linux-${arch}-${version}.tar.gz"
+              tar -C "$src_dir" -czf "$tarball" .
+              hash_file="out/hash-${arch}.txt"
+              ;;
+            darwin:arm64)
+              if [ ! -d dist/mac-arm64 ]; then
+                echo "Could not locate packaged Darwin app directory under dist/mac-arm64" >&2
+                find dist -maxdepth 3 -mindepth 1 -print >&2 || true
+                exit 1
+              fi
+              app_count="$(find dist/mac-arm64 -maxdepth 1 -type d -name '*.app' | wc -l | tr -d ' ')"
+              if [ "$app_count" != 1 ]; then
+                echo "Expected exactly one packaged .app under dist/mac-arm64, got $app_count" >&2
+                find dist -maxdepth 3 -mindepth 1 -print >&2 || true
+                exit 1
+              fi
+              app_dir="$(find dist/mac-arm64 -maxdepth 1 -type d -name '*.app' -print -quit)"
+              payload_dir="${RUNNER_TEMP}/darwin-arm64-payload"
+              mkdir -p "$payload_dir"
+              cp -PRp "$app_dir" "$payload_dir/Logseq.app"
+              if command -v xattr >/dev/null 2>&1; then
+                xattr -cr "$payload_dir/Logseq.app"
+              fi
+              /usr/bin/codesign --force --deep --sign - "$payload_dir/Logseq.app"
+              /usr/bin/codesign --verify --deep --strict "$payload_dir/Logseq.app"
+              tarball="out/logseq-darwin-arm64-${version}.tar.gz"
+              COPYFILE_DISABLE=1 tar -C "$payload_dir" -czf "$tarball" .
+              src_dir="$payload_dir"
+              hash_file="out/hash-darwin-arm64.txt"
+              ;;
+            *)
+              echo "Unsupported build matrix entry: ${{ matrix.os }}:${{ matrix.arch }}" >&2
+              exit 1
+              ;;
+          esac
           printf '%s\n' "$version" >out/VERSION
           hash=$(nix hash path --type sha256 --sri "$src_dir")
-          printf '%s\n' "$hash" >"out/hash-${arch}.txt"
+          printf '%s\n' "$hash" >"$hash_file"
 
       - name: Write build metadata
         if: matrix.arch == 'x64'
@@ -252,11 +354,12 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: linux-build-${{ matrix.arch }}
+          name: ${{ matrix.os }}-build-${{ matrix.arch }}
           path: logseq-src/static/out/*
           if-no-files-found: error
 
   publish-release:
+    if: github.event_name == 'schedule' || inputs.publish_release == true
     runs-on: ubuntu-24.04
     needs: build
     concurrency:
@@ -278,10 +381,12 @@ jobs:
           meta="$(find builds -name meta.txt | head -1)"
           x64_tar="$(find builds -name 'logseq-linux-x64-*.tar.gz' | head -1)"
           arm64_tar="$(find builds -name 'logseq-linux-arm64-*.tar.gz' | head -1)"
+          darwin_arm64_tar="$(find builds -name 'logseq-darwin-arm64-*.tar.gz' | head -1)"
           notes="$(find builds -name release-notes.md | head -1)"
           x64_hash_file="$(find builds -name 'hash-x64.txt' | head -1)"
           arm64_hash_file="$(find builds -name 'hash-arm64.txt' | head -1)"
-          for f in "$meta" "$x64_tar" "$arm64_tar" "$notes" "$x64_hash_file" "$arm64_hash_file"; do
+          darwin_arm64_hash_file="$(find builds -name 'hash-darwin-arm64.txt' | head -1)"
+          for f in "$meta" "$x64_tar" "$arm64_tar" "$darwin_arm64_tar" "$notes" "$x64_hash_file" "$arm64_hash_file" "$darwin_arm64_hash_file"; do
             test -n "$f" || { echo "Required artifact file missing" >&2; exit 1; }
           done
           # meta.txt holds trusted build-step outputs (version/revision/datestring).
@@ -289,6 +394,8 @@ jobs:
           revision="$(grep -E '^revision=' "$meta" | cut -d= -f2-)"
           datestring="$(grep -E '^datestring=' "$meta" | cut -d= -f2-)"
           tag="nightly-${datestring}"
+          darwin_arm64_asset_url="https://github.com/${REPO}/releases/download/${tag}/$(basename "$darwin_arm64_tar")"
+          darwin_arm64_asset_sha256="$(cat "$darwin_arm64_hash_file")"
           {
             echo "LOGSEQ_VERSION=${version}"
             echo "LOGSEQ_REV=${revision}"
@@ -297,11 +404,14 @@ jobs:
             echo "BUILD_REVISION=${revision}"
             echo "X64_TARBALL=${x64_tar}"
             echo "ARM64_TARBALL=${arm64_tar}"
+            echo "DARWIN_ARM64_TARBALL=${darwin_arm64_tar}"
             echo "RELEASE_NOTES=${notes}"
             echo "ASSET_URL_X86_64=https://github.com/${REPO}/releases/download/${tag}/$(basename "$x64_tar")"
             echo "ASSET_SHA256_X86_64=$(cat "$x64_hash_file")"
             echo "ASSET_URL_AARCH64=https://github.com/${REPO}/releases/download/${tag}/$(basename "$arm64_tar")"
             echo "ASSET_SHA256_AARCH64=$(cat "$arm64_hash_file")"
+            echo "ASSET_URL_AARCH64_DARWIN=${darwin_arm64_asset_url}"
+            echo "ASSET_SHA256_AARCH64_DARWIN=${darwin_arm64_asset_sha256}"
           } >>"$GITHUB_ENV"
 
       - name: Install Nix
@@ -322,8 +432,9 @@ jobs:
         run: |
           set -euo pipefail
           rev_short="${BUILD_REVISION:0:7}"
+          release_assets=("$X64_TARBALL" "$ARM64_TARBALL" "$DARWIN_ARM64_TARBALL")
           gh release delete "$RELEASE_TAG" -y || true
-          gh release create "$RELEASE_TAG" "$X64_TARBALL" "$ARM64_TARBALL" \
+          gh release create "$RELEASE_TAG" "${release_assets[@]}" \
             --title "logseq-nightly-${rev_short}" \
             --notes-file "$RELEASE_NOTES" \
             --target main

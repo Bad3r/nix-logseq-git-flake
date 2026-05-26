@@ -22,6 +22,16 @@ let
     "cliVersion"
   ];
   missing = lib.filter (key: !hasAttr key parsed) requiredKeys;
+  requiredAssetSystems = [
+    "x86_64-linux"
+    "aarch64-linux"
+    "aarch64-darwin"
+  ];
+  missingAssetSystems =
+    if hasAttr "assets" parsed then
+      lib.filter (system: !hasAttr system parsed.assets) requiredAssetSystems
+    else
+      requiredAssetSystems;
 
   validateHash =
     acc: key:
@@ -45,9 +55,13 @@ let
       );
 in
 throwIf (missing != [ ]) "Manifest missing required keys: ${concatStringsSep ", " missing}" (
-  foldl' validateAsset (foldl' validateHash parsed [
-    "cliSrcHash"
-    "cliPnpmDepsHash"
-    "cliVendorHash"
-  ]) assetSystems
+  throwIf (missingAssetSystems != [ ])
+    "Manifest missing required desktop asset systems: ${concatStringsSep ", " missingAssetSystems}"
+    (
+      foldl' validateAsset (foldl' validateHash parsed [
+        "cliSrcHash"
+        "cliPnpmDepsHash"
+        "cliVendorHash"
+      ]) assetSystems
+    )
 )

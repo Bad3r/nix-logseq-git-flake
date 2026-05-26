@@ -9,6 +9,10 @@
     "aarch64-linux": {
       "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260526/logseq-linux-arm64-2.0.1-alpha+nightly.20260526.tar.gz",
       "sha256": "sha256-hsSS/W+zSmAbxo2QwtMyw5M1PBXsa1/9QRlWm073PBE="
+    },
+    "aarch64-darwin": {
+      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260526/logseq-darwin-arm64-2.0.1-alpha+nightly.20260526.tar.gz",
+      "sha256": "sha256-j3/2qFit3b+vcweAQvkCWLhpAxqMK7s9+1k+csTJ2bE="
     }
   },
   "logseqRev": "c077b55dd2454a372bdb6bbcb918c10ecde76415",

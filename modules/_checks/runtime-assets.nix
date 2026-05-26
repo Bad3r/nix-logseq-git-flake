@@ -3,6 +3,13 @@
   payload,
   pkgs,
 }:
+let
+  asarPath =
+    if pkgs.stdenv.hostPlatform.isDarwin then
+      "${payload}/Logseq.app/Contents/Resources/app.asar"
+    else
+      "${payload}/resources/app.asar";
+in
 pkgs.runCommand "logseq-runtime-assets-check"
   {
     nativeBuildInputs = [
@@ -12,7 +19,7 @@ pkgs.runCommand "logseq-runtime-assets-check"
     ];
   }
   ''
-    asar_path="${payload}/resources/app.asar"
+    asar_path="${asarPath}"
     prepare_script="${logseqSrc}/scripts/prepare-desktop-runtime-js.mjs"
     if [ ! -f "$asar_path" ]; then
       echo "missing desktop ASAR at $asar_path" >&2

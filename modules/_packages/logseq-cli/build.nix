@@ -1,8 +1,9 @@
 {
+  cctools,
   cliPnpmDeps,
   cliVendor,
-  gcc,
   gnumake,
+  lib,
   logseqNodejs,
   pkg-config,
   pnpm_10,
@@ -12,6 +13,7 @@
   src,
   stdenv,
   version,
+  xcbuild,
 }:
 stdenv.mkDerivation {
   pname = "logseq-cli-built";
@@ -24,8 +26,12 @@ stdenv.mkDerivation {
     pnpmConfigHook
     python3
     gnumake
-    gcc
+    stdenv.cc
     pkg-config
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    cctools
+    xcbuild
   ];
 
   buildInputs = [ sqlite ];
@@ -34,6 +40,7 @@ stdenv.mkDerivation {
   pnpmRoot = "cli";
 
   env = {
+    npm_config_build_from_source = "true";
     npm_config_nodedir = logseqNodejs;
     npm_config_manage_package_manager_versions = "false";
   };
