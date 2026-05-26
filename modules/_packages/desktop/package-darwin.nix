@@ -11,18 +11,13 @@ pkgs.stdenv.mkDerivation {
 
   nativeBuildInputs = [
     pkgs.darwin.sigtool
-    pkgs.darwin.xattr
   ];
 
   buildCommand = ''
     app="$out/Applications/Logseq.app"
     mkdir -p "$out/Applications" "$out/bin"
-    cp -R ${logseqTree}/Logseq.app "$app"
+    cp -PRp ${logseqTree}/Logseq.app "$app"
     chmod -R u+rwX "$app"
-
-    if command -v xattr >/dev/null 2>&1; then
-      xattr -cr "$app"
-    fi
 
     if [ -x /usr/bin/codesign ]; then
       /usr/bin/codesign --force --deep --sign - "$app"

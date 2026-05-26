@@ -24,7 +24,7 @@ else if isDarwin then
       exit 1
     fi
     app="$(find "$src" -maxdepth 1 -type d -name '*.app' -print -quit)"
-    cp -R "$app" "$out/Logseq.app"
+    cp -PRp "$app" "$out/Logseq.app"
     chmod -R u+rwX "$out/Logseq.app"
     test -x "$out/Logseq.app/Contents/MacOS/Logseq" \
       || { echo "Logseq executable missing at expected Darwin app path" >&2; exit 1; }
