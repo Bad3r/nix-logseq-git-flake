@@ -60,7 +60,7 @@ jobs:
             arch: arm64
             runner: macos-14
             nix_system: aarch64-darwin
-            experimental: true
+            experimental: false
     continue-on-error: ${{ matrix.experimental }}
     runs-on: ${{ matrix.runner }}
     steps:
