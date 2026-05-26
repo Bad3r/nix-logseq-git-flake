@@ -467,7 +467,7 @@ jobs:
 
       - name: Commit nightly update
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if ! git diff --quiet -- data/logseq-nightly.json; then
