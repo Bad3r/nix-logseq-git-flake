@@ -3,7 +3,7 @@
 Nix flake packaging **Logseq Desktop** (nightly) and **Logseq CLI** (DB graph management / MCP server) from upstream `master`.
 
 > [!NOTE]
-> Supported systems: `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`. The `aarch64-darwin` desktop package is experimental until a published Darwin nightly has passed the macOS launch probe.
+> Supported systems: `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`.
 
 ## Packages
 
