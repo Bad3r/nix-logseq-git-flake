@@ -58,7 +58,7 @@ jobs:
             experimental: false
           - os: darwin
             arch: arm64
-            runner: macos-14
+            runner: macos-26
             nix_system: aarch64-darwin
             experimental: false
     continue-on-error: ${{ matrix.experimental }}
@@ -139,7 +139,7 @@ jobs:
         if: matrix.os == 'darwin'
         uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Determine nightly version
         id: version
