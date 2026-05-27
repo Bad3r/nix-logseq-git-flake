@@ -1,24 +1,24 @@
 {
-  "tag": "nightly-20260526",
-  "publishedAt": "2026-05-26T22:24:17Z",
+  "tag": "nightly-20260527",
+  "publishedAt": "2026-05-27T04:38:45Z",
   "assets": {
     "x86_64-linux": {
-      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260526/logseq-linux-x64-2.0.1-alpha+nightly.20260526.tar.gz",
-      "sha256": "sha256-GKhaIkwOBM55thFamNcZYX41p7k8PJY4+48iKbyWFxI="
+      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260527/logseq-linux-x64-2.0.1-alpha+nightly.20260527.tar.gz",
+      "sha256": "sha256-tt1gcu3J8TjNYmptYc0ZPRpRvytAesRBsVB4+gTJ7X0="
     },
     "aarch64-linux": {
-      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260526/logseq-linux-arm64-2.0.1-alpha+nightly.20260526.tar.gz",
-      "sha256": "sha256-6YRNIRIF4BvHqWr/fQJKQ/FDYAWt6hti84a8i3T3mnk="
+      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260527/logseq-linux-arm64-2.0.1-alpha+nightly.20260527.tar.gz",
+      "sha256": "sha256-XXJ+y8KSrNFICRz4BRvC3qfwn+T4a9AIpVMzNuytibc="
     },
     "aarch64-darwin": {
-      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260526/logseq-darwin-arm64-2.0.1-alpha+nightly.20260526.tar.gz",
-      "sha256": "sha256-bFjSVXMQdWIRCdbyyP5UUXHwE05KgtxFFWnp4FMlUGg="
+      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260527/logseq-darwin-arm64-2.0.1-alpha+nightly.20260527.tar.gz",
+      "sha256": "sha256-4re0X1HGOlpmMGdQTLTCJwhSxy2hU01olehk27ILtD0="
     }
   },
-  "logseqRev": "969f0b40372db7ba5bace056db81698763c1296f",
-  "logseqVersion": "2.0.1-alpha+nightly.20260526",
-  "cliSrcHash": "sha256-uX0uPymEktUuCFl1l/WjX/XUrE+IyHM3srLM+hsbvv8=",
+  "logseqRev": "9f596877e79f09d90ed751c2d52537fba63b60ab",
+  "logseqVersion": "2.0.1-alpha+nightly.20260527",
+  "cliSrcHash": "sha256-afY600BXyNeyG31LFEWM9MsYJQfYrKdG9BTb5wkzQws=",
   "cliPnpmDepsHash": "sha256-F6QwXe4/UIGjSMD1HUuLrk1VVfQSeRTmhw3tvQdk5Q8=",
-  "cliVendorHash": "sha256-370/wHHuTU4QXxJjrfOHnGdNQEOiISHi+6v4EndCh44=",
+  "cliVendorHash": "sha256-lJiEYeYbf/uK2SkbmQ3d7iFGes7jQl87UzxFmH+u+cg=",
   "cliVersion": "0.4.3"
 }
