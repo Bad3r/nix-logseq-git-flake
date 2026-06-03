@@ -1,0 +1,143 @@
+name: Test Build
+
+# Dispatch-only workflow that exercises the full nightly pipeline (shared build
+# matrix + publish + manifest regen + flake check) against an ISOLATED,
+# auto-deleted prerelease. It never commits a manifest bump and never touches
+# main, so downstream consumers (which read the committed data/logseq-nightly.json)
+# cannot pick it up. Design: docs/superpowers/specs/2026-06-03-test-build-workflow-design.md
+on:
+  workflow_dispatch:
+    inputs:
+      logseq_branch:
+        description: "Logseq branch to build"
+        required: false
+        default: master
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-desktop.yml
+    with:
+      logseq_branch: ${{ github.event.inputs.logseq_branch || 'master' }}
+
+  publish-test:
+    runs-on: ubuntu-24.04
+    needs: build
+    concurrency:
+      group: repo-test-publish-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Download packaged builds
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run download "${{ github.run_id }}" --repo "${{ github.repository }}" --dir builds
+
+      - name: Resolve build metadata (isolated test tag)
+        env:
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          meta="$(find builds -name meta.txt | head -1)"
+          x64_tar="$(find builds -name 'logseq-linux-x64-*.tar.gz' | head -1)"
+          arm64_tar="$(find builds -name 'logseq-linux-arm64-*.tar.gz' | head -1)"
+          darwin_arm64_tar="$(find builds -name 'logseq-darwin-arm64-*.tar.gz' | head -1)"
+          notes="$(find builds -name release-notes.md | head -1)"
+          x64_hash_file="$(find builds -name 'hash-x64.txt' | head -1)"
+          arm64_hash_file="$(find builds -name 'hash-arm64.txt' | head -1)"
+          darwin_arm64_hash_file="$(find builds -name 'hash-darwin-arm64.txt' | head -1)"
+          for f in "$meta" "$x64_tar" "$arm64_tar" "$darwin_arm64_tar" "$notes" "$x64_hash_file" "$arm64_hash_file" "$darwin_arm64_hash_file"; do
+            test -n "$f" || { echo "Required artifact file missing" >&2; exit 1; }
+          done
+          # meta.txt holds trusted build-step outputs (version/revision/datestring).
+          version="$(grep -E '^version=' "$meta" | cut -d= -f2-)"
+          revision="$(grep -E '^revision=' "$meta" | cut -d= -f2-)"
+          datestring="$(grep -E '^datestring=' "$meta" | cut -d= -f2-)"
+          # Disjoint tag namespace, unique per run: never collides with nightly-<date>.
+          tag="test-${datestring}-${RUN_ID}"
+          {
+            echo "LOGSEQ_VERSION=${version}"
+            echo "LOGSEQ_REV=${revision}"
+            echo "NIGHTLY_TAG=${tag}"
+            echo "RELEASE_TAG=${tag}"
+            echo "BUILD_REVISION=${revision}"
+            echo "X64_TARBALL=${x64_tar}"
+            echo "ARM64_TARBALL=${arm64_tar}"
+            echo "DARWIN_ARM64_TARBALL=${darwin_arm64_tar}"
+            echo "RELEASE_NOTES=${notes}"
+            echo "ASSET_URL_X86_64=https://github.com/${REPO}/releases/download/${tag}/$(basename "$x64_tar")"
+            echo "ASSET_SHA256_X86_64=$(cat "$x64_hash_file")"
+            echo "ASSET_URL_AARCH64=https://github.com/${REPO}/releases/download/${tag}/$(basename "$arm64_tar")"
+            echo "ASSET_SHA256_AARCH64=$(cat "$arm64_hash_file")"
+            echo "ASSET_URL_AARCH64_DARWIN=https://github.com/${REPO}/releases/download/${tag}/$(basename "$darwin_arm64_tar")"
+            echo "ASSET_SHA256_AARCH64_DARWIN=$(cat "$darwin_arm64_hash_file")"
+          } >>"$GITHUB_ENV"
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+
+      - name: Setup Cachix (read-only, no push)
+        uses: cachix/cachix-action@v17
+        with:
+          name: nix-logseq-git-flake
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: true
+
+      - name: Publish isolated test prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          rev_short="${BUILD_REVISION:0:7}"
+          release_assets=("$X64_TARBALL" "$ARM64_TARBALL" "$DARWIN_ARM64_TARBALL")
+          # Idempotent on a same-run retry; the tag is deleted in cleanup regardless.
+          gh release delete "$RELEASE_TAG" --cleanup-tag -y || true
+          gh release create "$RELEASE_TAG" "${release_assets[@]}" \
+            --title "test-build-${rev_short}" \
+            --notes-file "$RELEASE_NOTES" \
+            --prerelease \
+            --latest=false \
+            --target "$HEAD_SHA"
+
+      - name: Regenerate manifest and CLI hashes
+        run: bash scripts/update-nightly.sh
+
+      - name: Format repository
+        run: nix fmt
+
+      - name: Validate flake against test release
+        run: nix flake check
+
+      - name: Capture regenerated manifest
+        run: |
+          set -euo pipefail
+          mkdir -p test-out
+          cp data/logseq-nightly.json test-out/logseq-nightly.json
+          git --no-pager diff -- data/logseq-nightly.json >test-out/logseq-nightly.json.diff || true
+
+      - name: Upload regenerated manifest
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-manifest
+          path: test-out/*
+          if-no-files-found: error
+
+      - name: Delete isolated test prerelease
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${RELEASE_TAG:-}" ]; then
+            gh release delete "$RELEASE_TAG" --cleanup-tag -y || true
+          fi
