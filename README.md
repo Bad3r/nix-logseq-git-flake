@@ -1,136 +1,128 @@
 # nix-logseq-git-flake
 
-Nix flake packaging **Logseq Desktop** (nightly) and **Logseq CLI** (DB graph management / MCP server) from upstream `master`.
+Nix flake for Logseq nightly packages.
 
-> [!NOTE]
-> Supported systems: `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`.
+It packages the Logseq Desktop nightly artifacts built by this repository's
+workflow and builds the Logseq CLI from upstream's shadow-cljs source. The
+current manifest is [data/logseq-nightly.json](data/logseq-nightly.json).
 
-## Packages
+Supported systems:
 
-| Package      | Binary       | Description                                  |
-| ------------ | ------------ | -------------------------------------------- |
-| `logseq`     | `logseq`     | Desktop app package                          |
-| `logseq-cli` | `logseq-cli` | CLI for DB graphs: query, export, MCP server |
-| `default`    | both         | Desktop app + CLI combined                   |
+- `x86_64-linux`
+- `aarch64-linux`
+- `aarch64-darwin`
 
-## Installation
+## Outputs
 
-### Try Without Installing
+| Output       | Binary       | Notes                                                 |
+| ------------ | ------------ | ----------------------------------------------------- |
+| `logseq`     | `logseq`     | Desktop app                                           |
+| `logseq-cli` | `logseq-cli` | CLI for Logseq DB graphs                              |
+| `default`    | both         | Symlink join of desktop and CLI packages              |
+| overlay      | n/a          | Exposes the same packages under `pkgs.logseq-nightly` |
+
+## Quick Use
 
 ```bash
 nix run --accept-flake-config github:Bad3r/nix-logseq-git-flake#logseq
 nix run --accept-flake-config github:Bad3r/nix-logseq-git-flake#logseq-cli -- --help
 ```
 
-### Binary Cache (Cachix)
+The flake advertises its Cachix cache through `nixConfig`, so
+`--accept-flake-config` enables:
 
-This flake publishes binaries to Cachix and exposes the cache in `flake.nix` via:
+```nix
+extra-substituters = [ "https://nix-logseq-git-flake.cachix.org" ];
+extra-trusted-public-keys = [
+  "nix-logseq-git-flake.cachix.org-1:DSBNW07PSRyCvS926tpIWahb53OIydwwZhsP6LhJNZo="
+];
+```
 
-- `nixConfig.extra-substituters = [ "https://nix-logseq-git-flake.cachix.org" ]`
-- `nixConfig.extra-trusted-public-keys = [ "nix-logseq-git-flake.cachix.org-1:DSBNW07PSRyCvS926tpIWahb53OIydwwZhsP6LhJNZo=" ]`
+## Flake Usage
 
-Passing `--accept-flake-config` in commands above enables these settings from the flake.
-
-### Flake Input
+Add the input:
 
 ```nix
 {
-  inputs.logseq-nightly.url = "github:Bad3r/nix-logseq-git-flake";
-  # optional: share nixpkgs
-  inputs.logseq-nightly.inputs.nixpkgs.follows = "nixpkgs";
-
-  # optional but recommended: pin cache settings in your own flake too
-  nixConfig = {
-    extra-substituters = [ "https://nix-logseq-git-flake.cachix.org" ];
-    extra-trusted-public-keys = [
-      "nix-logseq-git-flake.cachix.org-1:DSBNW07PSRyCvS926tpIWahb53OIydwwZhsP6LhJNZo="
-    ];
+  inputs.logseq-nightly = {
+    url = "github:Bad3r/nix-logseq-git-flake";
+    inputs.nixpkgs.follows = "nixpkgs";
   };
-
-  # in your system or user configuration:
-  environment.systemPackages = [
-    inputs.logseq-nightly.packages.${pkgs.system}.logseq
-    inputs.logseq-nightly.packages.${pkgs.system}.logseq-cli
-  ];
 }
 ```
 
-### Overlay
+Use the packages directly from a module where `inputs` and `pkgs` are in scope:
 
 ```nix
-{
-  nixpkgs.overlays = [ inputs.logseq-nightly.overlays.default ];
-  environment.systemPackages = [
-    pkgs.logseq-nightly.logseq
-    pkgs.logseq-nightly.logseq-cli
-  ];
-}
+environment.systemPackages = [
+  inputs.logseq-nightly.packages.${pkgs.stdenv.hostPlatform.system}.logseq
+  inputs.logseq-nightly.packages.${pkgs.stdenv.hostPlatform.system}.logseq-cli
+];
 ```
 
-## CLI Reference
+Or use the overlay:
 
-### Commands
+```nix
+nixpkgs.overlays = [ inputs.logseq-nightly.overlays.default ];
 
-| Command                                      | Description                                |
-| -------------------------------------------- | ------------------------------------------ |
-| `logseq-cli list`                            | List local graphs                          |
-| `logseq-cli show <graph>`                    | Graph info (schema version, creation date) |
-| `logseq-cli search -g <graph> "<term>"`      | Full-text search                           |
-| `logseq-cli query -g <graph> '<datalog>'`    | Datalog query                              |
-| `logseq-cli export -g <graph>`               | Export as Markdown                         |
-| `logseq-cli export-edn -g <graph>`           | Export as EDN                              |
-| `logseq-cli import-edn -g <graph> -f <file>` | Import EDN into graph                      |
-| `logseq-cli append "<text>"`                 | Append text to the current page            |
-| `logseq-cli validate -g <graph>`             | Validate graph integrity                   |
-| `logseq-cli mcp-server -g <graph>`           | Start MCP server                           |
+environment.systemPackages = [
+  pkgs.logseq-nightly.logseq
+  pkgs.logseq-nightly.logseq-cli
+];
+```
 
-### MCP Server
+## CLI
+
+Upstream's CLI self-identifies as `logseq`; this flake installs the wrapper as
+`logseq-cli` so it can coexist with the desktop launcher.
 
 ```bash
-# HTTP transport (default, port 12315)
-logseq-cli mcp-server -g MyGraph
-
-# Stdio transport (for Claude Desktop / Claude Code)
-logseq-cli mcp-server -g MyGraph -s
+logseq-cli --help
+logseq-cli doctor
+logseq-cli example <command>
 ```
 
-MCP tools provided: `listPages`, `getPage`, `listTags`, `listProperties`, `searchBlocks`, `upsertNodes`.
+`doctor` is a smoke check for the shadow-cljs CLI runtime and bundled
+`db-worker-node.js`. The db-worker requires `keytar`, whose native binding is
+built from source with node-gyp (and `libsecret` on Linux); the
+`logseq-cli-help` check boots the worker so a missing binding fails the build.
 
-#### Claude Desktop Configuration
+Current command groups include:
 
-Add to `claude_desktop_config.json`:
+- Graph inspect and edit: `list`, `show`, `search`, `query`, `upsert`, `remove`.
+- Graph management: `graph`, `graph backup`, `server`, `doctor`.
+- Sync and auth: `sync`, `login`, `logout`.
+- Utilities: `agent`, `completion`, `debug`, `example`, `skill`.
 
-```json
-{
-  "mcpServers": {
-    "logseq": {
-      "command": "logseq-cli",
-      "args": ["mcp-server", "-g", "MyGraph", "-s"]
-    }
-  }
-}
-```
+Global options include `-g/--graph`, `-o/--output`, `--root-dir`, `--config`,
+`--timeout-ms`, `--profile`, `-v/--verbose`, and `--version`.
 
-#### Claude Code Configuration
+## Maintenance
+
+`data/logseq-nightly.json` is generated data and is the source of truth for:
+
+- per-system desktop artifact URLs and SRI hashes
+- upstream Logseq revision and version
+- CLI source, pnpm dependency, and Clojure dependency hashes
+
+`scripts/update-nightly.sh` rewrites the manifest during the nightly release
+flow. Manifest schema changes must update both that producer and
+[lib/loadManifest.nix](lib/loadManifest.nix).
+
+Useful local checks:
 
 ```bash
-claude mcp add logseq -- logseq-cli mcp-server -g MyGraph -s
-```
-
-> [!NOTE]
-> The Nix package vendors the CLI runtime sources. The wrapper still uses `$XDG_CACHE_HOME/logseq-cli/nbb/` as a writable nbb cache.
-
-## Development
-
-The flake is composed with `flake-parts` and `import-tree`. `flake.nix` only wires inputs and imports `modules/`; helper files live under underscore directories such as `modules/_packages/` so they are not imported as modules. Package implementation helpers are grouped by role, for example `modules/_packages/desktop/` and `modules/_packages/logseq-cli/`.
-
-```bash
-nix build .#logseq        # desktop app
-nix build .#logseq-cli    # CLI tool
+nix build .#logseq
+nix build .#logseq-cli
 nix build .#checks.x86_64-linux.logseq-runtime-assets
-nix flake check           # build checks + evaluate flake
-nix fmt                   # format all supported files via treefmt (nixfmt, dprint, shfmt)
+nix build .#checks.x86_64-linux.logseq-cli-help
+nix flake check --accept-flake-config --no-build --offline
+nix fmt
 ```
+
+The Darwin desktop package is validated by the `validate-aarch64-darwin`
+workflow job, which builds the package on macOS, verifies the app signature, and
+runs a bounded launch probe.
 
 ## License
 
