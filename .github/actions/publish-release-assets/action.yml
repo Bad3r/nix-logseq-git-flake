@@ -1,0 +1,60 @@
+name: Publish release assets
+description: Idempotently (re)create a GitHub release with assets
+inputs:
+  tag:
+    description: Release tag to create or recreate
+    required: true
+  title:
+    description: Release title shown in the GitHub UI
+    required: true
+  notes-file:
+    description: Path to a file whose contents become the release body
+    required: true
+  target:
+    description: Commit SHA or branch name that the release tag points at
+    required: true
+  prerelease:
+    description: Mark the release as a prerelease
+    required: false
+    default: "false"
+  mark-latest:
+    description: Mark the release as the latest release (default false, passes --latest=false)
+    required: false
+    default: "false"
+  cleanup-tag:
+    description: Delete the tag when deleting the release (nightly keeps tags; test flows delete them)
+    required: false
+    default: "false"
+  assets:
+    description: Newline-separated asset paths to attach to the release
+    required: true
+outputs:
+  release-url:
+    value: "${{ steps.create.outputs.release-url }}"
+runs:
+  using: composite
+  steps:
+    - id: create
+      shell: bash
+      env:
+        TAG: ${{ inputs.tag }}
+        TITLE: ${{ inputs.title }}
+        NOTES_FILE: ${{ inputs.notes-file }}
+        TARGET: ${{ inputs.target }}
+        PRERELEASE: ${{ inputs.prerelease }}
+        MARK_LATEST: ${{ inputs.mark-latest }}
+        CLEANUP_TAG: ${{ inputs.cleanup-tag }}
+        ASSETS: ${{ inputs.assets }}
+      run: |
+        set -euo pipefail
+        : "${GH_TOKEN:?GH_TOKEN must be set in the calling step env}"
+        delete_args=(-y)
+        [ "$CLEANUP_TAG" = "true" ] && delete_args+=(--cleanup-tag)
+        # Idempotent on a same-run retry.
+        gh release delete "$TAG" "${delete_args[@]}" || true
+        mapfile -t asset_paths < <(printf '%s\n' "$ASSETS" | sed '/^$/d')
+        args=(--title "$TITLE" --notes-file "$NOTES_FILE" --target "$TARGET")
+        [ "$PRERELEASE" = "true" ] && args+=(--prerelease)
+        [ "$MARK_LATEST" = "true" ] || args+=(--latest=false)
+        url="$(gh release create "$TAG" "${asset_paths[@]}" "${args[@]}")"
+        echo "release-url=${url}" >>"$GITHUB_OUTPUT"
