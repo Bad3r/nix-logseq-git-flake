@@ -54,6 +54,11 @@
           inherit pkgs;
           inherit (logseqNightly) cli;
         };
+
+        logseq-cli-login-callback = import ./_checks/cli-login-callback.nix {
+          inherit pkgs;
+          inherit (logseqNightly) cli;
+        };
       };
     };
 }

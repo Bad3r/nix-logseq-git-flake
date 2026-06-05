@@ -71,6 +71,22 @@ jobs:
           git fetch -q --depth 1 origin "${LOGSEQ_REV}"
           git checkout -q FETCH_HEAD
 
+      # Temporary upstream fixes tracked under patches/; each patch header
+      # documents the bug and its removal condition. Strict apply fails the
+      # build when upstream drifts or lands the fix, which is the signal to
+      # update or drop the patch file.
+      - name: Apply upstream patches
+        working-directory: logseq-src
+        run: |
+          set -euo pipefail
+          applied=0
+          for patch in ../patches/logseq-*.patch; do
+            [ -e "$patch" ] || continue
+            git apply --verbose "$patch"
+            applied=$((applied + 1))
+          done
+          echo "Applied ${applied} upstream patch(es)"
+
       - name: Set nightly metadata
         id: metadata
         run: echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"

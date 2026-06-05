@@ -1,0 +1,40 @@
+Hoist a conditional state/use-sub hook out of the header conditional.
+
+Upstream commit d185ea58 ("refactor: replace Rum with HSX", logseq/logseq#12748)
+converted state subscriptions from Rum reactivity to React hooks. The header
+kept calling (state/use-sub :electron/server) inside
+(when (state/feature-http-server-enabled?) ...). That condition reads
+non-reactive localStorage and flips mid-session (settings auto-enable it when
+MCP is toggled on), so the next header re-render runs one extra hook and React
+throws error #310 ("Rendered more hooks than during the previous render"),
+which the error boundary turns into a dead UI. Login state churn re-renders
+the header, so the crash surfaces at login.
+
+Fix: subscribe unconditionally in the component let block and use the value
+inside the conditional, per the Rules of Hooks.
+
+Removal condition: drop this patch when upstream hoists or otherwise fixes the
+conditional hook in src/main/frontend/components/header.cljs. A failed strict
+apply in the nightly build is the drift signal.
+
+diff --git a/src/main/frontend/components/header.cljs b/src/main/frontend/components/header.cljs
+index 394e3c3..a7074f7 100644
+--- a/src/main/frontend/components/header.cljs
++++ b/src/main/frontend/components/header.cljs
+@@ -395,6 +395,7 @@
+   (let [electron-mac? (and util/mac? (util/electron?))
+         rtc-graphs (state/use-sub :rtc/graphs)
+         default-home-page (state/use-sub-default-home-page)
++        electron-server (state/use-sub :electron/server)
+         left-menu (left-menu-button {:on-click (fn []
+                                                  (state/set-left-sidebar-open!
+                                                   (not (:ui/left-sidebar-open? @state/state))))})
+@@ -470,7 +471,7 @@
+           (plugins/updates-notifications)])
+ 
+        (when (state/feature-http-server-enabled?)
+-         (server/server-indicator (state/use-sub :electron/server)))
++         (server/server-indicator electron-server))
+ 
+        (when (util/electron?)
+          (back-and-forward))
