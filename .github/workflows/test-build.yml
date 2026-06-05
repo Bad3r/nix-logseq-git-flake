@@ -1,11 +1,22 @@
 name: Test Build
 
-# Dispatch-only workflow that exercises the full nightly pipeline (shared build
-# matrix + publish + manifest regen + flake check) against an ISOLATED,
-# auto-deleted prerelease. It never commits a manifest bump and never touches
-# main, so downstream consumers (which read the committed data/logseq-nightly.json)
-# cannot pick it up. Design: docs/superpowers/specs/2026-06-03-test-build-workflow-design.md
+# Pull request and dispatch workflow that exercises the full nightly pipeline
+# (shared build matrix + publish + manifest regen + flake check) against an
+# ISOLATED, auto-deleted prerelease. It never commits a manifest bump and never
+# touches main, so downstream consumers (which read the committed
+# data/logseq-nightly.json) cannot pick it up. Design:
+# docs/superpowers/specs/2026-06-03-test-build-workflow-design.md
+#
+# test-build-required is a required status check on main, so it always runs:
+# it passes outright for docs-only change sets (the changes job classifies the
+# PR diff paths) and otherwise requires the full approval+build+publish chain.
+# The approval job reads the PR labels live from the API instead of the event
+# payload, so the maintainer flow after adding
+# status(security-review-approved) is "Re-run failed jobs" on this workflow;
+# label events deliberately do not re-trigger the pipeline.
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
     inputs:
       logseq_branch:
@@ -14,10 +25,86 @@ on:
         default: master
 
 permissions:
+  actions: read
   contents: write
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: test-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.classify.outputs.build }}
+    steps:
+      - name: Classify changed paths
+        id: classify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            # Manual dispatch is an explicit ask for the full build.
+            echo "build=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Relevance comes from the diff path list only; any path outside the
+          # docs/meta allowlist requires the full build. Unknown new paths
+          # therefore default to building. Capture the listing first so an API
+          # failure aborts the job instead of silently classifying as docs-only.
+          files="$(gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" --jq '.[].filename')"
+          build=false
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            case "$file" in
+              *.md | docs/* | .claude/* | LICENSE | .gitignore | .actrc) ;;
+              *)
+                echo "build-relevant change: $file"
+                build=true
+                ;;
+            esac
+          done <<<"$files"
+          echo "build=$build" >>"$GITHUB_OUTPUT"
+
+  test-build-approval:
+    name: test-build-approval
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require security approval label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            exit 0
+          fi
+          # Read labels live instead of from the event payload so a re-run
+          # picks up a label added after the run first failed. Capture first:
+          # a pipe into grep -q can mask an API failure under pipefail.
+          labels="$(gh api "repos/${REPO}/issues/${PR_NUMBER}/labels" --jq '.[].name')"
+          if grep -qxF 'status(security-review-approved)' <<<"$labels"; then
+            exit 0
+          fi
+          echo "Missing required label: status(security-review-approved)" >&2
+          echo "Add the label, then re-run the failed jobs of this workflow." >&2
+          exit 1
+
   build:
+    needs: test-build-approval
     uses: ./.github/workflows/build-desktop.yml
     with:
       logseq_branch: ${{ github.event.inputs.logseq_branch || 'master' }}
@@ -25,9 +112,6 @@ jobs:
   publish-test:
     runs-on: ubuntu-24.04
     needs: build
-    concurrency:
-      group: repo-test-publish-${{ github.ref }}
-      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v6
         with:
@@ -140,4 +224,36 @@ jobs:
           set -euo pipefail
           if [ -n "${RELEASE_TAG:-}" ]; then
             gh release delete "$RELEASE_TAG" --cleanup-tag -y || true
+          fi
+
+  test-build-required:
+    name: test-build-required
+    runs-on: ubuntu-24.04
+    needs: [changes, test-build-approval, build, publish-test]
+    if: always()
+    steps:
+      - name: Require successful test build
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          BUILD_REQUIRED: ${{ needs.changes.outputs.build }}
+          APPROVAL_RESULT: ${{ needs.test-build-approval.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          PUBLISH_TEST_RESULT: ${{ needs.publish-test.result }}
+        run: |
+          set -euo pipefail
+          # A failed classifier must fail the gate; otherwise its empty output
+          # would read as "build not required" and waive the check.
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "changes result: $CHANGES_RESULT" >&2
+            exit 1
+          fi
+          if [ "$BUILD_REQUIRED" != "true" ]; then
+            echo "No build-relevant changes; test build not required."
+            exit 0
+          fi
+          if [ "$APPROVAL_RESULT" != "success" ] || [ "$BUILD_RESULT" != "success" ] || [ "$PUBLISH_TEST_RESULT" != "success" ]; then
+            echo "test-build-approval result: $APPROVAL_RESULT" >&2
+            echo "build result: $BUILD_RESULT" >&2
+            echo "publish-test result: $PUBLISH_TEST_RESULT" >&2
+            exit 1
           fi
