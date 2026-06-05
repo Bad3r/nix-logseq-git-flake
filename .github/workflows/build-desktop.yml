@@ -8,10 +8,35 @@ on:
   workflow_call:
     inputs:
       logseq_branch:
-        description: "Logseq branch to build"
+        description: "Logseq branch to build (legacy alias; ignored when logseq_ref is set)"
         required: false
         type: string
         default: master
+      logseq_repo:
+        description: "GitHub repository (owner/repo) to build from"
+        required: false
+        type: string
+        default: logseq/logseq
+      logseq_ref:
+        description: "Branch, tag, 40-char SHA, or refs/pull/N/head; wins over logseq_branch when non-empty"
+        required: false
+        type: string
+        default: ""
+      build_x86_64_linux:
+        description: "Build the x86_64-linux matrix leg"
+        required: false
+        type: boolean
+        default: true
+      build_aarch64_linux:
+        description: "Build the aarch64-linux matrix leg"
+        required: false
+        type: boolean
+        default: true
+      build_aarch64_darwin:
+        description: "Build the aarch64-darwin matrix leg"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -25,18 +50,43 @@ env:
 jobs:
   resolve-revision:
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     outputs:
       rev: ${{ steps.resolve.outputs.rev }}
+      repo: ${{ steps.resolve.outputs.repo }}
     steps:
-      - name: Resolve upstream revision
+      - name: Resolve source revision
         id: resolve
         env:
-          LOGSEQ_BRANCH: ${{ inputs.logseq_branch }}
+          LOGSEQ_REPO: ${{ inputs.logseq_repo }}
+          LOGSEQ_REF: ${{ inputs.logseq_ref != '' && inputs.logseq_ref || inputs.logseq_branch }}
         run: |
           set -euo pipefail
-          rev="$(git ls-remote https://github.com/logseq/logseq.git "refs/heads/${LOGSEQ_BRANCH}" | head -1 | cut -f1)"
-          test -n "$rev" || { echo "Could not resolve refs/heads/${LOGSEQ_BRANCH}" >&2; exit 1; }
+          # Reject anything that could turn into an arbitrary clone URL.
+          if [[ ! "$LOGSEQ_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "logseq_repo must be OWNER/REPO, got: $LOGSEQ_REPO" >&2
+            exit 1
+          fi
+          if [[ "$LOGSEQ_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            rev="$LOGSEQ_REF"
+          else
+            remote="https://github.com/${LOGSEQ_REPO}.git"
+            rev=""
+            # Order matters: branch wins over tag; X^{} peels annotated tags to
+            # the commit; the literal pattern covers refs/pull/N/head.
+            # A ref absent as a branch falls through to tags, then the literal
+            # (so a mistyped branch name that matches a tag resolves to the tag).
+            for pattern in "refs/heads/${LOGSEQ_REF}" "refs/tags/${LOGSEQ_REF}^{}" "refs/tags/${LOGSEQ_REF}" "$LOGSEQ_REF"; do
+              rev="$(git ls-remote "$remote" "$pattern" | head -1 | cut -f1)"
+              if [ -n "$rev" ]; then break; fi
+            done
+          fi
+          if [[ ! "$rev" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Could not resolve '${LOGSEQ_REF}' on ${LOGSEQ_REPO}" >&2
+            exit 1
+          fi
           echo "rev=${rev}" >>"$GITHUB_OUTPUT"
+          echo "repo=${LOGSEQ_REPO}" >>"$GITHUB_OUTPUT"
 
   build:
     needs: resolve-revision
@@ -56,18 +106,25 @@ jobs:
             arch: arm64
             runner: macos-26
             nix_system: aarch64-darwin
+        exclude:
+          - nix_system: ${{ !inputs.build_x86_64_linux && 'x86_64-linux' || '' }}
+          - nix_system: ${{ !inputs.build_aarch64_linux && 'aarch64-linux' || '' }}
+          - nix_system: ${{ !inputs.build_aarch64_darwin && 'aarch64-darwin' || '' }}
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Clone Logseq source
         env:
+          LOGSEQ_REPO: ${{ needs.resolve-revision.outputs.repo }}
           LOGSEQ_REV: ${{ needs.resolve-revision.outputs.rev }}
         run: |
           set -euo pipefail
           git init -q logseq-src
           cd logseq-src
-          git remote add origin https://github.com/logseq/logseq.git
+          git remote add origin "https://github.com/${LOGSEQ_REPO}.git"
           git fetch -q --depth 1 origin "${LOGSEQ_REV}"
           git checkout -q FETCH_HEAD
 
@@ -86,10 +143,6 @@ jobs:
             applied=$((applied + 1))
           done
           echo "Applied ${applied} upstream patch(es)"
-
-      - name: Set nightly metadata
-        id: metadata
-        run: echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -193,11 +246,6 @@ jobs:
           patched = "".join(patched_lines)
           path.write_text(patched)
           PY
-        working-directory: logseq-src
-
-      - name: Record source revision
-        id: revision
-        run: echo "rev=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
         working-directory: logseq-src
 
       - name: Compile Logseq assets
@@ -345,29 +393,69 @@ jobs:
           hash=$(nix hash path --type sha256 --sri "$src_dir")
           printf '%s\n' "$hash" >"$hash_file"
 
-      - name: Write build metadata
-        if: matrix.arch == 'x64'
-        working-directory: logseq-src/static
-        run: |
-          set -euo pipefail
-          {
-            echo "version=${{ steps.version.outputs.value }}"
-            echo "revision=${{ steps.revision.outputs.rev }}"
-            echo "datestring=${{ steps.metadata.outputs.date }}"
-          } >out/meta.txt
-
-      - name: Render release notes
-        if: matrix.arch == 'x64'
-        working-directory: logseq-src
-        env:
-          LOGSEQ_REV: ${{ steps.revision.outputs.rev }}
-          MANIFEST_PATH: ../data/logseq-nightly.json
-          OUTPUT_PATH: static/out/release-notes.md
-        run: bash ../scripts/render-nightly-release-notes.sh
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.os }}-build-${{ matrix.arch }}
           path: logseq-src/static/out/*
+          if-no-files-found: error
+
+  # metadata is a separate job so deselecting any arch leg (including x64)
+  # cannot drop meta.txt or release-notes.md. Version and datestring are
+  # recomputed here, so they can skew from per-leg tarball filenames across a
+  # UTC midnight boundary; accepted because release URLs derive from actual
+  # tarball basenames.
+  metadata:
+    needs: resolve-revision
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Clone source at resolved revision
+        env:
+          LOGSEQ_REPO: ${{ needs.resolve-revision.outputs.repo }}
+          LOGSEQ_REV: ${{ needs.resolve-revision.outputs.rev }}
+        run: |
+          set -euo pipefail
+          git init -q logseq-src
+          cd logseq-src
+          git remote add origin "https://github.com/${LOGSEQ_REPO}.git"
+          git fetch -q --depth 1 origin "${LOGSEQ_REV}"
+          git checkout -q FETCH_HEAD
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Write build metadata
+        env:
+          LOGSEQ_REV: ${{ needs.resolve-revision.outputs.rev }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          version="$(cd logseq-src && node ./scripts/get-pkg-version.js nightly)"
+          {
+            echo "version=${version}"
+            echo "revision=${LOGSEQ_REV}"
+            echo "datestring=$(date -u +%Y%m%d)"
+          } >out/meta.txt
+
+      - name: Render release notes
+        working-directory: logseq-src
+        env:
+          LOGSEQ_REV: ${{ needs.resolve-revision.outputs.rev }}
+          UPSTREAM_REPO_URL: https://github.com/${{ needs.resolve-revision.outputs.repo }}
+          MANIFEST_PATH: ${{ github.workspace }}/data/logseq-nightly.json
+          OUTPUT_PATH: ${{ github.workspace }}/out/release-notes.md
+        run: bash "${GITHUB_WORKSPACE}/scripts/render-nightly-release-notes.sh"
+
+      - name: Upload metadata artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: build-metadata
+          path: out/*
           if-no-files-found: error
