@@ -42,11 +42,15 @@ CLI_SRC_HASH=$(nix shell nixpkgs#nix-prefetch-github nixpkgs#nix-prefetch-git -c
 echo "  cliSrcHash=$CLI_SRC_HASH"
 echo "::endgroup::"
 
-# ── Phase 3: Fetch CLI version from upstream ─────────────────────────
-echo "::group::Phase 3: Fetch CLI version"
-CLI_VERSION=$(curl -fsSL \
-  "https://raw.githubusercontent.com/logseq/logseq/${LOGSEQ_REV}/deps/cli/package.json" |
-  jq -r '.version')
+# ── Phase 3: Resolve CLI version ─────────────────────────────────────
+# Upstream removed `deps/cli` (the nbb sub-package) and now builds the CLI as a
+# shadow-cljs release target in `src/main/logseq/cli`. There is no standalone
+# CLI package.json to read a version from: `scripts/prepare-cli-package.mjs`
+# stamps the prepared package with the root project version, which the nightly
+# build sets to LOGSEQ_VERSION. Mirror that here instead of fetching a path that
+# no longer exists.
+echo "::group::Phase 3: Resolve CLI version"
+CLI_VERSION="$LOGSEQ_VERSION"
 echo "  cliVersion=$CLI_VERSION"
 echo "::endgroup::"
 
@@ -66,7 +70,7 @@ jq -n \
   --arg logseqVersion "$LOGSEQ_VERSION" \
   --arg cliSrcHash "$CLI_SRC_HASH" \
   --arg cliPnpmDepsHash "$PLACEHOLDER" \
-  --arg cliVendorHash "$PLACEHOLDER" \
+  --arg cliCljDepsHash "$PLACEHOLDER" \
   --arg cliVersion "$CLI_VERSION" \
   '{
     tag: $tag,
@@ -80,17 +84,17 @@ jq -n \
     logseqVersion: $logseqVersion,
     cliSrcHash: $cliSrcHash,
     cliPnpmDepsHash: $cliPnpmDepsHash,
-    cliVendorHash: $cliVendorHash,
+    cliCljDepsHash: $cliCljDepsHash,
     cliVersion: $cliVersion
   }' >"$MANIFEST"
-echo "  Wrote $MANIFEST with placeholder cliPnpmDepsHash, cliVendorHash"
+echo "  Wrote $MANIFEST with placeholder cliPnpmDepsHash, cliCljDepsHash"
 echo "::endgroup::"
 
 # Helper: build a single FOD with a placeholder hash, parse the real
 # `got: sha256-...` line from the failure. Targets one FOD attr at a
 # time so the parsed hash is unambiguous even if Nix were to schedule
 # unrelated builds in parallel (`logseq-cli` transitively pulls in
-# both cliPnpmDeps and cliVendor; building one passthru attr forces
+# both cliPnpmDeps and cliCljDeps; building one passthru attr forces
 # Nix to evaluate only that subgraph).
 extract_hash_from_build_failure() {
   local field="$1"
@@ -122,13 +126,13 @@ jq --arg hash "$PNPM_HASH" '.cliPnpmDepsHash = $hash' "$MANIFEST" >"${MANIFEST}.
 mv "${MANIFEST}.tmp" "$MANIFEST"
 echo "::endgroup::"
 
-# ── Phase 6: Resolve cliVendorHash ──────────────────────────────────
-# cliVendor depends on cliPnpmDeps, so the pnpm hash above must already be
-# correct in the manifest before we trigger the vendor build.
-echo "::group::Phase 6: Resolve cliVendorHash"
-VENDOR_HASH=$(extract_hash_from_build_failure cliVendorHash logseq-cli.cliVendor)
-echo "  cliVendorHash=$VENDOR_HASH"
-jq --arg hash "$VENDOR_HASH" '.cliVendorHash = $hash' "$MANIFEST" >"${MANIFEST}.tmp"
+# ── Phase 6: Resolve cliCljDepsHash ─────────────────────────────────
+# cliCljDeps (Maven + git-deps for the shadow-cljs release) is independent of
+# cliPnpmDeps, so order between the two FODs does not matter.
+echo "::group::Phase 6: Resolve cliCljDepsHash"
+CLJ_DEPS_HASH=$(extract_hash_from_build_failure cliCljDepsHash logseq-cli.cliCljDeps)
+echo "  cliCljDepsHash=$CLJ_DEPS_HASH"
+jq --arg hash "$CLJ_DEPS_HASH" '.cliCljDepsHash = $hash' "$MANIFEST" >"${MANIFEST}.tmp"
 mv "${MANIFEST}.tmp" "$MANIFEST"
 echo "::endgroup::"
 
@@ -143,5 +147,5 @@ echo "  assetSha256(arm):           $ASSET_SHA256_AARCH64"
 echo "  assetSha256(darwin-arm64):  $ASSET_SHA256_AARCH64_DARWIN"
 echo "  cliSrcHash:                 $CLI_SRC_HASH"
 echo "  cliPnpmDepsHash:            $PNPM_HASH"
-echo "  cliVendorHash:              $VENDOR_HASH"
+echo "  cliCljDepsHash:             $CLJ_DEPS_HASH"
 echo "  cliVersion:                 $CLI_VERSION"

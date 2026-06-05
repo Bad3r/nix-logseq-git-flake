@@ -44,13 +44,12 @@ jobs:
         run: nix flake check
 
       # nix flake check caches only check markers, not these intermediate FODs.
-      # Build them explicitly so Cachix uploads them: the aarch64 runner cannot
-      # run nbb's dep resolver, so it must substitute these content-addressed,
-      # architecture-independent paths instead of rebuilding them.
+      # Build them explicitly so Cachix uploads them: aarch64 jobs substitute
+      # these architecture-independent paths instead of rebuilding them.
       - name: Seed CLI fixed-output derivations for aarch64 substitution
         run: |
           nix build --accept-flake-config --print-build-logs \
-            .#logseq-cli.cliVendor \
+            .#logseq-cli.cliCljDeps \
             .#logseq-cli.cliPnpmDeps
 
   validate-aarch64:

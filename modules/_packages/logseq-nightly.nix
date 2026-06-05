@@ -20,9 +20,9 @@ let
   };
   cli = pkgs.callPackage ./logseq-cli/package.nix {
     inherit (manifest)
+      cliCljDepsHash
       cliPnpmDepsHash
       cliSrcHash
-      cliVendorHash
       cliVersion
       logseqRev
       ;
