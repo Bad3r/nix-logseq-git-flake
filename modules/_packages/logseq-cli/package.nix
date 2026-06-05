@@ -1,23 +1,26 @@
 {
-  babashka,
   cacert,
   cctools,
+  clang_20,
+  cliCljDepsHash,
   cliPnpmDepsHash,
   cliSrcHash,
-  cliVendorHash,
   cliVersion,
+  clojure,
   fetchFromGitHub,
   fetchPnpmDeps,
   git,
   gnumake,
+  jdk,
   lib,
+  libsecret,
   logseqNodejs,
   logseqRev,
+  patchelf,
   pkg-config,
   pnpm_10,
   pnpmConfigHook,
   python3,
-  sqlite,
   stdenv,
   writeShellScript,
   xcbuild,
@@ -36,17 +39,14 @@ let
       version
       ;
   };
-  cliVendor = import ./vendor.nix {
+  cliCljDeps = import ./clj-deps.nix {
     inherit
-      babashka
       cacert
-      cliPnpmDeps
-      cliVendorHash
+      cliCljDepsHash
+      clojure
       git
+      jdk
       lib
-      logseqNodejs
-      pnpm_10
-      pnpmConfigHook
       src
       stdenv
       version
@@ -54,17 +54,23 @@ let
   };
   cliBuilt = import ./build.nix {
     inherit
-      cliPnpmDeps
-      cliVendor
       cctools
+      clang_20
+      cliCljDeps
+      cliPnpmDeps
+      clojure
+      git
       gnumake
+      jdk
       lib
+      libsecret
       logseqNodejs
+      logseqRev
+      patchelf
       pkg-config
       pnpm_10
       pnpmConfigHook
       python3
-      sqlite
       src
       stdenv
       version
@@ -72,7 +78,11 @@ let
       ;
   };
   wrapper = import ./wrapper.nix {
-    inherit cliBuilt logseqNodejs writeShellScript;
+    inherit
+      cliBuilt
+      logseqNodejs
+      writeShellScript
+      ;
   };
 in
 stdenv.mkDerivation {
@@ -82,21 +92,20 @@ stdenv.mkDerivation {
   dontUnpack = true;
 
   installPhase = ''
-    mkdir -p $out/bin $out/lib
-    ln -s ${cliBuilt} $out/lib/logseq-cli
+    mkdir -p $out/bin
     cp ${wrapper} $out/bin/logseq-cli
     chmod +x $out/bin/logseq-cli
   '';
 
   # Expose the FODs so `scripts/update-nightly.sh` can target them
-  # individually (`nix build .#logseq-cli.cliPnpmDeps` and `.cliVendor`).
+  # individually (`nix build .#logseq-cli.cliPnpmDeps` and `.cliCljDeps`).
   passthru = {
-    inherit cliPnpmDeps cliVendor;
+    inherit cliPnpmDeps cliCljDeps;
   };
 
   meta = {
-    description = "Logseq CLI for DB graphs - MCP server and graph management";
-    homepage = "https://github.com/logseq/logseq/tree/master/deps/cli";
+    description = "Logseq CLI for DB graphs - graph management and queries";
+    homepage = "https://github.com/logseq/logseq/tree/master/src/main/logseq/cli";
     license = lib.licenses.agpl3Plus;
     mainProgram = "logseq-cli";
     platforms = lib.platforms.linux ++ [ "aarch64-darwin" ];
