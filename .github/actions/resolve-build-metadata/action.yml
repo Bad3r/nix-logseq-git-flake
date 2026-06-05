@@ -1,0 +1,103 @@
+name: Resolve build metadata
+description: Map downloaded build artifacts to release env vars and outputs
+inputs:
+  systems:
+    description: CSV of nix systems to require (x86_64-linux,aarch64-linux,aarch64-darwin)
+    required: true
+  repo:
+    description: owner/repo hosting the release download URLs
+    required: true
+  tag-prefix:
+    description: Release tag prefix (tag = <prefix><datestring><suffix>)
+    required: true
+  tag-suffix:
+    required: false
+    default: ""
+  builds-dir:
+    required: false
+    default: builds
+outputs:
+  version:
+    value: "${{ steps.resolve.outputs.version }}"
+  revision:
+    value: "${{ steps.resolve.outputs.revision }}"
+  tag:
+    value: "${{ steps.resolve.outputs.tag }}"
+  assets-json:
+    value: "${{ steps.resolve.outputs.assets-json }}"
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        SYSTEMS: ${{ inputs.systems }}
+        REPO: ${{ inputs.repo }}
+        TAG_PREFIX: ${{ inputs.tag-prefix }}
+        TAG_SUFFIX: ${{ inputs.tag-suffix }}
+        BUILDS_DIR: ${{ inputs.builds-dir }}
+      run: |
+        set -euo pipefail
+        find_one() {
+          local pattern="$1" label="$2"
+          local hits
+          mapfile -t hits < <(find "$BUILDS_DIR" -name "$pattern" -print | sort)
+          case "${#hits[@]}" in
+            0)
+              echo "Required artifact missing: $label ($pattern)" >&2
+              exit 1
+              ;;
+            1) printf '%s' "${hits[0]}" ;;
+            *)
+              echo "Ambiguous artifact for $label ($pattern): ${hits[*]}" >&2
+              exit 1
+              ;;
+          esac
+        }
+        # meta.txt and release-notes.md come from the single build-metadata artifact, so exactly one match is expected.
+        meta="$(find_one meta.txt meta)"
+        notes="$(find_one release-notes.md release-notes)"
+        version="$(grep -E '^version=' "$meta" | cut -d= -f2-)"
+        revision="$(grep -E '^revision=' "$meta" | cut -d= -f2-)"
+        datestring="$(grep -E '^datestring=' "$meta" | cut -d= -f2-)"
+        tag="${TAG_PREFIX}${datestring}${TAG_SUFFIX}"
+        {
+          echo "LOGSEQ_VERSION=${version}"
+          echo "LOGSEQ_REV=${revision}"
+          echo "BUILD_REVISION=${revision}"
+          echo "NIGHTLY_TAG=${tag}"
+          echo "RELEASE_TAG=${tag}"
+          echo "RELEASE_NOTES=${notes}"
+        } >>"$GITHUB_ENV"
+        assets_json="[]"
+        emit_system() {
+          local system="$1" glob="$2" hashname="$3" tarvar="$4" urlvar="$5" shavar="$6"
+          local tarball hash_file url hash
+          tarball="$(find_one "$glob" "$system tarball")"
+          hash_file="$(find_one "$hashname" "$system hash")"
+          url="https://github.com/${REPO}/releases/download/${tag}/$(basename "$tarball")"
+          hash="$(cat "$hash_file")"
+          {
+            echo "${tarvar}=${tarball}"
+            echo "${urlvar}=${url}"
+            echo "${shavar}=${hash}"
+          } >>"$GITHUB_ENV"
+          assets_json="$(jq -c --arg s "$system" --arg u "$url" \
+            --arg h "$hash" --arg t "$tarball" \
+            '. + [{system:$s,url:$u,sha256:$h,tarball:$t}]' <<<"$assets_json")"
+        }
+        IFS=',' read -ra wanted <<<"$SYSTEMS"
+        for system in "${wanted[@]}"; do
+          case "$system" in
+            x86_64-linux) emit_system "$system" 'logseq-linux-x64-*.tar.gz' hash-x64.txt X64_TARBALL ASSET_URL_X86_64 ASSET_SHA256_X86_64 ;;
+            aarch64-linux) emit_system "$system" 'logseq-linux-arm64-*.tar.gz' hash-arm64.txt ARM64_TARBALL ASSET_URL_AARCH64 ASSET_SHA256_AARCH64 ;;
+            aarch64-darwin) emit_system "$system" 'logseq-darwin-arm64-*.tar.gz' hash-darwin-arm64.txt DARWIN_ARM64_TARBALL ASSET_URL_AARCH64_DARWIN ASSET_SHA256_AARCH64_DARWIN ;;
+            *) echo "Unknown system: $system" >&2; exit 1 ;;
+          esac
+        done
+        {
+          echo "version=${version}"
+          echo "revision=${revision}"
+          echo "tag=${tag}"
+          echo "assets-json=${assets_json}"
+        } >>"$GITHUB_OUTPUT"
