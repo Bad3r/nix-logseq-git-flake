@@ -7,9 +7,12 @@ name: Test Build
 # data/logseq-nightly.json) cannot pick it up. Design:
 # docs/superpowers/specs/2026-06-03-test-build-workflow-design.md
 #
-# test-build-required is a required status check on main, so it always runs:
-# it passes outright for docs-only change sets (the changes job classifies the
-# PR diff paths) and otherwise requires the full approval+build+publish chain.
+# test-build-required is a required status check on main. Pull requests get it
+# from this workflow: it passes outright for docs-only change sets (the changes
+# job classifies the PR diff paths) and otherwise requires the full
+# approval+build+publish chain. Nightly manifest bumps (scheduled or manually
+# dispatched with publish_release=true) get the same context from nightly.yml
+# after the real publish-release path validates the generated manifest commit.
 # The approval job reads the PR labels live from the API instead of the event
 # payload, so the maintainer flow after adding
 # status(security-review-approved) is "Re-run failed jobs" on this workflow;

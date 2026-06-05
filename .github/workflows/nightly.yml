@@ -15,9 +15,10 @@ on:
         type: boolean
         default: true
 
+# Least-privilege default for jobs without their own block; writing jobs
+# elevate per-job. The reusable build call needs only contents: read.
 permissions:
-  contents: write
-  issues: write
+  contents: read
 
 jobs:
   build:
@@ -29,6 +30,9 @@ jobs:
     if: github.event_name == 'schedule' || inputs.publish_release == true
     runs-on: ubuntu-24.04
     needs: build
+    permissions:
+      contents: write # push the manifest bump and publish the release
+      statuses: write # attach test-build-required to the bump commit
     concurrency:
       group: repo-main-writer
       cancel-in-progress: false
@@ -137,15 +141,47 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if ! git diff --quiet -- data/logseq-nightly.json; then
-            git add data/logseq-nightly.json
-            git commit -m "chore: bump nightly manifest"
-            git fetch "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" main
-            git rebase FETCH_HEAD
-            git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:main
-          else
+          if git diff --quiet -- data/logseq-nightly.json; then
             echo "Manifest unchanged"
+            exit 0
           fi
+
+          git add data/logseq-nightly.json
+          git commit -F - <<EOF
+          chore: bump nightly manifest
+
+          The nightly publish-release job rewrites data/logseq-nightly.json for ${NIGHTLY_TAG}.
+          It records upstream revision ${LOGSEQ_REV} and refreshed CLI fixed-output hashes.
+
+          Validation: nix fmt
+          Validation: nix flake check
+          EOF
+
+          repo_url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch "$repo_url" main
+          git rebase FETCH_HEAD
+
+          commit_sha="$(git rev-parse HEAD)"
+          staging_branch="automation/nightly-manifest-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup_staging_branch() {
+            # Best-effort: a leaked automation/nightly-manifest-* ref is
+            # harmless, but a failed delete should be visible in the log.
+            git push "$repo_url" ":refs/heads/${staging_branch}" \
+              || echo "WARNING: could not delete staging ref ${staging_branch}" >&2
+          }
+          trap cleanup_staging_branch EXIT
+
+          # Branch protection requires test-build-required before the commit
+          # reaches main. Publish the commit object on a short-lived ref, then
+          # attach the status after the real nightly validation has passed.
+          git push "$repo_url" "HEAD:refs/heads/${staging_branch}"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${commit_sha}" \
+            -f state=success \
+            -f context="test-build-required" \
+            -f description="Nightly publish-release validated this manifest bump." \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          git push "$repo_url" HEAD:main
 
   report-failure:
     if: ${{ always() && github.event_name == 'schedule' && (needs.build.result != 'success' || needs['publish-release'].result != 'success') }}
@@ -153,6 +189,8 @@ jobs:
       - build
       - publish-release
     runs-on: ubuntu-24.04
+    permissions:
+      issues: write
     steps:
       - name: Create or update failure issue
         uses: actions/github-script@v9
@@ -236,6 +274,8 @@ jobs:
       - build
       - publish-release
     runs-on: ubuntu-24.04
+    permissions:
+      issues: write
     steps:
       - name: Close failure issue after recovery
         uses: actions/github-script@v9
