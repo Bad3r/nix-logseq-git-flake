@@ -26,6 +26,7 @@ This file provides guidance to coding agents when working with this repository.
 - `modules/_packages/logseq-cli/` builds the upstream CLI from the Logseq monorepo as a shadow-cljs `:node-script` release, with offline pnpm deps and an offline Clojure dependency tree (Maven jars plus tools.gitlibs git checkouts).
 - `scripts/update-nightly.sh` regenerates manifest fields, CLI source/dependency hashes, and the CLI Clojure-deps hash.
 - `scripts/render-nightly-release-notes.sh` renders release notes from the cloned upstream Logseq repo.
+- `patches/` carries temporary fixes for upstream Logseq source; each patch header documents the bug and its removal condition.
 - `.actrc` is tracked local `act` configuration; `.act/` is runtime state and stays ignored.
 - `.github/workflows/validate.yml` is the clearest snapshot of CI expectations.
 
@@ -37,7 +38,7 @@ The flake does **not** build Logseq Desktop from source inside Nix. It consumes 
 
 End-to-end data flow:
 
-1. `.github/workflows/nightly.yml` -> `build` job runs as a `strategy.matrix` over Linux x64 (`ubuntu-24.04`), Linux arm64 (`ubuntu-24.04-arm`), and Darwin arm64 (`macos-26`), **without** Nix during upstream compilation. Each leg clones upstream `logseq/logseq`, installs upstream pnpm dependencies, runs `pnpm gulp:build && pnpm cljs:release-electron && pnpm db-worker-node:bundle && pnpm webpack-app-build && pnpm desktop:prepare-runtime-js` to populate `static/` and stage runtime JS under `static/js/`. Linux runs `pnpm electron:make` and packages `dist/linux*-unpacked` as `logseq-linux-<arch>-<version>.tar.gz`. Darwin verifies `rebuild:all` and `electron:make-macos-arm64`, runs `pnpm rebuild:all && pnpm electron:make-macos-arm64`, copies the single `dist/mac-arm64/*.app` into a clean top-level `Logseq.app` payload, ad-hoc signs it, then packages `logseq-darwin-arm64-<version>.tar.gz`. Each leg writes an SRI hash file; the x64 leg additionally writes shared `meta.txt` (version/revision/datestring) and rendered release notes, because matrix job `outputs` are unreliable.
+1. `.github/workflows/nightly.yml` -> `build` job runs as a `strategy.matrix` over Linux x64 (`ubuntu-24.04`), Linux arm64 (`ubuntu-24.04-arm`), and Darwin arm64 (`macos-26`), **without** Nix during upstream compilation. Each leg clones upstream `logseq/logseq`, strict-applies `patches/logseq-*.patch`, installs upstream pnpm dependencies, runs `pnpm gulp:build && pnpm cljs:release-electron && pnpm db-worker-node:bundle && pnpm webpack-app-build && pnpm desktop:prepare-runtime-js` to populate `static/` and stage runtime JS under `static/js/`. Linux runs `pnpm electron:make` and packages `dist/linux*-unpacked` as `logseq-linux-<arch>-<version>.tar.gz`. Darwin verifies `rebuild:all` and `electron:make-macos-arm64`, runs `pnpm rebuild:all && pnpm electron:make-macos-arm64`, copies the single `dist/mac-arm64/*.app` into a clean top-level `Logseq.app` payload, ad-hoc signs it, then packages `logseq-darwin-arm64-<version>.tar.gz`. Each leg writes an SRI hash file; the x64 leg additionally writes shared `meta.txt` (version/revision/datestring) and rendered release notes, because matrix job `outputs` are unreliable.
 2. `.github/workflows/nightly.yml` -> `publish-release` job downloads build artifacts, resolves shared metadata + per-system hashes, requires Linux and Darwin tarballs plus their SRI hash files, installs Nix + Cachix, publishes all three tarballs, then runs `bash scripts/update-nightly.sh`. The Darwin matrix leg is release-blocking, so a Darwin build failure or missing Darwin artifact prevents publishing. `workflow_dispatch` can set `publish_release=false` to validate the build matrix without creating a release or committing a manifest bump.
 3. `scripts/update-nightly.sh` rewrites `data/logseq-nightly.json` with the per-system release URLs + SRI hashes (under `assets.<system>`), upstream rev, and CLI version. It requires `ASSET_URL_X86_64`, `ASSET_SHA256_X86_64`, `ASSET_URL_AARCH64`, `ASSET_SHA256_AARCH64`, `ASSET_URL_AARCH64_DARWIN`, and `ASSET_SHA256_AARCH64_DARWIN`. It resolves `cliPnpmDepsHash` and `cliCljDepsHash` with deliberate placeholder fixed-output builds, parsing the resulting `got: sha256-...` error from stderr and rewriting the manifest after each hash.
 4. `nix flake check` validates the updated manifest through `lib/loadManifest.nix`, rebuilds both packages, then the `logseq-nightly-bot` auto-commits the manifest bump to `main`.
@@ -63,6 +64,15 @@ The bundle's internal layout is dictated by upstream's packaging tool and change
 `logseqTree` in `modules/_packages/desktop/tree.nix` expects the flat electron-builder payload on Linux and a single top-level `Logseq.app` payload on Darwin. Linux copies the flat tree directly and the FHS `runScript` executes `share/logseq/logseq`. Darwin copies the app to `Logseq.app`; `package-darwin.nix` later installs it under `$out/Applications/Logseq.app` and re-signs the installed copy. If upstream reintroduces a nested Linux bundle root, renames the Linux executable, or changes the Darwin app name/layout, fix tree normalization and the launcher/package path together. The Linux icon is fetched from `logseqSrc` (upstream repo at pinned rev), not extracted from the tarball, because asar-packed resources aren't filesystem-accessible.
 
 When a nightly fails, first check whether upstream renamed a path, changed the packaging tool, or moved an expected file. The cleanest signal is usually a diff of upstream's `.github/workflows/build-desktop-release.yml` around the failing step.
+
+### Upstream patches
+
+`patches/` holds temporary unified diffs against the upstream Logseq tree for bugs that upstream has not fixed yet. Two consumers apply them:
+
+- `.github/workflows/build-desktop.yml` strict-applies every `patches/logseq-*.patch` with `git apply` right after cloning upstream, so the desktop tarballs (and the bundled `static/js/logseq-cli.js`) ship the fixes.
+- `modules/_packages/logseq-cli/build.nix` lists only the patches that touch files compiled into the CLI in its `patches` attribute. Patching happens in the build derivation, not the source FOD, so `cliSrcHash`, `cliPnpmDepsHash`, and `cliCljDepsHash` stay unchanged.
+
+Rules: every patch header must explain the bug and name its removal condition. Strict apply is the drift guard; when a nightly or CLI build fails at patch application, upstream either landed the fix (delete the patch and its `build.nix` reference) or moved the code (regenerate the patch against the new tree). Keep the two apply sites in sync in the same change. Verify a new or regenerated patch with `git apply --check` against a checkout of `manifest.logseqRev` before committing.
 
 ### Desktop packaging
 
@@ -98,6 +108,7 @@ nix build .#checks.x86_64-linux.logseq-runtime-assets
 nix build .#checks.x86_64-linux.logseq
 nix build .#checks.x86_64-linux.logseq-cli
 nix build .#checks.x86_64-linux.logseq-cli-help
+nix build .#checks.x86_64-linux.logseq-cli-login-callback
 nix build .#checks.x86_64-linux.pre-commit-check
 nix eval --accept-flake-config .#packages.aarch64-darwin.logseq.meta.mainProgram
 nix eval --accept-flake-config .#packages.aarch64-darwin.logseq-cli.meta.mainProgram
@@ -160,6 +171,7 @@ Required env vars for `scripts/update-nightly.sh`: `LOGSEQ_REV`, `LOGSEQ_VERSION
 
 - `flake.nix` or `modules/**`: run `nix fmt`, `nix flake show --all-systems --accept-flake-config`, the relevant Darwin metadata evals when Darwin outputs are touched, and at least one targeted build or check attr.
 - `modules/_packages/logseq-cli/**`: run `nix build .#logseq-cli` or `nix build .#checks.x86_64-linux.logseq-cli-help`; the smoke check runs `logseq-cli doctor` plus a db-worker spawn probe (`graph create` then `list page`), exercising the shadow-cljs runtime and the bundled `db-worker-node.js`. The worker requires `keytar`, whose native binding is built from source with node-gyp (`libsecret` on Linux); keychain operations additionally need a running secret service at runtime. Darwin CLI changes also need GitHub `validate-aarch64-darwin` because the local host is Linux.
+- `patches/**`: verify each changed patch with `git apply --check` against a checkout of `manifest.logseqRev`, then run `nix build .#logseq-cli` and `nix build .#checks.x86_64-linux.logseq-cli-login-callback` when the patch affects the CLI. Desktop-only patches get exercised by the next nightly (or a `test-build` run); there is no local desktop compile.
 - `lib/loadManifest.nix` or `data/logseq-nightly.json`: run `nix build .#checks.x86_64-linux.logseq-runtime-assets` for desktop ASAR layout changes, or `nix flake check` for broader manifest/load-path changes. For Darwin asset changes, use the `aarch64-darwin` runtime-assets check in CI once the Darwin hash is real.
 - `flake.lock`: if the bump changes `git` or `zlib`, the CLI Clojure-deps FOD output can change bytes (its git deps are exploded to loose objects, whose encoding depends on those tools), so `nix build .#logseq-cli` fails with a `cliCljDepsHash` mismatch until `scripts/update-nightly.sh` re-resolves the hash; the nightly workflow is the only flow that re-resolves it automatically. Validate lock bumps with `nix build .#checks.x86_64-linux.logseq-cli` (or the `logseq-cli-help` check) before merging.
 - `.github/workflows/*.yml` or `scripts/*.sh`: run the relevant formatter, then `nix develop -c pre-commit run --all-files` if practical. Use the long-running local `act` build only when the workflow or script change materially affects the nightly build path and smaller checks cannot cover it.
