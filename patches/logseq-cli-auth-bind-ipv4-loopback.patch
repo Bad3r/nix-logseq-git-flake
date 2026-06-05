@@ -1,0 +1,53 @@
+Bind the CLI OAuth callback servers to the IPv4 loopback literal.
+
+logseq.cli.auth listens with (.listen server 8765 "localhost"). Node resolves
+the host with dns.lookup and binds only the first returned address, which is
+::1 on systems whose hosts file lists the IPv6 loopback first. Browsers with
+IPv6 DNS disabled (for example LibreWolf with network.dns.disableIPv6=true)
+resolve localhost to 127.0.0.1 only, get connection refused, and the login
+callback never reaches the CLI, which keeps waiting until the login timeout.
+
+Fix: bind 127.0.0.1 explicitly, following RFC 8252 section 8.3. Browsers that
+prefer ::1 fall back to the next loopback address on refusal, and the
+redirect URI keeps the "localhost" host registered with the Cognito client.
+
+Removal condition: drop this patch when upstream binds an explicit loopback
+literal (or dual-binds both families) in src/main/logseq/cli/auth.cljs. A
+failed strict apply in the nightly build or the CLI build is the drift signal.
+
+diff --git a/src/main/logseq/cli/auth.cljs b/src/main/logseq/cli/auth.cljs
+index d901975..33927c6 100644
+--- a/src/main/logseq/cli/auth.cljs
++++ b/src/main/logseq/cli/auth.cljs
+@@ -17,6 +17,13 @@
+ (def ^:private logout-complete-path "/logout-complete")
+ (def ^:private callback-host "localhost")
+ (def ^:private callback-port 8765)
++;; Bind the loopback IP literal instead of "localhost": node binds only the
++;; first address the resolver returns (often ::1), while browsers with IPv6
++;; disabled connect to 127.0.0.1 only, so the OAuth redirect can target an
++;; address family the server never bound. RFC 8252 section 8.3 recommends
++;; loopback IP literals. The redirect URI keeps the "localhost" host that
++;; the Cognito app client registers.
++(def ^:private callback-bind-address "127.0.0.1")
+ (def ^:private auth-provider "cognito")
+ (def ^:private default-scope "email openid phone")
+ (def ^:private token-endpoint-path "/oauth2/token")
+@@ -258,7 +265,7 @@
+                               (reject (ex-info "failed to start login callback server"
+                                                {:code :login-callback-server-start-failed}
+                                                error))))
+-       (.listen server callback-port callback-host
++       (.listen server callback-port callback-bind-address
+                 (fn []
+                   (let [address (.address server)
+                         port (.-port address)
+@@ -308,7 +315,7 @@
+                               (reject (ex-info "failed to start logout callback server"
+                                                {:code :logout-callback-server-start-failed}
+                                                error))))
+-       (.listen server callback-port callback-host
++       (.listen server callback-port callback-bind-address
+                 (fn []
+                   (resolve {:logout-uri (logout-complete-uri)
+                             :wait! (fn []

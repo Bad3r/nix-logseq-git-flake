@@ -32,6 +32,14 @@ stdenv.mkDerivation {
   pname = "logseq-cli-built";
   inherit version src;
 
+  # Temporary upstream fixes; each patch header documents the bug and its
+  # removal condition. Only patches touching files compiled into the CLI
+  # belong here. The nightly desktop build applies the full patches/ set in
+  # .github/workflows/build-desktop.yml; keep the two apply sites in sync
+  # when adding or removing a CLI-relevant patch. Patching here (not in the
+  # source FOD) keeps cliSrcHash and the dependency FODs unchanged.
+  patches = [ ../../../patches/logseq-cli-auth-bind-ipv4-loopback.patch ];
+
   # keytar (db-worker OS-keychain access) ships no usable prebuilt for this Node
   # ABI, so its native addon is compiled from source with node-gyp (see the
   # "build keytar.node" step in buildPhase). That needs a C/C++ toolchain plus
