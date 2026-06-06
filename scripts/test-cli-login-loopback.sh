@@ -71,7 +71,7 @@ wait_for_authorize_url() {
 }
 
 extract_state() {
-  sed -n 's/.*[?&]state=\([^&]*\).*/\1/p' "$1"
+  sed -n 's/^.*[?&]state=\([^&]*\).*$/\1/p' "$1" | tr -d '\r'
 }
 
 probe_family() {
@@ -79,14 +79,11 @@ probe_family() {
   local curl_resolve="$2"
   local test_root="$3"
   local dir="$test_root/$family"
-  local login_pid=""
   local authorize_url
   local state
   local callback_url
   local http_status
   local login_status
-
-  trap 'if [ -n "${login_pid:-}" ]; then kill "$login_pid" 2>/dev/null || true; wait "$login_pid" 2>/dev/null || true; login_pid=""; fi' EXIT
 
   mkdir -p "$dir/bin" "$dir/home" "$dir/cache"
   make_opener_stub "$dir/bin/xdg-open"
@@ -160,6 +157,8 @@ run_probe_family() {
   set +e
   (
     set -e
+    login_pid=""
+    trap 'if [ -n "${login_pid:-}" ]; then kill "$login_pid" 2>/dev/null || true; wait "$login_pid" 2>/dev/null || true; login_pid=""; fi' EXIT
     probe_family "$@"
   )
   probe_status=$?
