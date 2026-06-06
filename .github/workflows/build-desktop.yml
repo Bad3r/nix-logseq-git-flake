@@ -37,6 +37,11 @@ on:
         required: false
         type: boolean
         default: true
+      apply_patches:
+        description: "Apply patches/logseq-*.patch to the cloned source (rev-pinned fixes for the nightly rev)"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -133,6 +138,7 @@ jobs:
       # build when upstream drifts or lands the fix, which is the signal to
       # update or drop the patch file.
       - name: Apply upstream patches
+        if: ${{ inputs.apply_patches }}
         working-directory: logseq-src
         run: |
           set -euo pipefail

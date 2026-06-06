@@ -3,6 +3,7 @@ name: PR Build
 # Dispatchable test build of a Logseq PR or branch from ANY repo (upstream
 # logseq/logseq or a fork such as Bad3r/Logseq). Logseq analog of
 # Defelo/nixpkgs-review-gha. Builds run UNTRUSTED code and receive no secrets.
+# Builds run on pristine PR source; patches/ is nightly-rev-pinned and skipped.
 on:
   workflow_dispatch:
     inputs:
@@ -118,6 +119,8 @@ jobs:
       build_x86_64_linux: ${{ inputs.build_x86_64_linux }}
       build_aarch64_linux: ${{ inputs.build_aarch64_linux }}
       build_aarch64_darwin: ${{ inputs.build_aarch64_darwin }}
+      # pr-build tests the PR's pristine code; local patches are pinned to the nightly rev
+      apply_patches: false
 
   publish:
     needs:
