@@ -59,7 +59,12 @@ runs:
         notes="$(find_one release-notes.md release-notes)"
         read_meta_value() {
           local key="$1"
-          grep -E -m 1 "^${key}=" "$meta" | cut -d= -f2- | tr -d '\r\n'
+          local line
+          if ! line="$(grep -E -m 1 "^${key}=" "$meta")"; then
+            echo "Missing required key in meta.txt: ${key}" >&2
+            exit 1
+          fi
+          printf '%s' "${line#*=}" | tr -d '\r\n'
         }
         version="$(read_meta_value version)"
         revision="$(read_meta_value revision)"
@@ -83,7 +88,8 @@ runs:
           tarball="$(find_one "$glob" "$system tarball")"
           hash_file="$(find_one "$hashname" "$system hash")"
           url="https://github.com/${REPO}/releases/download/${tag}/$(basename "$tarball")"
-          hash="$(tr -d '\r' <"$hash_file")"
+          hash="$(tr -d '\r\n' <"$hash_file")"
+          [[ "$hash" =~ ^sha256-[A-Za-z0-9+/=]+$ ]] || { echo "Invalid sha256 hash in $hash_file: $hash" >&2; exit 1; }
           {
             echo "${tarvar}=${tarball}"
             echo "${urlvar}=${url}"

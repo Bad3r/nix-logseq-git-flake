@@ -91,7 +91,8 @@ render_row() {
   if [ -n "$REVISION" ]; then
     rev7="${REVISION:0:7}"
     version_str=""
-    [ -n "$VERSION" ] && version_str=" (version \`${VERSION}\`)"
+    safe_version="${VERSION//\`/}"
+    [ -n "$safe_version" ] && version_str=" (version \`${safe_version}\`)"
     # shellcheck disable=SC2016
     printf 'Built from [`%s`](https://github.com/%s/commit/%s)%s by [pr-build](%s)\n\n' \
       "$rev7" "$SOURCE_REPO" "$REVISION" "$version_str" "$RUN_URL"

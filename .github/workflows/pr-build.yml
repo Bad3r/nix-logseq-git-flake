@@ -85,7 +85,12 @@ jobs:
               echo "logseq_repo must be OWNER/REPO, got: $IN_REPO" >&2
               exit 1
             fi
-            { echo "repo=${IN_REPO}"; echo "ref=${IN_REF}"; echo "pr_number="; echo "html_url="; } >>"$GITHUB_OUTPUT"
+            safe_ref="$(printf '%s' "$IN_REF" | tr -d '\r\n')"
+            if [ -z "$safe_ref" ]; then
+              echo "logseq_ref must not be empty" >&2
+              exit 1
+            fi
+            { echo "repo=${IN_REPO}"; echo "ref=${safe_ref}"; echo "pr_number="; echo "html_url="; } >>"$GITHUB_OUTPUT"
             exit 0
           fi
           re='^https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pull/([0-9]+)$'

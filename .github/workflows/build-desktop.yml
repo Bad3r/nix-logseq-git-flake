@@ -235,7 +235,7 @@ jobs:
 
       - name: Determine nightly version
         id: version
-        run: echo "value=$(node ./scripts/get-pkg-version.js nightly)" >> "$GITHUB_OUTPUT"
+        run: echo "value=$(node ./scripts/get-pkg-version.js nightly | tr -d '\r\n')" >>"$GITHUB_OUTPUT"
         working-directory: logseq-src
 
       - name: Update Nightly APP Version
@@ -316,7 +316,9 @@ jobs:
         working-directory: logseq-src/static
 
       - name: Save VERSION file
-        run: echo "${{ steps.version.outputs.value }}" > ./VERSION
+        env:
+          NIGHTLY_VERSION: ${{ steps.version.outputs.value }}
+        run: printf '%s\n' "$NIGHTLY_VERSION" >./VERSION
         working-directory: logseq-src/static
 
       - name: Verify Darwin Electron scripts
@@ -370,10 +372,12 @@ jobs:
 
       - name: Create tarball artifact
         working-directory: logseq-src/static
+        env:
+          NIGHTLY_VERSION: ${{ steps.version.outputs.value }}
         run: |
           set -euo pipefail
           mkdir -p out
-          version="${{ steps.version.outputs.value }}"
+          version="$NIGHTLY_VERSION"
           case "${{ matrix.os }}:${{ matrix.arch }}" in
             linux:*)
               src_dir="$(find dist -maxdepth 1 -type d -name 'linux*-unpacked' | head -1)"
