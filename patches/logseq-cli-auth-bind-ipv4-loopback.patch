@@ -1,53 +1,288 @@
-Bind the CLI OAuth callback servers to the IPv4 loopback literal.
+Bind the CLI OAuth callback servers to both loopback address families.
 
 logseq.cli.auth listens with (.listen server 8765 "localhost"). Node resolves
 the host with dns.lookup and binds only the first returned address, which is
-::1 on systems whose hosts file lists the IPv6 loopback first. Browsers with
-IPv6 DNS disabled (for example LibreWolf with network.dns.disableIPv6=true)
-resolve localhost to 127.0.0.1 only, get connection refused, and the login
-callback never reaches the CLI, which keeps waiting until the login timeout.
+often ::1 on systems whose hosts file lists the IPv6 loopback first. Browsers
+resolve localhost independently, and browser IPv6 policy can make the callback
+connect to the other loopback family. When that happens, the OAuth callback
+never reaches the CLI, which keeps waiting until the login timeout.
 
-Fix: bind 127.0.0.1 explicitly, following RFC 8252 section 8.3. Browsers that
-prefer ::1 fall back to the next loopback address on refusal, and the
-redirect URI keeps the "localhost" host registered with the Cognito client.
+Fix: keep the "localhost" redirect URI registered with the Cognito client, but
+bind explicit 127.0.0.1 and ::1 listeners for the same callback handler. This
+keeps the listener loopback-only, avoids wildcard :: or omitted-host binding,
+and lets the browser choose either localhost address family. If IPv6 loopback
+is unavailable on a system, the IPv4 listener still starts.
 
-Removal condition: drop this patch when upstream binds an explicit loopback
-literal (or dual-binds both families) in src/main/logseq/cli/auth.cljs. A
-failed strict apply in the nightly build or the CLI build is the drift signal.
+Removal condition: drop this patch when upstream binds explicit loopback
+literals for both families, or switches the Cognito app client to IP-literal
+redirect URIs and uses the matching literal for the selected listener, in
+src/main/logseq/cli/auth.cljs. A failed strict apply in the nightly build or
+the CLI build is the drift signal.
 
 diff --git a/src/main/logseq/cli/auth.cljs b/src/main/logseq/cli/auth.cljs
-index d901975..33927c6 100644
+index d901975..5acee54 100644
 --- a/src/main/logseq/cli/auth.cljs
 +++ b/src/main/logseq/cli/auth.cljs
-@@ -17,6 +17,13 @@
+@@ -17,6 +17,12 @@
  (def ^:private logout-complete-path "/logout-complete")
  (def ^:private callback-host "localhost")
  (def ^:private callback-port 8765)
-+;; Bind the loopback IP literal instead of "localhost": node binds only the
-+;; first address the resolver returns (often ::1), while browsers with IPv6
-+;; disabled connect to 127.0.0.1 only, so the OAuth redirect can target an
-+;; address family the server never bound. RFC 8252 section 8.3 recommends
-+;; loopback IP literals. The redirect URI keeps the "localhost" host that
-+;; the Cognito app client registers.
-+(def ^:private callback-bind-address "127.0.0.1")
++;; Keep the redirect URI host as "localhost" because the Cognito app client
++;; registers that exact callback URL, but bind explicit loopback literals so
++;; browsers can resolve localhost to either address family.
++(def ^:private callback-bind-addresses ["127.0.0.1" "::1"])
++(def ^:private callback-bind-unavailable-error-codes #{"EAFNOSUPPORT"
++                                                       "EADDRNOTAVAIL"})
  (def ^:private auth-provider "cognito")
  (def ^:private default-scope "email openid phone")
  (def ^:private token-endpoint-path "/oauth2/token")
-@@ -258,7 +265,7 @@
-                               (reject (ex-info "failed to start login callback server"
-                                                {:code :login-callback-server-start-failed}
-                                                error))))
+@@ -194,6 +200,61 @@
+                                  (resolve true)))))
+     (p/resolved true)))
+
++(defn- stop-servers!
++  [servers]
++  (if (seq servers)
++    (-> (p/all (map stop-server! servers))
++        (p/then (fn [_] true)))
++    (p/resolved true)))
++
++(defn- callback-bind-unavailable-error?
++  [error]
++  (contains? callback-bind-unavailable-error-codes (.-code error)))
++
++(defn- listen-callback-server!
++  [handler host]
++  (p/create
++   (fn [resolve _reject]
++     (let [server (.createServer http handler)
++           on-error (fn [error]
++                      (resolve {:host host
++                                :error error
++                                :unavailable? (callback-bind-unavailable-error? error)}))]
++       (.once server "error" on-error)
++       (.listen server callback-port host
++                (fn []
++                  (.off server "error" on-error)
++                  (resolve {:host host
++                            :server server
++                            :port (.-port (.address server))})))))))
++
++(defn- start-callback-servers!
++  [handler error-code]
++  (p/let [results (p/all (map #(listen-callback-server! handler %)
++                              callback-bind-addresses))
++          servers (->> results (keep :server) vec)
++          fatal-error (first (filter #(and (:error %) (not (:unavailable? %)))
++                                     results))]
++    (cond
++      fatal-error
++      (-> (stop-servers! servers)
++          (p/then (fn [_]
++                    (p/rejected
++                     (ex-info "failed to start callback server"
++                              {:code error-code
++                               :host (:host fatal-error)}
++                              (:error fatal-error))))))
++
++      (empty? servers)
++      (p/rejected
++       (ex-info "failed to start callback server"
++                {:code error-code
++                 :hosts callback-bind-addresses}))
++
++      :else
++      (p/resolved {:servers servers
++                   :port callback-port}))))
++
+ (defn start-login-callback-server!
+   [{:keys [state login-timeout-ms]}]
+   (p/create
+@@ -208,70 +269,65 @@
+                        (reset! settled? true)
+                        (when-let [{:keys [resolve reject]} @callback-handlers]
+                          ((if (= kind :resolve) resolve reject) payload))))
+-           server (.createServer http
+-                                 (fn [^js req ^js res]
+-                                   (let [url (js/URL. (str "http://" callback-host (.-url req)))
+-                                         pathname (.-pathname url)
+-                                         params (.-searchParams url)
+-                                         code (.get params "code")
+-                                         callback-state (.get params "state")
+-                                         error-code (.get params "error")]
+-                                     (cond
+-                                       (not= redirect-path pathname)
+-                                       (do
+-                                         (.writeHead res 404 #js {"Content-Type" "text/plain; charset=utf-8"})
+-                                         (.end res "Not found"))
+-
+-                                       (seq error-code)
+-                                       (do
+-                                         (.writeHead res 400 #js {"Content-Type" "text/plain; charset=utf-8"})
+-                                         (.end res "Login failed. You can return to the CLI.")
+-                                         (finish! :reject (ex-info "login callback returned oauth error"
+-                                                                   {:code :login-callback-error
+-                                                                    :oauth-error error-code})))
+-
+-                                       (not= state callback-state)
+-                                       (do
+-                                         (.writeHead res 400 #js {"Content-Type" "text/plain; charset=utf-8"})
+-                                         (.end res "Login failed due to state mismatch. Return to the CLI and retry.")
+-                                         (finish! :reject (ex-info "login callback state mismatch"
+-                                                                   {:code :invalid-callback-state})))
+-
+-                                       (not (seq code))
+-                                       (do
+-                                         (.writeHead res 400 #js {"Content-Type" "text/plain; charset=utf-8"})
+-                                         (.end res "Login failed because the callback did not include a code.")
+-                                         (finish! :reject (ex-info "missing authorization code"
+-                                                                   {:code :missing-callback-code})))
+-
+-                                       :else
+-                                       (do
+-                                         (.writeHead res 200 #js {"Content-Type" "text/plain; charset=utf-8"})
+-                                         (.end res "Login successful. You can return to the CLI.")
+-                                         (finish! :resolve {:code code}))))))
++           handler (fn [^js req ^js res]
++                     (let [url (js/URL. (str "http://" callback-host (.-url req)))
++                           pathname (.-pathname url)
++                           params (.-searchParams url)
++                           code (.get params "code")
++                           callback-state (.get params "state")
++                           error-code (.get params "error")]
++                       (cond
++                         (not= redirect-path pathname)
++                         (do
++                           (.writeHead res 404 #js {"Content-Type" "text/plain; charset=utf-8"})
++                           (.end res "Not found"))
++
++                         (seq error-code)
++                         (do
++                           (.writeHead res 400 #js {"Content-Type" "text/plain; charset=utf-8"})
++                           (.end res "Login failed. You can return to the CLI.")
++                           (finish! :reject (ex-info "login callback returned oauth error"
++                                                     {:code :login-callback-error
++                                                      :oauth-error error-code})))
++
++                         (not= state callback-state)
++                         (do
++                           (.writeHead res 400 #js {"Content-Type" "text/plain; charset=utf-8"})
++                           (.end res "Login failed due to state mismatch. Return to the CLI and retry.")
++                           (finish! :reject (ex-info "login callback state mismatch"
++                                                     {:code :invalid-callback-state})))
++
++                         (not (seq code))
++                         (do
++                           (.writeHead res 400 #js {"Content-Type" "text/plain; charset=utf-8"})
++                           (.end res "Login failed because the callback did not include a code.")
++                           (finish! :reject (ex-info "missing authorization code"
++                                                     {:code :missing-callback-code})))
++
++                         :else
++                         (do
++                           (.writeHead res 200 #js {"Content-Type" "text/plain; charset=utf-8"})
++                           (.end res "Login successful. You can return to the CLI.")
++                           (finish! :resolve {:code code})))))
+            timeout-id (js/setTimeout (fn []
+                                        (finish! :reject (ex-info "login callback timed out"
+                                                                  {:code :login-timeout})))
+                                      (or login-timeout-ms default-login-timeout-ms))]
+-       (.on server "error" (fn [error]
+-                              (js/clearTimeout timeout-id)
+-                              (reject (ex-info "failed to start login callback server"
+-                                               {:code :login-callback-server-start-failed}
+-                                               error))))
 -       (.listen server callback-port callback-host
-+       (.listen server callback-port callback-bind-address
-                 (fn []
-                   (let [address (.address server)
-                         port (.-port address)
-@@ -308,7 +315,7 @@
-                               (reject (ex-info "failed to start logout callback server"
-                                                {:code :logout-callback-server-start-failed}
-                                                error))))
+-                (fn []
+-                  (let [address (.address server)
+-                        port (.-port address)
+-                        redirect-uri (str "http://" callback-host ":" port redirect-path)]
+-                    (resolve {:port port
+-                              :redirect-uri redirect-uri
+-                              :wait! (fn []
+-                                       (-> callback-promise
+-                                           (p/finally (fn []
+-                                                        (js/clearTimeout timeout-id)))))
+-                              :stop! (fn []
+-                                       (js/clearTimeout timeout-id)
+-                                       (stop-server! server))}))))))))
++       (-> (start-callback-servers! handler :login-callback-server-start-failed)
++           (p/then (fn [{:keys [servers port]}]
++                     (let [redirect-uri (str "http://" callback-host ":" port redirect-path)]
++                       (resolve {:port port
++                                 :redirect-uri redirect-uri
++                                 :wait! (fn []
++                                          (-> callback-promise
++                                              (p/finally (fn []
++                                                           (js/clearTimeout timeout-id)))))
++                                 :stop! (fn []
++                                          (js/clearTimeout timeout-id)
++                                          (stop-servers! servers))}))))
++           (p/catch (fn [error]
++                      (js/clearTimeout timeout-id)
++                      (reject error))))))))
+
+ (defn start-logout-complete-server!
+   [{:keys [logout-timeout-ms]}]
+@@ -287,37 +343,34 @@
+                        (reset! settled? true)
+                        (when-let [{:keys [resolve reject]} @callback-handlers]
+                          ((if (= kind :resolve) resolve reject) payload))))
+-           server (.createServer http
+-                                 (fn [^js req ^js res]
+-                                   (let [url (js/URL. (str "http://" callback-host (.-url req)))
+-                                         pathname (.-pathname url)]
+-                                     (if (= logout-complete-path pathname)
+-                                       (do
+-                                         (.writeHead res 200 #js {"Content-Type" "text/plain; charset=utf-8"})
+-                                         (.end res "Logout successful. You can return to the CLI.")
+-                                         (finish! :resolve true))
+-                                       (do
+-                                         (.writeHead res 404 #js {"Content-Type" "text/plain; charset=utf-8"})
+-                                         (.end res "Not found"))))))
++           handler (fn [^js req ^js res]
++                     (let [url (js/URL. (str "http://" callback-host (.-url req)))
++                           pathname (.-pathname url)]
++                       (if (= logout-complete-path pathname)
++                         (do
++                           (.writeHead res 200 #js {"Content-Type" "text/plain; charset=utf-8"})
++                           (.end res "Logout successful. You can return to the CLI.")
++                           (finish! :resolve true))
++                         (do
++                           (.writeHead res 404 #js {"Content-Type" "text/plain; charset=utf-8"})
++                           (.end res "Not found")))))
+            timeout-id (js/setTimeout (fn []
+                                        (finish! :reject (ex-info "logout callback timed out"
+                                                                  {:code :logout-timeout})))
+                                      (or logout-timeout-ms default-logout-timeout-ms))]
+-       (.on server "error" (fn [error]
+-                              (js/clearTimeout timeout-id)
+-                              (reject (ex-info "failed to start logout callback server"
+-                                               {:code :logout-callback-server-start-failed}
+-                                               error))))
 -       (.listen server callback-port callback-host
-+       (.listen server callback-port callback-bind-address
-                 (fn []
-                   (resolve {:logout-uri (logout-complete-uri)
-                             :wait! (fn []
+-                (fn []
+-                  (resolve {:logout-uri (logout-complete-uri)
+-                            :wait! (fn []
+-                                     (-> callback-promise
+-                                         (p/finally (fn []
+-                                                      (js/clearTimeout timeout-id)))))
+-                            :stop! (fn []
+-                                     (js/clearTimeout timeout-id)
+-                                     (stop-server! server))})))))))
++       (-> (start-callback-servers! handler :logout-callback-server-start-failed)
++           (p/then (fn [{:keys [servers]}]
++                     (resolve {:logout-uri (logout-complete-uri)
++                               :wait! (fn []
++                                        (-> callback-promise
++                                            (p/finally (fn []
++                                                         (js/clearTimeout timeout-id)))))
++                               :stop! (fn []
++                                        (js/clearTimeout timeout-id)
++                                        (stop-servers! servers))})))
++           (p/catch (fn [error]
++                      (js/clearTimeout timeout-id)
++                      (reject error))))))))
+
+ (defn- browser-open-command
+   [platform url]
