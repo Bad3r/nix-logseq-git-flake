@@ -52,7 +52,7 @@ runs:
         [ "$CLEANUP_TAG" = "true" ] && delete_args+=(--cleanup-tag)
         # Idempotent on a same-run retry.
         gh release delete "$TAG" "${delete_args[@]}" || true
-        mapfile -t asset_paths < <(printf '%s\n' "$ASSETS" | sed '/^$/d')
+        mapfile -t asset_paths < <(printf '%s\n' "$ASSETS" | tr -d '\r' | sed '/^$/d')
         args=(--title "$TITLE" --notes-file "$NOTES_FILE" --target "$TARGET")
         [ "$PRERELEASE" = "true" ] && args+=(--prerelease)
         [ "$MARK_LATEST" = "true" ] || args+=(--latest=false)

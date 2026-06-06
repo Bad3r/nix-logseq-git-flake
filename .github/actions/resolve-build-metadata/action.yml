@@ -57,9 +57,9 @@ runs:
         # meta.txt and release-notes.md come from the single build-metadata artifact, so exactly one match is expected.
         meta="$(find_one meta.txt meta)"
         notes="$(find_one release-notes.md release-notes)"
-        version="$(grep -E '^version=' "$meta" | cut -d= -f2-)"
-        revision="$(grep -E '^revision=' "$meta" | cut -d= -f2-)"
-        datestring="$(grep -E '^datestring=' "$meta" | cut -d= -f2-)"
+        version="$(grep -E '^version=' "$meta" | cut -d= -f2- | tr -d '\r')"
+        revision="$(grep -E '^revision=' "$meta" | cut -d= -f2- | tr -d '\r')"
+        datestring="$(grep -E '^datestring=' "$meta" | cut -d= -f2- | tr -d '\r')"
         tag="${TAG_PREFIX}${datestring}${TAG_SUFFIX}"
         {
           echo "LOGSEQ_VERSION=${version}"
@@ -76,7 +76,7 @@ runs:
           tarball="$(find_one "$glob" "$system tarball")"
           hash_file="$(find_one "$hashname" "$system hash")"
           url="https://github.com/${REPO}/releases/download/${tag}/$(basename "$tarball")"
-          hash="$(cat "$hash_file")"
+          hash="$(tr -d '\r' <"$hash_file")"
           {
             echo "${tarvar}=${tarball}"
             echo "${urlvar}=${url}"
@@ -86,7 +86,7 @@ runs:
             --arg h "$hash" --arg t "$tarball" \
             '. + [{system:$s,url:$u,sha256:$h,tarball:$t}]' <<<"$assets_json")"
         }
-        IFS=',' read -ra wanted <<<"$SYSTEMS"
+        IFS=',' read -ra wanted <<<"${SYSTEMS//[[:space:]]/}"
         for system in "${wanted[@]}"; do
           case "$system" in
             x86_64-linux) emit_system "$system" 'logseq-linux-x64-*.tar.gz' hash-x64.txt X64_TARBALL ASSET_URL_X86_64 ASSET_SHA256_X86_64 ;;
