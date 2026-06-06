@@ -57,9 +57,16 @@ runs:
         # meta.txt and release-notes.md come from the single build-metadata artifact, so exactly one match is expected.
         meta="$(find_one meta.txt meta)"
         notes="$(find_one release-notes.md release-notes)"
-        version="$(grep -E '^version=' "$meta" | cut -d= -f2- | tr -d '\r')"
-        revision="$(grep -E '^revision=' "$meta" | cut -d= -f2- | tr -d '\r')"
-        datestring="$(grep -E '^datestring=' "$meta" | cut -d= -f2- | tr -d '\r')"
+        read_meta_value() {
+          local key="$1"
+          grep -E -m 1 "^${key}=" "$meta" | cut -d= -f2- | tr -d '\r\n'
+        }
+        version="$(read_meta_value version)"
+        revision="$(read_meta_value revision)"
+        datestring="$(read_meta_value datestring)"
+        [[ -n "$version" ]] || { echo "Invalid version in meta.txt: empty" >&2; exit 1; }
+        [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid revision in meta.txt: ${revision}" >&2; exit 1; }
+        [[ "$datestring" =~ ^[0-9]{8}$ ]] || { echo "Invalid datestring in meta.txt: ${datestring}" >&2; exit 1; }
         tag="${TAG_PREFIX}${datestring}${TAG_SUFFIX}"
         {
           echo "LOGSEQ_VERSION=${version}"

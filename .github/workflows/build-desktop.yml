@@ -466,7 +466,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out
-          version="$(cd logseq-src && node ./scripts/get-pkg-version.js nightly)"
+          version="$(cd logseq-src && node ./scripts/get-pkg-version.js nightly | tr -d '\r\n')"
           {
             echo "version=${version}"
             echo "revision=${LOGSEQ_REV}"
