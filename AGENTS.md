@@ -26,7 +26,10 @@ This file provides guidance to coding agents when working with this repository.
 - `modules/_packages/logseq-cli/` builds the upstream CLI from the Logseq monorepo as a shadow-cljs `:node-script` release, with offline pnpm deps and an offline Clojure dependency tree (Maven jars plus tools.gitlibs git checkouts).
 - `scripts/update-nightly.sh` regenerates manifest fields, CLI source/dependency hashes, and the CLI Clojure-deps hash.
 - `scripts/render-nightly-release-notes.sh` renders release notes from the cloned upstream Logseq repo.
+- `scripts/render-pr-build-report.sh` renders the per-arch result table posted as a PR comment by `pr-build.yml`.
 - `patches/` carries temporary fixes for upstream Logseq source; each patch header documents the bug and its removal condition.
+- `.github/actions/resolve-build-metadata/` is a composite action shared by `test-build.yml` and `pr-build.yml`: maps downloaded build artifacts to env vars and outputs (tarball paths, URLs, SRI hashes, tag).
+- `.github/actions/publish-release-assets/` is a composite action shared by `test-build.yml` and `pr-build.yml`: idempotently creates a GitHub release and attaches assets.
 - `.actrc` is tracked local `act` configuration; `.act/` is runtime state and stays ignored.
 - `.github/workflows/validate.yml` is the clearest snapshot of CI expectations.
 
@@ -38,7 +41,7 @@ The flake does **not** build Logseq Desktop from source inside Nix. It consumes 
 
 End-to-end data flow:
 
-1. `.github/workflows/nightly.yml` -> `build` job runs as a `strategy.matrix` over Linux x64 (`ubuntu-24.04`), Linux arm64 (`ubuntu-24.04-arm`), and Darwin arm64 (`macos-26`), **without** Nix during upstream compilation. Each leg clones upstream `logseq/logseq`, strict-applies `patches/logseq-*.patch`, installs upstream pnpm dependencies, runs `pnpm gulp:build && pnpm cljs:release-electron && pnpm db-worker-node:bundle && pnpm webpack-app-build && pnpm desktop:prepare-runtime-js` to populate `static/` and stage runtime JS under `static/js/`. Linux runs `pnpm electron:make` and packages `dist/linux*-unpacked` as `logseq-linux-<arch>-<version>.tar.gz`. Darwin verifies `rebuild:all` and `electron:make-macos-arm64`, runs `pnpm rebuild:all && pnpm electron:make-macos-arm64`, copies the single `dist/mac-arm64/*.app` into a clean top-level `Logseq.app` payload, ad-hoc signs it, then packages `logseq-darwin-arm64-<version>.tar.gz`. Each leg writes an SRI hash file; the x64 leg additionally writes shared `meta.txt` (version/revision/datestring) and rendered release notes, because matrix job `outputs` are unreliable.
+1. `.github/workflows/nightly.yml` delegates to the reusable `.github/workflows/build-desktop.yml`, which is parameterized by `logseq_repo`/`logseq_ref`, per-arch boolean toggles (`build_x86_64_linux`, `build_aarch64_linux`, `build_aarch64_darwin`), and `apply_patches` (default true; gates the strict patch step). The `build` matrix runs over Linux x64 (`ubuntu-24.04`), Linux arm64 (`ubuntu-24.04-arm`), and Darwin arm64 (`macos-26`), **without** Nix during upstream compilation. Each leg clones the upstream repo at the resolved revision, optionally strict-applies `patches/logseq-*.patch`, installs upstream pnpm dependencies, runs `pnpm gulp:build && pnpm cljs:release-electron && pnpm db-worker-node:bundle && pnpm webpack-app-build && pnpm desktop:prepare-runtime-js` to populate `static/` and stage runtime JS under `static/js/`. Linux runs `pnpm electron:make` and packages `dist/linux*-unpacked` as `logseq-linux-<arch>-<version>.tar.gz`. Darwin verifies `rebuild:all` and `electron:make-macos-arm64`, runs `pnpm rebuild:all && pnpm electron:make-macos-arm64`, copies the single `dist/mac-arm64/*.app` into a clean top-level `Logseq.app` payload, ad-hoc signs it, then packages `logseq-darwin-arm64-<version>.tar.gz`. Each leg writes an SRI hash file and its tarball as artifacts. A separate `metadata` job (parallel to the build matrix) clones the upstream repo, computes version/revision/datestring, renders release notes, and uploads a `build-metadata` artifact containing `meta.txt` and `release-notes.md`; this decouples metadata from any single arch leg so deselecting any leg (including x64) cannot drop shared metadata (matrix job `outputs` are unreliable).
 2. `.github/workflows/nightly.yml` -> `publish-release` job downloads build artifacts, resolves shared metadata + per-system hashes, requires Linux and Darwin tarballs plus their SRI hash files, installs Nix + Cachix, publishes all three tarballs, then runs `bash scripts/update-nightly.sh`. The Darwin matrix leg is release-blocking, so a Darwin build failure or missing Darwin artifact prevents publishing. `workflow_dispatch` can set `publish_release=false` to validate the build matrix without creating a release or committing a manifest bump.
 3. `scripts/update-nightly.sh` rewrites `data/logseq-nightly.json` with the per-system release URLs + SRI hashes (under `assets.<system>`), upstream rev, and CLI version. It requires `ASSET_URL_X86_64`, `ASSET_SHA256_X86_64`, `ASSET_URL_AARCH64`, `ASSET_SHA256_AARCH64`, `ASSET_URL_AARCH64_DARWIN`, and `ASSET_SHA256_AARCH64_DARWIN`. It resolves `cliPnpmDepsHash` and `cliCljDepsHash` with deliberate placeholder fixed-output builds, parsing the resulting `got: sha256-...` error from stderr and rewriting the manifest after each hash.
 4. `nix flake check` validates the updated manifest through `lib/loadManifest.nix`, rebuilds both packages, then the `logseq-nightly-bot` auto-commits the manifest bump to `main`.
@@ -73,6 +76,35 @@ When a nightly fails, first check whether upstream renamed a path, changed the p
 - `modules/_packages/logseq-cli/build.nix` lists only the patches that touch files compiled into the CLI in its `patches` attribute. Patching happens in the build derivation, not the source FOD, so `cliSrcHash`, `cliPnpmDepsHash`, and `cliCljDepsHash` stay unchanged.
 
 Rules: every patch header must explain the bug and name its removal condition. Strict apply is the drift guard; when a nightly or CLI build fails at patch application, upstream either landed the fix (delete the patch and its `build.nix` reference) or moved the code (regenerate the patch against the new tree). Keep the two apply sites in sync in the same change. Verify a new or regenerated patch with `git apply --check` against a checkout of `manifest.logseqRev` before committing.
+
+### PR test builds (pr-build.yml)
+
+`pr-build.yml` is a dispatch-only analog of nixpkgs-review-gha. It builds any PR URL
+(`https://github.com/OWNER/REPO/pull/N`) or an arbitrary repo+ref from upstream or forks,
+with per-arch boolean toggles.
+
+Key properties:
+
+- Builds run untrusted code. The reusable `build-desktop.yml` job receives no secrets;
+  `apply_patches: false` so the PR's pristine source is tested (patches/ is pinned to the
+  nightly rev and would not apply cleanly against arbitrary PR heads).
+- Publishes present-arch tarballs as a prerelease tagged `test-pr<N>-<date>-<runid>` (for PR
+  input) or `test-<date>-<runid>` (for branch/ref input) on this repo. `keep_release`
+  (default true) keeps the release for manual testing; manual cleanup is
+  `gh release delete <tag> --cleanup-tag`. A failed arch leg does not block publishing the
+  rest.
+- `validate=auto` (default) runs `scripts/update-nightly.sh` + `nix fmt` + `nix flake check`
+  ONLY when all three arch legs were selected AND built green AND the source repo is
+  `logseq/logseq`. `push_to_cachix` (default false) optionally pushes validation store paths
+  plus CLI FOD seeds.
+- `post_comment` (default true) posts a per-arch result table (download links, SRI hashes,
+  log links) on the source PR. This requires the repo secret `GH_TOKEN` (classic PAT,
+  `public_repo` scope), used exclusively by the `comment` job. `GITHUB_TOKEN` cannot comment
+  cross-repo. The `comment` job fails loudly when `post_comment=true` and the secret is unset.
+
+`test-build.yml`'s `publish-test` step uses the same two composites
+(`.github/actions/resolve-build-metadata` and `.github/actions/publish-release-assets`);
+the behavior of that step is otherwise identical to before the composites were introduced.
 
 ### Desktop packaging
 
@@ -174,7 +206,7 @@ Required env vars for `scripts/update-nightly.sh`: `LOGSEQ_REV`, `LOGSEQ_VERSION
 - `patches/**`: verify each changed patch with `git apply --check` against a checkout of `manifest.logseqRev`, then run `nix build .#logseq-cli` and `nix build .#checks.x86_64-linux.logseq-cli-login-callback` when the patch affects the CLI. Desktop-only patches get exercised by the next nightly (or a `test-build` run); there is no local desktop compile.
 - `lib/loadManifest.nix` or `data/logseq-nightly.json`: run `nix build .#checks.x86_64-linux.logseq-runtime-assets` for desktop ASAR layout changes, or `nix flake check` for broader manifest/load-path changes. For Darwin asset changes, use the `aarch64-darwin` runtime-assets check in CI once the Darwin hash is real.
 - `flake.lock`: if the bump changes `git` or `zlib`, the CLI Clojure-deps FOD output can change bytes (its git deps are exploded to loose objects, whose encoding depends on those tools), so `nix build .#logseq-cli` fails with a `cliCljDepsHash` mismatch until `scripts/update-nightly.sh` re-resolves the hash; the nightly workflow is the only flow that re-resolves it automatically. Validate lock bumps with `nix build .#checks.x86_64-linux.logseq-cli` (or the `logseq-cli-help` check) before merging.
-- `.github/workflows/*.yml` or `scripts/*.sh`: run the relevant formatter, then `nix develop -c pre-commit run --all-files` if practical. Use the long-running local `act` build only when the workflow or script change materially affects the nightly build path and smaller checks cannot cover it.
+- `.github/workflows/*.yml`, `.github/actions/**`, or `scripts/*.sh`: run the relevant formatter, then `nix develop -c pre-commit run --all-files` if practical. Use the long-running local `act` build only when the workflow, composite action, or script change materially affects the nightly build path and smaller checks cannot cover it.
 - Hook config changes: run `nix build .#checks.x86_64-linux.pre-commit-check`; for pre-push-only hooks, also run the specific hook with `nix develop -c pre-commit run <hook> --hook-stage pre-push --all-files`.
 
 ## Code Style Guidelines
@@ -223,6 +255,7 @@ Required env vars for `scripts/update-nightly.sh`: `LOGSEQ_REV`, `LOGSEQ_VERSION
 - Keep shell indentation compatible with `shfmt -i 2`.
 - Preserve the existing GitHub Actions style: explicit timeouts, concurrency groups, scoped permissions, and current major-pinned action versions.
 - PRs touching `.github/workflows/*` or `flake.lock` trigger a policy check that requires the `status(security-review-approved)` label.
+- `pr-build.yml` requires a repo secret `GH_TOKEN` (classic PAT, `public_repo` scope) to post PR comments cross-repo. The `comment` job skips automatically when `post_comment=false` or no PR number is resolved; it fails loudly when `post_comment=true` and the secret is absent. `GITHUB_TOKEN` cannot comment on PRs in external repos.
 
 ### JSON, Markdown, and YAML
 
