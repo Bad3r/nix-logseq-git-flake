@@ -66,9 +66,9 @@ render_row() {
     url="$(jq -r '.url' <<<"$asset")"
     tarball="$(jq -r '.tarball' <<<"$asset")"
     hash="$(jq -r '.sha256' <<<"$asset")"
-    # tarball_name is trusted to match the upstream version-string shape
-    # (logseq-<os>-<arch>-<version>.tar.gz), so using it as Markdown link text is accepted by design.
-    tarball_name="$(basename "$tarball")"
+    # PR-controlled version text can inject Markdown link or table syntax through the tarball basename.
+    tarball_name="$(basename "$tarball" | tr -cd 'A-Za-z0-9._-')"
+    [ -n "$tarball_name" ] || tarball_name="artifact"
     # shellcheck disable=SC2016
     printf '| %s | built | [%s](%s) `%s` |\n' "$label" "$tarball_name" "$url" "$hash"
   else
