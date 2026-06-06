@@ -1,22 +1,37 @@
 name: Publish release assets
-description: Idempotently (re)create a GitHub release with assets
+description: >-
+  Idempotently (re)create a GitHub release with assets. Defaults target
+  disposable test releases: inputs fall back to the RELEASE_* env vars
+  exported by resolve-build-metadata, so a bare invocation after that action
+  needs no inputs at all. The nightly publish flow overrides them explicitly.
 inputs:
   tag:
-    description: Release tag to create or recreate
-    required: true
-  title:
-    description: Release title shown in the GitHub UI
-    required: true
-  notes-file:
-    description: Path to a file whose contents become the release body
-    required: true
-  target:
-    description: Commit SHA or branch name that the release tag points at
-    required: true
-  prerelease:
-    description: Mark the release as a prerelease
+    description: >-
+      Release tag to create or recreate. Falls back to RELEASE_TAG (exported
+      by resolve-build-metadata), then to a generated test-<date>-<run id>.
     required: false
-    default: "false"
+    default: ""
+  title:
+    description: Release title shown in the GitHub UI. Defaults to the tag.
+    required: false
+    default: ""
+  notes-file:
+    description: >-
+      Path to a file whose contents become the release body. Falls back to
+      RELEASE_NOTES (exported by resolve-build-metadata), then to an empty
+      body.
+    required: false
+    default: ""
+  target:
+    description: >-
+      Commit SHA or branch name that the release tag points at. Defaults to
+      the commit the workflow runs on.
+    required: false
+    default: ${{ github.sha }}
+  prerelease:
+    description: Mark the release as a prerelease (the nightly flow sets false)
+    required: false
+    default: "true"
   mark-latest:
     description: Mark the release as the latest release (default false, passes --latest=false)
     required: false
@@ -24,10 +39,14 @@ inputs:
   cleanup-tag:
     description: Delete the tag when deleting the release (nightly keeps tags; test flows delete them)
     required: false
-    default: "false"
+    default: "true"
   assets:
-    description: Newline-separated asset paths to attach to the release
-    required: true
+    description: >-
+      Newline-separated asset paths to attach to the release. Falls back to
+      RELEASE_ASSETS (exported by resolve-build-metadata). Fails when no
+      asset paths resolve.
+    required: false
+    default: ""
 outputs:
   release-url:
     value: "${{ steps.create.outputs.release-url }}"
@@ -48,13 +67,28 @@ runs:
       run: |
         set -euo pipefail
         : "${GH_TOKEN:?GH_TOKEN must be set in the calling step env}"
+        # Inputs fall back to the RELEASE_* env handoff from resolve-build-metadata.
+        tag="${TAG:-${RELEASE_TAG:-}}"
+        [ -n "$tag" ] || tag="test-$(date -u +%Y%m%d)-${GITHUB_RUN_ID}"
+        title="${TITLE:-$tag}"
+        notes_file="${NOTES_FILE:-${RELEASE_NOTES:-}}"
+        assets="${ASSETS:-${RELEASE_ASSETS:-}}"
+        mapfile -t asset_paths < <(printf '%s\n' "$assets" | tr -d '\r' | sed '/^$/d')
+        if [ "${#asset_paths[@]}" -eq 0 ]; then
+          echo "No release assets resolved: pass assets, or run resolve-build-metadata first so RELEASE_ASSETS is exported" >&2
+          exit 1
+        fi
         delete_args=(-y)
         [ "$CLEANUP_TAG" = "true" ] && delete_args+=(--cleanup-tag)
         # Idempotent on a same-run retry.
-        gh release delete "$TAG" "${delete_args[@]}" || true
-        mapfile -t asset_paths < <(printf '%s\n' "$ASSETS" | tr -d '\r' | sed '/^$/d')
-        args=(--title "$TITLE" --notes-file "$NOTES_FILE" --target "$TARGET")
+        gh release delete "$tag" "${delete_args[@]}" || true
+        args=(--title "$title" --target "$TARGET")
+        if [ -n "$notes_file" ]; then
+          args+=(--notes-file "$notes_file")
+        else
+          args+=(--notes "")
+        fi
         [ "$PRERELEASE" = "true" ] && args+=(--prerelease)
         [ "$MARK_LATEST" = "true" ] || args+=(--latest=false)
-        url="$(gh release create "$TAG" "${asset_paths[@]}" "${args[@]}")"
+        url="$(gh release create "$tag" "${asset_paths[@]}" "${args[@]}")"
         echo "release-url=${url}" >>"$GITHUB_OUTPUT"

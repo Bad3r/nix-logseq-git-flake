@@ -1,19 +1,33 @@
 name: Resolve build metadata
-description: Map downloaded build artifacts to release env vars and outputs
+description: >-
+  Map downloaded build artifacts to release env vars and outputs. Exports
+  RELEASE_TAG, RELEASE_NOTES, RELEASE_ASSETS, and per-system tarball, URL,
+  and SRI hash env vars; publish-release-assets consumes them as defaults.
 inputs:
   systems:
-    description: CSV of nix systems to require (x86_64-linux,aarch64-linux,aarch64-darwin)
-    required: true
-  repo:
-    description: owner/repo hosting the release download URLs
-    required: true
-  tag-prefix:
-    description: Release tag prefix (tag = <prefix><datestring><suffix>)
-    required: true
-  tag-suffix:
+    description: >-
+      CSV of nix systems to require. Defaults to all supported systems; pass
+      a computed subset when arch legs are optional.
     required: false
-    default: ""
+    default: x86_64-linux,aarch64-linux,aarch64-darwin
+  repo:
+    description: >-
+      owner/repo that will host the release the asset download URLs point at.
+      Defaults to the repository running the workflow.
+    required: false
+    default: ${{ github.repository }}
+  tag-prefix:
+    description: >-
+      Release tag prefix (tag = <prefix><datestring><suffix>). The defaults
+      yield a disposable test tag like test-20260606-1234567890.
+    required: false
+    default: test-
+  tag-suffix:
+    description: Release tag suffix appended after the datestring.
+    required: false
+    default: "-${{ github.run_id }}"
   builds-dir:
+    description: Directory holding the downloaded build artifacts.
     required: false
     default: builds
 outputs:
@@ -38,6 +52,11 @@ runs:
         BUILDS_DIR: ${{ inputs.builds-dir }}
       run: |
         set -euo pipefail
+        systems_csv="${SYSTEMS//[[:space:]]/}"
+        if [ -z "$systems_csv" ]; then
+          echo "systems must name at least one nix system" >&2
+          exit 1
+        fi
         find_one() {
           local pattern="$1" label="$2"
           local hits
@@ -82,6 +101,7 @@ runs:
           echo "RELEASE_NOTES=${notes}"
         } >>"$GITHUB_ENV"
         assets_json="[]"
+        present_tarballs=()
         emit_system() {
           local system="$1" glob="$2" hashname="$3" tarvar="$4" urlvar="$5" shavar="$6"
           local tarball hash_file url hash
@@ -95,11 +115,12 @@ runs:
             echo "${urlvar}=${url}"
             echo "${shavar}=${hash}"
           } >>"$GITHUB_ENV"
+          present_tarballs+=("$tarball")
           assets_json="$(jq -c --arg s "$system" --arg u "$url" \
             --arg h "$hash" --arg t "$tarball" \
             '. + [{system:$s,url:$u,sha256:$h,tarball:$t}]' <<<"$assets_json")"
         }
-        IFS=',' read -ra wanted <<<"${SYSTEMS//[[:space:]]/}"
+        IFS=',' read -ra wanted <<<"$systems_csv"
         for system in "${wanted[@]}"; do
           case "$system" in
             x86_64-linux) emit_system "$system" 'logseq-linux-x64-*.tar.gz' hash-x64.txt X64_TARBALL ASSET_URL_X86_64 ASSET_SHA256_X86_64 ;;
@@ -108,6 +129,12 @@ runs:
             *) echo "Unknown system: $system" >&2; exit 1 ;;
           esac
         done
+        # Newline-joined tarball list; publish-release-assets uses it as the default asset set.
+        {
+          echo "RELEASE_ASSETS<<EOF_RELEASE_ASSETS"
+          printf '%s\n' "${present_tarballs[@]}"
+          echo "EOF_RELEASE_ASSETS"
+        } >>"$GITHUB_ENV"
         {
           echo "version=${version}"
           echo "revision=${revision}"

@@ -28,8 +28,8 @@ This file provides guidance to coding agents when working with this repository.
 - `scripts/render-nightly-release-notes.sh` renders release notes from the cloned upstream Logseq repo.
 - `scripts/render-pr-build-report.sh` renders the per-arch result table posted as a PR comment by `pr-build.yml`.
 - `patches/` carries temporary fixes for upstream Logseq source; each patch header documents the bug and its removal condition.
-- `.github/actions/resolve-build-metadata/` is a composite action shared by `test-build.yml` and `pr-build.yml`: maps downloaded build artifacts to env vars and outputs (tarball paths, URLs, SRI hashes, tag).
-- `.github/actions/publish-release-assets/` is a composite action shared by `test-build.yml` and `pr-build.yml`: idempotently creates a GitHub release and attaches assets.
+- `.github/actions/resolve-build-metadata/` is a composite action shared by `test-build.yml` and `pr-build.yml`: maps downloaded build artifacts to env vars and outputs (tarball paths, URLs, SRI hashes, tag). Input defaults cover the test flow (all systems, current repo, tag `test-<datestring>-<run_id>`); it exports `RELEASE_TAG`, `RELEASE_NOTES`, and `RELEASE_ASSETS` for the publish composite.
+- `.github/actions/publish-release-assets/` is a composite action shared by `test-build.yml` and `pr-build.yml`: idempotently creates a GitHub release and attaches assets. All inputs are optional; tag, notes, and assets fall back to the `RELEASE_*` env handoff from `resolve-build-metadata`, target defaults to the current commit, and `prerelease`/`cleanup-tag` default to true (a future nightly caller would override these). It fails loudly when no asset paths resolve.
 - `.actrc` is tracked local `act` configuration; `.act/` is runtime state and stays ignored.
 - `.github/workflows/validate.yml` is the clearest snapshot of CI expectations.
 
@@ -102,9 +102,11 @@ Key properties:
   `public_repo` scope), used exclusively by the `comment` job. `GITHUB_TOKEN` cannot comment
   cross-repo. The `comment` job fails loudly when `post_comment=true` and the secret is unset.
 
-`test-build.yml`'s `publish-test` step uses the same two composites
-(`.github/actions/resolve-build-metadata` and `.github/actions/publish-release-assets`);
-the behavior of that step is otherwise identical to before the composites were introduced.
+`test-build.yml`'s `publish-test` job calls the same two composites
+(`.github/actions/resolve-build-metadata` and `.github/actions/publish-release-assets`)
+with no inputs at all: the composite defaults plus the `RELEASE_*` env handoff produce
+the isolated `test-<datestring>-<run_id>` prerelease (title = tag). `pr-build.yml`
+overrides only `systems` (present arch legs), `tag-prefix` (PR number), and `title`.
 
 ### Desktop packaging
 

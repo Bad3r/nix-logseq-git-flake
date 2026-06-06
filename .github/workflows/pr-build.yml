@@ -182,9 +182,7 @@ jobs:
         uses: ./.github/actions/resolve-build-metadata
         with:
           systems: ${{ steps.present.outputs.present }}
-          repo: ${{ github.repository }}
           tag-prefix: ${{ needs.resolve-target.outputs.pr_number != '' && format('test-pr{0}-', needs.resolve-target.outputs.pr_number) || 'test-' }}
-          tag-suffix: -${{ github.run_id }}
 
       - name: Compute release title
         env:
@@ -201,32 +199,15 @@ jobs:
           fi
           echo "RELEASE_TITLE=${title}" >>"$GITHUB_ENV"
 
-      - name: Assemble asset list
-        id: assetlist
-        run: |
-          set -euo pipefail
-          {
-            echo 'assets<<EOF'
-            [ -n "${X64_TARBALL:-}" ] && echo "$X64_TARBALL"
-            [ -n "${ARM64_TARBALL:-}" ] && echo "$ARM64_TARBALL"
-            [ -n "${DARWIN_ARM64_TARBALL:-}" ] && echo "$DARWIN_ARM64_TARBALL"
-            echo 'EOF'
-          } >>"$GITHUB_OUTPUT"
-
+      # Tag, notes, and the present-arch asset list come from the RELEASE_*
+      # env handoff exported by resolve-build-metadata.
       - name: Publish test prerelease
         id: release
         uses: ./.github/actions/publish-release-assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag: ${{ env.RELEASE_TAG }}
           title: ${{ env.RELEASE_TITLE }}
-          notes-file: ${{ env.RELEASE_NOTES }}
-          target: ${{ github.sha }}
-          prerelease: "true"
-          mark-latest: "false"
-          cleanup-tag: "true"
-          assets: ${{ steps.assetlist.outputs.assets }}
 
       - name: Evaluate validation gate
         id: gate

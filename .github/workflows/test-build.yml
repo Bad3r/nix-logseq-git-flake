@@ -125,18 +125,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh run download "${{ github.run_id }}" --repo "${{ github.repository }}" --dir builds
 
+      # Composite defaults cover the isolated test flow: all systems, this
+      # repo, tag test-<datestring>-<run_id>.
       - name: Resolve build metadata (isolated test tag)
         uses: ./.github/actions/resolve-build-metadata
-        with:
-          systems: x86_64-linux,aarch64-linux,aarch64-darwin
-          repo: ${{ github.repository }}
-          tag-prefix: test-
-          tag-suffix: -${{ github.run_id }}
-
-      - name: Compute release title
-        run: |
-          set -euo pipefail
-          echo "RELEASE_TITLE=test-build-${BUILD_REVISION:0:7}" >>"$GITHUB_ENV"
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
@@ -151,22 +143,13 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           skipPush: true
 
+      # Tag, notes, and assets come from the RELEASE_* env handoff exported
+      # by resolve-build-metadata; the other defaults already fit a
+      # disposable test prerelease.
       - name: Publish isolated test prerelease
         uses: ./.github/actions/publish-release-assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag: ${{ env.RELEASE_TAG }}
-          title: ${{ env.RELEASE_TITLE }}
-          notes-file: ${{ env.RELEASE_NOTES }}
-          target: ${{ github.sha }}
-          prerelease: "true"
-          mark-latest: "false"
-          cleanup-tag: "true"
-          assets: |
-            ${{ env.X64_TARBALL }}
-            ${{ env.ARM64_TARBALL }}
-            ${{ env.DARWIN_ARM64_TARBALL }}
 
       - name: Regenerate manifest and CLI hashes
         run: bash scripts/update-nightly.sh
