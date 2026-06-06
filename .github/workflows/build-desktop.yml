@@ -59,6 +59,7 @@ jobs:
     outputs:
       rev: ${{ steps.resolve.outputs.rev }}
       repo: ${{ steps.resolve.outputs.repo }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - name: Resolve source revision
         id: resolve
@@ -93,28 +94,50 @@ jobs:
           echo "rev=${rev}" >>"$GITHUB_OUTPUT"
           echo "repo=${LOGSEQ_REPO}" >>"$GITHUB_OUTPUT"
 
+      - name: Select build matrix
+        id: matrix
+        env:
+          BUILD_X86_64_LINUX: ${{ inputs.build_x86_64_linux }}
+          BUILD_AARCH64_LINUX: ${{ inputs.build_aarch64_linux }}
+          BUILD_AARCH64_DARWIN: ${{ inputs.build_aarch64_darwin }}
+        run: |
+          set -euo pipefail
+          matrix="$(jq -cn \
+            --argjson x64 "$BUILD_X86_64_LINUX" \
+            --argjson arm64 "$BUILD_AARCH64_LINUX" \
+            --argjson darwin "$BUILD_AARCH64_DARWIN" \
+            '[
+              if $x64 then {
+                os: "linux",
+                arch: "x64",
+                runner: "ubuntu-24.04",
+                nix_system: "x86_64-linux"
+              } else empty end,
+              if $arm64 then {
+                os: "linux",
+                arch: "arm64",
+                runner: "ubuntu-24.04-arm",
+                nix_system: "aarch64-linux"
+              } else empty end,
+              if $darwin then {
+                os: "darwin",
+                arch: "arm64",
+                runner: "macos-26",
+                nix_system: "aarch64-darwin"
+              } else empty end
+            ] as $include
+            | if ($include | length) == 0 then
+                error("at least one build system must be selected")
+              else
+                {include: $include}
+              end')"
+          echo "matrix=${matrix}" >>"$GITHUB_OUTPUT"
+
   build:
     needs: resolve-revision
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: linux
-            arch: x64
-            runner: ubuntu-24.04
-            nix_system: x86_64-linux
-          - os: linux
-            arch: arm64
-            runner: ubuntu-24.04-arm
-            nix_system: aarch64-linux
-          - os: darwin
-            arch: arm64
-            runner: macos-26
-            nix_system: aarch64-darwin
-        exclude:
-          - nix_system: ${{ !inputs.build_x86_64_linux && 'x86_64-linux' || '' }}
-          - nix_system: ${{ !inputs.build_aarch64_linux && 'aarch64-linux' || '' }}
-          - nix_system: ${{ !inputs.build_aarch64_darwin && 'aarch64-darwin' || '' }}
+      matrix: ${{ fromJSON(needs.resolve-revision.outputs.matrix) }}
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
