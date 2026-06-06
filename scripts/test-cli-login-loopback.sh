@@ -79,12 +79,14 @@ probe_family() {
   local curl_resolve="$2"
   local test_root="$3"
   local dir="$test_root/$family"
-  local login_pid
+  local login_pid=""
   local authorize_url
   local state
   local callback_url
   local http_status
   local login_status
+
+  trap 'if [ -n "${login_pid:-}" ]; then kill "$login_pid" 2>/dev/null || true; wait "$login_pid" 2>/dev/null || true; login_pid=""; fi' RETURN
 
   mkdir -p "$dir/bin" "$dir/home" "$dir/cache"
   make_opener_stub "$dir/bin/xdg-open"
@@ -107,7 +109,6 @@ probe_family() {
   if [ -z "$state" ]; then
     echo "$family: authorize URL is missing the OAuth state parameter" >&2
     printf '%s\n' "$authorize_url" >&2
-    kill "$login_pid" 2>/dev/null || true
     return 1
   fi
 
@@ -120,26 +121,24 @@ probe_family() {
     "$callback_url")"; then
     echo "$family: callback could not connect through $curl_resolve" >&2
     cat "$dir/login-output" >&2
-    kill "$login_pid" 2>/dev/null || true
     return 1
   fi
 
   if [ "$http_status" != "400" ]; then
     echo "$family: expected HTTP 400 for a state-mismatch callback, got $http_status" >&2
     cat "$dir/callback-body" >&2
-    kill "$login_pid" 2>/dev/null || true
     return 1
   fi
 
   if ! grep -q 'state mismatch' "$dir/callback-body"; then
     echo "$family: callback body did not contain the expected state-mismatch message" >&2
     cat "$dir/callback-body" >&2
-    kill "$login_pid" 2>/dev/null || true
     return 1
   fi
 
   login_status=0
   wait "$login_pid" || login_status=$?
+  login_pid=""
   if [ "$login_status" -eq 0 ]; then
     echo "$family: login exited 0 after a state-mismatch callback" >&2
     cat "$dir/login-output" >&2
