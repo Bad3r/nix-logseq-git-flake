@@ -36,7 +36,7 @@ index d901975..5acee54 100644
  (def ^:private auth-provider "cognito")
  (def ^:private default-scope "email openid phone")
  (def ^:private token-endpoint-path "/oauth2/token")
-@@ -194,6 +200,61 @@
+@@ -194,6 +200,60 @@
                                   (resolve true)))))
      (p/resolved true)))
 
@@ -97,7 +97,7 @@ index d901975..5acee54 100644
  (defn start-login-callback-server!
    [{:keys [state login-timeout-ms]}]
    (p/create
-@@ -208,70 +269,65 @@
+@@ -208,70 +268,65 @@
                         (reset! settled? true)
                         (when-let [{:keys [resolve reject]} @callback-handlers]
                           ((if (= kind :resolve) resolve reject) payload))))
@@ -223,7 +223,7 @@ index d901975..5acee54 100644
 
  (defn start-logout-complete-server!
    [{:keys [logout-timeout-ms]}]
-@@ -287,37 +343,34 @@
+@@ -287,37 +342,34 @@
                         (reset! settled? true)
                         (when-let [{:keys [resolve reject]} @callback-handlers]
                           ((if (= kind :resolve) resolve reject) payload))))
