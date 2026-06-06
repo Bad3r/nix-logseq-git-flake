@@ -36,7 +36,7 @@ index d901975..5acee54 100644
  (def ^:private auth-provider "cognito")
  (def ^:private default-scope "email openid phone")
  (def ^:private token-endpoint-path "/oauth2/token")
-@@ -194,6 +200,60 @@
+@@ -194,6 +200,71 @@
                                   (resolve true)))))
      (p/resolved true)))
 
@@ -56,13 +56,19 @@ index d901975..5acee54 100644
 +  (p/create
 +   (fn [resolve _reject]
 +     (let [server (.createServer http handler)
++           bound? (atom false)
 +           on-error (fn [error]
-+                      (resolve {:host host
-+                                :error error
-+                                :unavailable? (callback-bind-unavailable-error? error)}))]
++                      (if @bound?
++                        (js/console.error
++                         (str "logseq-cli callback server error after bind on " host ": ")
++                         error)
++                        (resolve {:host host
++                                  :error error
++                                  :unavailable? (callback-bind-unavailable-error? error)})))]
 +       (.on server "error" on-error)
 +       (.listen server callback-port host
 +                (fn []
++                  (reset! bound? true)
 +                  (resolve {:host host
 +                            :server server
 +                            :port (.-port (.address server))})))))))
@@ -88,7 +94,12 @@ index d901975..5acee54 100644
 +      (p/rejected
 +       (ex-info "failed to start callback server"
 +                {:code error-code
-+                 :hosts callback-bind-addresses}))
++                 :hosts callback-bind-addresses
++                 :errors (mapv (fn [result]
++                                 {:host (:host result)
++                                  :code (some-> (:error result) .-code)
++                                  :message (some-> (:error result) .-message)})
++                               results)}))
 +
 +      :else
 +      (p/resolved {:servers servers
@@ -97,7 +108,7 @@ index d901975..5acee54 100644
  (defn start-login-callback-server!
    [{:keys [state login-timeout-ms]}]
    (p/create
-@@ -208,70 +268,65 @@
+@@ -208,70 +279,65 @@
                         (reset! settled? true)
                         (when-let [{:keys [resolve reject]} @callback-handlers]
                           ((if (= kind :resolve) resolve reject) payload))))
@@ -223,7 +234,7 @@ index d901975..5acee54 100644
 
  (defn start-logout-complete-server!
    [{:keys [logout-timeout-ms]}]
-@@ -287,37 +342,34 @@
+@@ -287,37 +353,34 @@
                         (reset! settled? true)
                         (when-let [{:keys [resolve reject]} @callback-handlers]
                           ((if (= kind :resolve) resolve reject) payload))))
