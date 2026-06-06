@@ -86,7 +86,7 @@ probe_family() {
   local http_status
   local login_status
 
-  trap 'if [ -n "${login_pid:-}" ]; then kill "$login_pid" 2>/dev/null || true; wait "$login_pid" 2>/dev/null || true; login_pid=""; fi' RETURN
+  trap 'if [ -n "${login_pid:-}" ]; then kill "$login_pid" 2>/dev/null || true; wait "$login_pid" 2>/dev/null || true; login_pid=""; fi' EXIT
 
   mkdir -p "$dir/bin" "$dir/home" "$dir/cache"
   make_opener_stub "$dir/bin/xdg-open"
@@ -154,6 +154,22 @@ probe_family() {
   echo "$family: callback server reachable through $curl_resolve"
 }
 
+run_probe_family() {
+  local probe_status
+
+  set +e
+  (
+    set -e
+    probe_family "$@"
+  )
+  probe_status=$?
+  set -e
+
+  if [ "$probe_status" -ne 0 ]; then
+    status=1
+  fi
+}
+
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/logseq-cli-loopback-test.XXXXXXXXXX")"
 trap 'rm -rf -- "$test_root"' EXIT
 status=0
@@ -161,8 +177,8 @@ status=0
 echo "test root: $test_root"
 echo "cli: ${cli[*]}"
 
-probe_family ipv4 'localhost:8765:127.0.0.1' "$test_root" || status=1
-probe_family ipv6 'localhost:8765:[::1]' "$test_root" || status=1
+run_probe_family ipv4 'localhost:8765:127.0.0.1' "$test_root"
+run_probe_family ipv6 'localhost:8765:[::1]' "$test_root"
 
 if [ "$status" -ne 0 ]; then
   echo "one or more loopback callback probes failed" >&2
