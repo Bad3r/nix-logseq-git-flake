@@ -156,6 +156,7 @@ probe_family() {
 }
 
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/logseq-cli-loopback-test.XXXXXXXXXX")"
+trap 'rm -rf -- "$test_root"' EXIT
 status=0
 
 echo "test root: $test_root"
