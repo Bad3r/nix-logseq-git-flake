@@ -69,7 +69,7 @@ runs:
         version="$(read_meta_value version)"
         revision="$(read_meta_value revision)"
         datestring="$(read_meta_value datestring)"
-        [[ -n "$version" ]] || { echo "Invalid version in meta.txt: empty" >&2; exit 1; }
+        [[ "$version" =~ ^[A-Za-z0-9._+-]+$ ]] || { echo "Invalid version in meta.txt: ${version}" >&2; exit 1; }
         [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid revision in meta.txt: ${revision}" >&2; exit 1; }
         [[ "$datestring" =~ ^[0-9]{8}$ ]] || { echo "Invalid datestring in meta.txt: ${datestring}" >&2; exit 1; }
         tag="${TAG_PREFIX}${datestring}${TAG_SUFFIX}"

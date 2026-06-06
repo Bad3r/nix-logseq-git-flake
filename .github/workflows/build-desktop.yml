@@ -235,7 +235,11 @@ jobs:
 
       - name: Determine nightly version
         id: version
-        run: echo "value=$(node ./scripts/get-pkg-version.js nightly | tr -d '\r\n')" >>"$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          value="$(node ./scripts/get-pkg-version.js nightly | tr -d '\r\n')"
+          [[ "$value" =~ ^[A-Za-z0-9._+-]+$ ]] || { echo "Invalid version characters: $value" >&2; exit 1; }
+          echo "value=${value}" >>"$GITHUB_OUTPUT"
         working-directory: logseq-src
 
       - name: Update Nightly APP Version
@@ -471,6 +475,7 @@ jobs:
           set -euo pipefail
           mkdir -p out
           version="$(cd logseq-src && node ./scripts/get-pkg-version.js nightly | tr -d '\r\n')"
+          [[ "$version" =~ ^[A-Za-z0-9._+-]+$ ]] || { echo "Invalid version characters: $version" >&2; exit 1; }
           {
             echo "version=${version}"
             echo "revision=${LOGSEQ_REV}"
