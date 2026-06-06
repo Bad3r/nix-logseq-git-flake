@@ -110,7 +110,7 @@ jobs:
     needs: test-build-approval
     uses: ./.github/workflows/build-desktop.yml
     with:
-      logseq_branch: ${{ github.event.inputs.logseq_branch || 'master' }}
+      logseq_ref: ${{ github.event.inputs.logseq_branch || 'master' }}
 
   publish-test:
     runs-on: ubuntu-24.04
@@ -125,46 +125,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh run download "${{ github.run_id }}" --repo "${{ github.repository }}" --dir builds
 
+      # Composite defaults cover the isolated test flow: all systems, this
+      # repo, tag test-<datestring>-<run_id>.
       - name: Resolve build metadata (isolated test tag)
-        env:
-          REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          meta="$(find builds -name meta.txt | head -1)"
-          x64_tar="$(find builds -name 'logseq-linux-x64-*.tar.gz' | head -1)"
-          arm64_tar="$(find builds -name 'logseq-linux-arm64-*.tar.gz' | head -1)"
-          darwin_arm64_tar="$(find builds -name 'logseq-darwin-arm64-*.tar.gz' | head -1)"
-          notes="$(find builds -name release-notes.md | head -1)"
-          x64_hash_file="$(find builds -name 'hash-x64.txt' | head -1)"
-          arm64_hash_file="$(find builds -name 'hash-arm64.txt' | head -1)"
-          darwin_arm64_hash_file="$(find builds -name 'hash-darwin-arm64.txt' | head -1)"
-          for f in "$meta" "$x64_tar" "$arm64_tar" "$darwin_arm64_tar" "$notes" "$x64_hash_file" "$arm64_hash_file" "$darwin_arm64_hash_file"; do
-            test -n "$f" || { echo "Required artifact file missing" >&2; exit 1; }
-          done
-          # meta.txt holds trusted build-step outputs (version/revision/datestring).
-          version="$(grep -E '^version=' "$meta" | cut -d= -f2-)"
-          revision="$(grep -E '^revision=' "$meta" | cut -d= -f2-)"
-          datestring="$(grep -E '^datestring=' "$meta" | cut -d= -f2-)"
-          # Disjoint tag namespace, unique per run: never collides with nightly-<date>.
-          tag="test-${datestring}-${RUN_ID}"
-          {
-            echo "LOGSEQ_VERSION=${version}"
-            echo "LOGSEQ_REV=${revision}"
-            echo "NIGHTLY_TAG=${tag}"
-            echo "RELEASE_TAG=${tag}"
-            echo "BUILD_REVISION=${revision}"
-            echo "X64_TARBALL=${x64_tar}"
-            echo "ARM64_TARBALL=${arm64_tar}"
-            echo "DARWIN_ARM64_TARBALL=${darwin_arm64_tar}"
-            echo "RELEASE_NOTES=${notes}"
-            echo "ASSET_URL_X86_64=https://github.com/${REPO}/releases/download/${tag}/$(basename "$x64_tar")"
-            echo "ASSET_SHA256_X86_64=$(cat "$x64_hash_file")"
-            echo "ASSET_URL_AARCH64=https://github.com/${REPO}/releases/download/${tag}/$(basename "$arm64_tar")"
-            echo "ASSET_SHA256_AARCH64=$(cat "$arm64_hash_file")"
-            echo "ASSET_URL_AARCH64_DARWIN=https://github.com/${REPO}/releases/download/${tag}/$(basename "$darwin_arm64_tar")"
-            echo "ASSET_SHA256_AARCH64_DARWIN=$(cat "$darwin_arm64_hash_file")"
-          } >>"$GITHUB_ENV"
+        uses: ./.github/actions/resolve-build-metadata
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
@@ -179,22 +143,13 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           skipPush: true
 
+      # Tag, notes, and assets come from the RELEASE_* env handoff exported
+      # by resolve-build-metadata; the other defaults already fit a
+      # disposable test prerelease.
       - name: Publish isolated test prerelease
+        uses: ./.github/actions/publish-release-assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          rev_short="${BUILD_REVISION:0:7}"
-          release_assets=("$X64_TARBALL" "$ARM64_TARBALL" "$DARWIN_ARM64_TARBALL")
-          # Idempotent on a same-run retry; the tag is deleted in cleanup regardless.
-          gh release delete "$RELEASE_TAG" --cleanup-tag -y || true
-          gh release create "$RELEASE_TAG" "${release_assets[@]}" \
-            --title "test-build-${rev_short}" \
-            --notes-file "$RELEASE_NOTES" \
-            --prerelease \
-            --latest=false \
-            --target "$HEAD_SHA"
 
       - name: Regenerate manifest and CLI hashes
         run: bash scripts/update-nightly.sh

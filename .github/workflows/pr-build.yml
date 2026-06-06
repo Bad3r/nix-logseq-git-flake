@@ -1,0 +1,353 @@
+name: PR Build
+
+# Dispatchable test build of a Logseq PR or branch from ANY repo (upstream
+# logseq/logseq or a fork such as Bad3r/Logseq). Logseq analog of
+# Defelo/nixpkgs-review-gha. Builds run UNTRUSTED code and receive no secrets.
+# Builds run on pristine PR source; patches/ is nightly-rev-pinned and skipped.
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "PR URL (https://github.com/OWNER/REPO/pull/N); overrides repo/ref"
+        required: false
+        type: string
+        default: ""
+      logseq_repo:
+        description: "Source repository (owner/repo) when pr is empty"
+        required: false
+        type: string
+        default: logseq/logseq
+      logseq_ref:
+        description: "Branch, tag, or SHA when pr is empty"
+        required: false
+        type: string
+        default: master
+      build_x86_64_linux:
+        description: "Build x86_64-linux"
+        type: boolean
+        default: true
+      build_aarch64_linux:
+        description: "Build aarch64-linux"
+        type: boolean
+        default: true
+      build_aarch64_darwin:
+        description: "Build aarch64-darwin"
+        type: boolean
+        default: true
+      push_to_cachix:
+        description: "Push validation builds to Cachix"
+        type: boolean
+        default: false
+      keep_release:
+        description: "Keep the prerelease and assets after the run"
+        type: boolean
+        default: true
+      post_comment:
+        description: "Comment results on the source PR (needs GH_TOKEN secret)"
+        type: boolean
+        default: true
+      validate:
+        description: "Flake validation (auto = all archs green and repo is logseq/logseq)"
+        type: choice
+        default: auto
+        options:
+          - auto
+          - skip
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-build-${{ inputs.pr || format('{0}@{1}', inputs.logseq_repo, inputs.logseq_ref) }}
+  cancel-in-progress: true
+
+jobs:
+  resolve-target:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      repo: ${{ steps.target.outputs.repo }}
+      ref: ${{ steps.target.outputs.ref }}
+      pr_number: ${{ steps.target.outputs.pr_number }}
+    steps:
+      - name: Resolve build target
+        id: target
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ inputs.pr }}
+          IN_REPO: ${{ inputs.logseq_repo }}
+          IN_REF: ${{ inputs.logseq_ref }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PR_URL" ]; then
+            if [[ ! "$IN_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+              echo "logseq_repo must be OWNER/REPO, got: $IN_REPO" >&2
+              exit 1
+            fi
+            safe_ref="$(printf '%s' "$IN_REF" | tr -d '\r\n')"
+            if [ -z "$safe_ref" ]; then
+              echo "logseq_ref must not be empty" >&2
+              exit 1
+            fi
+            { echo "repo=${IN_REPO}"; echo "ref=${safe_ref}"; echo "pr_number="; } >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          re='^https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pull/([0-9]+)$'
+          if [[ ! "$PR_URL" =~ $re ]]; then
+            echo "Malformed PR URL: $PR_URL (expected https://github.com/OWNER/REPO/pull/N)" >&2
+            exit 1
+          fi
+          owner="${BASH_REMATCH[1]}"; repo="${BASH_REMATCH[2]}"; number="${BASH_REMATCH[3]}"
+          # Capture first: a failed API call (404, rate limit) must abort loudly.
+          pr_json="$(gh api "repos/${owner}/${repo}/pulls/${number}")"
+          state="$(jq -r '.state' <<<"$pr_json")"
+          head_sha="$(jq -r '.head.sha' <<<"$pr_json")"
+          [ "$state" = "open" ] || echo "::warning::PR #${number} state is '${state}'; building its head anyway."
+          [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "No head SHA for ${owner}/${repo}#${number}" >&2; exit 1; }
+          {
+            echo "repo=${owner}/${repo}"
+            # refs/pull/N/head is served by the BASE repo even for fork-head PRs.
+            echo "ref=refs/pull/${number}/head"
+            echo "pr_number=${number}"
+          } >>"$GITHUB_OUTPUT"
+
+  build:
+    needs: resolve-target
+    uses: ./.github/workflows/build-desktop.yml
+    with:
+      logseq_repo: ${{ needs.resolve-target.outputs.repo }}
+      logseq_ref: ${{ needs.resolve-target.outputs.ref }}
+      build_x86_64_linux: ${{ inputs.build_x86_64_linux }}
+      build_aarch64_linux: ${{ inputs.build_aarch64_linux }}
+      build_aarch64_darwin: ${{ inputs.build_aarch64_darwin }}
+      # pr-build tests the PR's pristine code; local patches are pinned to the nightly rev
+      apply_patches: false
+
+  publish:
+    needs:
+      - resolve-target
+      - build
+    if: ${{ !cancelled() && needs.resolve-target.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: write
+      actions: read
+    outputs:
+      release_url: ${{ steps.release.outputs.release-url }}
+      assets_json: ${{ steps.metadata.outputs.assets-json }}
+      version: ${{ steps.metadata.outputs.version }}
+      revision: ${{ steps.metadata.outputs.revision }}
+      validate_ran: ${{ steps.gate.outputs.run }}
+      validate_skip_reason: ${{ steps.gate.outputs.skip_reason }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Download packaged builds
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run download "${{ github.run_id }}" --repo "${{ github.repository }}" --dir builds
+
+      - name: Compute present systems
+        id: present
+        env:
+          SEL_X64: ${{ inputs.build_x86_64_linux }}
+          SEL_ARM: ${{ inputs.build_aarch64_linux }}
+          SEL_DARWIN: ${{ inputs.build_aarch64_darwin }}
+        run: |
+          set -euo pipefail
+          present=""
+          probe() {
+            local system="$1" sel="$2" glob="$3"
+            if [ "$sel" != "true" ]; then return 0; fi
+            if [ -n "$(find builds -name "$glob" -print -quit)" ]; then
+              present="${present}${system},"
+            else
+              echo "::warning::${system} selected but no artifact found (leg failed?)"
+            fi
+          }
+          probe x86_64-linux "$SEL_X64" 'logseq-linux-x64-*.tar.gz'
+          probe aarch64-linux "$SEL_ARM" 'logseq-linux-arm64-*.tar.gz'
+          probe aarch64-darwin "$SEL_DARWIN" 'logseq-darwin-arm64-*.tar.gz'
+          if [ -z "$present" ]; then
+            echo "No build artifacts produced for any selected system" >&2
+            exit 1
+          fi
+          echo "present=${present%,}" >>"$GITHUB_OUTPUT"
+
+      - name: Resolve build metadata
+        id: metadata
+        uses: ./.github/actions/resolve-build-metadata
+        with:
+          systems: ${{ steps.present.outputs.present }}
+          tag-prefix: ${{ needs.resolve-target.outputs.pr_number != '' && format('test-pr{0}-', needs.resolve-target.outputs.pr_number) || 'test-' }}
+
+      - name: Compute release title
+        env:
+          PR_NUMBER: ${{ needs.resolve-target.outputs.pr_number }}
+          SOURCE_REPO: ${{ needs.resolve-target.outputs.repo }}
+          SOURCE_REF: ${{ needs.resolve-target.outputs.ref }}
+        run: |
+          set -euo pipefail
+          rev7="${BUILD_REVISION:0:7}"
+          if [ -n "$PR_NUMBER" ]; then
+            title="test build ${SOURCE_REPO}#${PR_NUMBER} (${rev7})"
+          else
+            title="test build ${SOURCE_REPO}@${SOURCE_REF} (${rev7})"
+          fi
+          echo "RELEASE_TITLE=${title}" >>"$GITHUB_ENV"
+
+      # Tag, notes, and the present-arch asset list come from the RELEASE_*
+      # env handoff exported by resolve-build-metadata.
+      - name: Publish test prerelease
+        id: release
+        uses: ./.github/actions/publish-release-assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          title: ${{ env.RELEASE_TITLE }}
+
+      - name: Evaluate validation gate
+        id: gate
+        env:
+          VALIDATE_INPUT: ${{ inputs.validate }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          SEL_X64: ${{ inputs.build_x86_64_linux }}
+          SEL_ARM: ${{ inputs.build_aarch64_linux }}
+          SEL_DARWIN: ${{ inputs.build_aarch64_darwin }}
+          SOURCE_REPO: ${{ needs.resolve-target.outputs.repo }}
+        run: |
+          set -euo pipefail
+          run=false
+          skip_reason=""
+          if [ "$VALIDATE_INPUT" = "skip" ]; then
+            skip_reason="validate=skip"
+          elif [ "$BUILD_RESULT" != "success" ]; then
+            skip_reason="build result is ${BUILD_RESULT}"
+          elif [ "$SEL_X64" != "true" ] || [ "$SEL_ARM" != "true" ] || [ "$SEL_DARWIN" != "true" ]; then
+            skip_reason="not all arch legs selected"
+          elif [ "$SOURCE_REPO" != "logseq/logseq" ]; then
+            skip_reason="source repo is ${SOURCE_REPO}, not logseq/logseq"
+          else
+            run=true
+          fi
+          if [ "$run" = "true" ]; then
+            echo "Validation will run."
+          else
+            echo "Skipping validation: ${skip_reason}"
+          fi
+          echo "run=${run}" >>"$GITHUB_OUTPUT"
+          echo "skip_reason=${skip_reason}" >>"$GITHUB_OUTPUT"
+
+      - name: Install Nix
+        if: steps.gate.outputs.run == 'true'
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+
+      - name: Setup Cachix
+        if: steps.gate.outputs.run == 'true'
+        uses: cachix/cachix-action@v17
+        with:
+          name: nix-logseq-git-flake
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: ${{ !inputs.push_to_cachix }}
+
+      - name: Regenerate manifest and CLI hashes
+        if: steps.gate.outputs.run == 'true'
+        run: bash scripts/update-nightly.sh
+
+      - name: Format repository
+        if: steps.gate.outputs.run == 'true'
+        run: nix fmt
+
+      - name: Validate flake against test release
+        if: steps.gate.outputs.run == 'true'
+        run: nix flake check --accept-flake-config
+
+      - name: Seed CLI fixed-output derivations to Cachix
+        if: ${{ steps.gate.outputs.run == 'true' && inputs.push_to_cachix }}
+        run: |
+          nix build --accept-flake-config --print-build-logs \
+            .#logseq-cli.cliCljDeps \
+            .#logseq-cli.cliPnpmDeps
+
+      - name: Capture regenerated manifest
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p pr-build-out
+          cp data/logseq-nightly.json pr-build-out/logseq-nightly.json
+          git --no-pager diff -- data/logseq-nightly.json >pr-build-out/logseq-nightly.json.diff || true
+
+      - name: Upload regenerated manifest
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: pr-build-manifest
+          path: pr-build-out/*
+          if-no-files-found: error
+
+      - name: Delete prerelease if keep_release is false
+        if: ${{ always() && !inputs.keep_release }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${RELEASE_TAG:-}" ]; then
+            gh release delete "$RELEASE_TAG" --cleanup-tag -y || true
+          fi
+
+  comment:
+    needs:
+      - resolve-target
+      - build
+      - publish
+    if: ${{ !cancelled() && inputs.post_comment && needs.resolve-target.outputs.pr_number != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Verify GH_TOKEN is set
+        env:
+          COMMENT_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          [ -n "${COMMENT_TOKEN}" ] || {
+            echo "post_comment=true but secrets.GH_TOKEN (classic PAT, public_repo scope) is unset" >&2
+            exit 1
+          }
+
+      - name: Render PR comment report
+        env:
+          SOURCE_REPO: ${{ needs.resolve-target.outputs.repo }}
+          PR_NUMBER: ${{ needs.resolve-target.outputs.pr_number }}
+          SEL_X64: ${{ inputs.build_x86_64_linux }}
+          SEL_ARM: ${{ inputs.build_aarch64_linux }}
+          SEL_DARWIN: ${{ inputs.build_aarch64_darwin }}
+          ASSETS_JSON: ${{ needs.publish.outputs.assets_json }}
+          RELEASE_URL: ${{ needs.publish.outputs.release_url }}
+          KEEP_RELEASE: ${{ inputs.keep_release }}
+          VALIDATE_RAN: ${{ needs.publish.outputs.validate_ran }}
+          VALIDATE_SKIP_REASON: ${{ needs.publish.outputs.validate_skip_reason }}
+          VERSION: ${{ needs.publish.outputs.version }}
+          REVISION: ${{ needs.publish.outputs.revision }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OUTPUT_PATH: report.md
+        run: bash scripts/render-pr-build-report.sh
+
+      - name: Post comment on source PR
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          SOURCE_REPO: ${{ needs.resolve-target.outputs.repo }}
+          PR_NUMBER: ${{ needs.resolve-target.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          gh pr comment "$PR_NUMBER" -R "$SOURCE_REPO" -F report.md

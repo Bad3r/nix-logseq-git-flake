@@ -1,0 +1,143 @@
+name: Resolve build metadata
+description: >-
+  Map downloaded build artifacts to release env vars and outputs. Exports
+  RELEASE_TAG, RELEASE_NOTES, RELEASE_ASSETS, and per-system tarball, URL,
+  and SRI hash env vars; publish-release-assets consumes them as defaults.
+inputs:
+  systems:
+    description: >-
+      CSV of nix systems to require. Defaults to all supported systems; pass
+      a computed subset when arch legs are optional.
+    required: false
+    default: x86_64-linux,aarch64-linux,aarch64-darwin
+  repo:
+    description: >-
+      owner/repo that will host the release the asset download URLs point at.
+      Defaults to the repository running the workflow.
+    required: false
+    default: ${{ github.repository }}
+  tag-prefix:
+    description: >-
+      Release tag prefix (tag = <prefix><datestring><suffix>). The defaults
+      yield a disposable test tag like test-20260606-1234567890.
+    required: false
+    default: test-
+  tag-suffix:
+    description: Release tag suffix appended after the datestring.
+    required: false
+    default: "-${{ github.run_id }}"
+  builds-dir:
+    description: Directory holding the downloaded build artifacts.
+    required: false
+    default: builds
+outputs:
+  version:
+    value: "${{ steps.resolve.outputs.version }}"
+  revision:
+    value: "${{ steps.resolve.outputs.revision }}"
+  tag:
+    value: "${{ steps.resolve.outputs.tag }}"
+  assets-json:
+    value: "${{ steps.resolve.outputs.assets-json }}"
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        SYSTEMS: ${{ inputs.systems }}
+        REPO: ${{ inputs.repo }}
+        TAG_PREFIX: ${{ inputs.tag-prefix }}
+        TAG_SUFFIX: ${{ inputs.tag-suffix }}
+        BUILDS_DIR: ${{ inputs.builds-dir }}
+      run: |
+        set -euo pipefail
+        systems_csv="${SYSTEMS//[[:space:]]/}"
+        if [ -z "$systems_csv" ]; then
+          echo "systems must name at least one nix system" >&2
+          exit 1
+        fi
+        find_one() {
+          local pattern="$1" label="$2"
+          local hits
+          mapfile -t hits < <(find "$BUILDS_DIR" -name "$pattern" -print | sort)
+          case "${#hits[@]}" in
+            0)
+              echo "Required artifact missing: $label ($pattern)" >&2
+              exit 1
+              ;;
+            1) printf '%s' "${hits[0]}" ;;
+            *)
+              echo "Ambiguous artifact for $label ($pattern): ${hits[*]}" >&2
+              exit 1
+              ;;
+          esac
+        }
+        # meta.txt and release-notes.md come from the single build-metadata artifact, so exactly one match is expected.
+        meta="$(find_one meta.txt meta)"
+        notes="$(find_one release-notes.md release-notes)"
+        read_meta_value() {
+          local key="$1"
+          local line
+          if ! line="$(grep -E -m 1 "^${key}=" "$meta")"; then
+            echo "Missing required key in meta.txt: ${key}" >&2
+            exit 1
+          fi
+          printf '%s' "${line#*=}" | tr -d '\r\n'
+        }
+        version="$(read_meta_value version)"
+        revision="$(read_meta_value revision)"
+        datestring="$(read_meta_value datestring)"
+        [[ "$version" =~ ^[A-Za-z0-9._+-]+$ ]] || { echo "Invalid version in meta.txt: ${version}" >&2; exit 1; }
+        [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid revision in meta.txt: ${revision}" >&2; exit 1; }
+        [[ "$datestring" =~ ^[0-9]{8}$ ]] || { echo "Invalid datestring in meta.txt: ${datestring}" >&2; exit 1; }
+        tag="${TAG_PREFIX}${datestring}${TAG_SUFFIX}"
+        {
+          echo "LOGSEQ_VERSION=${version}"
+          echo "LOGSEQ_REV=${revision}"
+          echo "BUILD_REVISION=${revision}"
+          echo "NIGHTLY_TAG=${tag}"
+          echo "RELEASE_TAG=${tag}"
+          echo "RELEASE_NOTES=${notes}"
+        } >>"$GITHUB_ENV"
+        assets_json="[]"
+        present_tarballs=()
+        emit_system() {
+          local system="$1" glob="$2" hashname="$3" tarvar="$4" urlvar="$5" shavar="$6"
+          local tarball hash_file url hash
+          tarball="$(find_one "$glob" "$system tarball")"
+          hash_file="$(find_one "$hashname" "$system hash")"
+          url="https://github.com/${REPO}/releases/download/${tag}/$(basename "$tarball")"
+          hash="$(tr -d '\r\n' <"$hash_file")"
+          [[ "$hash" =~ ^sha256-[A-Za-z0-9+/=]+$ ]] || { echo "Invalid sha256 hash in $hash_file: $hash" >&2; exit 1; }
+          {
+            echo "${tarvar}=${tarball}"
+            echo "${urlvar}=${url}"
+            echo "${shavar}=${hash}"
+          } >>"$GITHUB_ENV"
+          present_tarballs+=("$tarball")
+          assets_json="$(jq -c --arg s "$system" --arg u "$url" \
+            --arg h "$hash" --arg t "$tarball" \
+            '. + [{system:$s,url:$u,sha256:$h,tarball:$t}]' <<<"$assets_json")"
+        }
+        IFS=',' read -ra wanted <<<"$systems_csv"
+        for system in "${wanted[@]}"; do
+          case "$system" in
+            x86_64-linux) emit_system "$system" 'logseq-linux-x64-*.tar.gz' hash-x64.txt X64_TARBALL ASSET_URL_X86_64 ASSET_SHA256_X86_64 ;;
+            aarch64-linux) emit_system "$system" 'logseq-linux-arm64-*.tar.gz' hash-arm64.txt ARM64_TARBALL ASSET_URL_AARCH64 ASSET_SHA256_AARCH64 ;;
+            aarch64-darwin) emit_system "$system" 'logseq-darwin-arm64-*.tar.gz' hash-darwin-arm64.txt DARWIN_ARM64_TARBALL ASSET_URL_AARCH64_DARWIN ASSET_SHA256_AARCH64_DARWIN ;;
+            *) echo "Unknown system: $system" >&2; exit 1 ;;
+          esac
+        done
+        # Newline-joined tarball list; publish-release-assets uses it as the default asset set.
+        {
+          echo "RELEASE_ASSETS<<EOF_RELEASE_ASSETS"
+          printf '%s\n' "${present_tarballs[@]}"
+          echo "EOF_RELEASE_ASSETS"
+        } >>"$GITHUB_ENV"
+        {
+          echo "version=${version}"
+          echo "revision=${revision}"
+          echo "tag=${tag}"
+          echo "assets-json=${assets_json}"
+        } >>"$GITHUB_OUTPUT"
