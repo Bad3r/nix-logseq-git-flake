@@ -43,7 +43,7 @@ index d901975..5acee54 100644
 +(defn- stop-servers!
 +  [servers]
 +  (if (seq servers)
-+    (-> (p/all (map stop-server! servers))
++    (-> (p/all (mapv stop-server! servers))
 +        (p/then (fn [_] true)))
 +    (p/resolved true)))
 +
@@ -60,18 +60,17 @@ index d901975..5acee54 100644
 +                      (resolve {:host host
 +                                :error error
 +                                :unavailable? (callback-bind-unavailable-error? error)}))]
-+       (.once server "error" on-error)
++       (.on server "error" on-error)
 +       (.listen server callback-port host
 +                (fn []
-+                  (.off server "error" on-error)
 +                  (resolve {:host host
 +                            :server server
 +                            :port (.-port (.address server))})))))))
 +
 +(defn- start-callback-servers!
 +  [handler error-code]
-+  (p/let [results (p/all (map #(listen-callback-server! handler %)
-+                              callback-bind-addresses))
++  (p/let [results (p/all (mapv #(listen-callback-server! handler %)
++                               callback-bind-addresses))
 +          servers (->> results (keep :server) vec)
 +          fatal-error (first (filter #(and (:error %) (not (:unavailable? %)))
 +                                     results))]
