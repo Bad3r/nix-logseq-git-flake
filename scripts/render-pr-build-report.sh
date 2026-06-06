@@ -11,15 +11,11 @@
 #   OUTPUT_PATH  - file path to write the rendered report
 #
 # Optional (graceful degradation when absent or empty):
-#   PR_URL            - full PR HTML URL
-#   BUILD_RESULT      - GitHub job result string (success/failure/cancelled/skipped)
-#   PUBLISH_RESULT    - GitHub job result string for the publish job
 #   SEL_X64           - "true"/"false" whether x86_64-linux was selected
 #   SEL_ARM           - "true"/"false" whether aarch64-linux was selected
 #   SEL_DARWIN        - "true"/"false" whether aarch64-darwin was selected
 #   ASSETS_JSON       - compact JSON array from resolve-build-metadata outputs
 #   RELEASE_URL       - URL of the GitHub release
-#   RELEASE_TAG       - release tag name
 #   KEEP_RELEASE      - "true"/"false" whether assets are kept after the run
 #   VALIDATE_RAN      - "true"/"false" whether flake validation ran
 #   VALIDATE_SKIP_REASON - reason validation was skipped (when VALIDATE_RAN != true)
@@ -38,14 +34,11 @@ SEL_ARM="${SEL_ARM:-false}"
 SEL_DARWIN="${SEL_DARWIN:-false}"
 ASSETS_JSON="${ASSETS_JSON:-[]}"
 RELEASE_URL="${RELEASE_URL:-}"
-RELEASE_TAG="${RELEASE_TAG:-}"
 KEEP_RELEASE="${KEEP_RELEASE:-true}"
 VALIDATE_RAN="${VALIDATE_RAN:-false}"
 VALIDATE_SKIP_REASON="${VALIDATE_SKIP_REASON:-}"
 VERSION="${VERSION:-}"
 REVISION="${REVISION:-}"
-BUILD_RESULT="${BUILD_RESULT:-}"
-PUBLISH_RESULT="${PUBLISH_RESULT:-}"
 
 # --- Helpers ---
 

@@ -360,15 +360,11 @@ jobs:
         env:
           SOURCE_REPO: ${{ needs.resolve-target.outputs.repo }}
           PR_NUMBER: ${{ needs.resolve-target.outputs.pr_number }}
-          PR_URL: ${{ needs.resolve-target.outputs.html_url }}
-          BUILD_RESULT: ${{ needs.build.result }}
-          PUBLISH_RESULT: ${{ needs.publish.result }}
           SEL_X64: ${{ inputs.build_x86_64_linux }}
           SEL_ARM: ${{ inputs.build_aarch64_linux }}
           SEL_DARWIN: ${{ inputs.build_aarch64_darwin }}
           ASSETS_JSON: ${{ needs.publish.outputs.assets_json }}
           RELEASE_URL: ${{ needs.publish.outputs.release_url }}
-          RELEASE_TAG: ${{ needs.publish.outputs.tag }}
           KEEP_RELEASE: ${{ inputs.keep_release }}
           VALIDATE_RAN: ${{ needs.publish.outputs.validate_ran }}
           VALIDATE_SKIP_REASON: ${{ needs.publish.outputs.validate_skip_reason }}
