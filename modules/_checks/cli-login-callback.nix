@@ -1,5 +1,5 @@
 { cli, pkgs }:
-# Regression check for the patches/logseq-cli-auth-bind-ipv4-loopback.patch
+# Regression check for the patches/logseq-cli-auth-bind-loopback-address-families.patch
 # behavior: `logseq-cli login` must serve its OAuth callback on both explicit
 # loopback address families when the host supports them. Upstream binds the
 # resolver's first "localhost" address only, so browser address-family policy

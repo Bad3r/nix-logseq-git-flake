@@ -38,7 +38,7 @@ stdenv.mkDerivation {
   # .github/workflows/build-desktop.yml; keep the two apply sites in sync
   # when adding or removing a CLI-relevant patch. Patching here (not in the
   # source FOD) keeps cliSrcHash and the dependency FODs unchanged.
-  patches = [ ../../../patches/logseq-cli-auth-bind-ipv4-loopback.patch ];
+  patches = [ ../../../patches/logseq-cli-auth-bind-loopback-address-families.patch ];
 
   # keytar (db-worker OS-keychain access) ships no usable prebuilt for this Node
   # ABI, so its native addon is compiled from source with node-gyp (see the
