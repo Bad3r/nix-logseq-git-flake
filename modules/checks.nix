@@ -59,6 +59,11 @@
           inherit pkgs;
           inherit (logseqNightly) cli;
         };
+
+        logseq-cli-graph-query = import ./_checks/cli-graph-query.nix {
+          inherit pkgs;
+          inherit (logseqNightly) cli;
+        };
       };
     };
 }
