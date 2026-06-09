@@ -16,7 +16,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -40,9 +40,6 @@ jobs:
       - name: Check formatting
         run: nix fmt -- --ci
 
-      - name: Run nix flake check
-        run: nix flake check
-
       # nix flake check caches only check markers, not these intermediate FODs.
       # Build them explicitly so Cachix uploads them: aarch64 jobs substitute
       # these architecture-independent paths instead of rebuilding them.
@@ -51,6 +48,33 @@ jobs:
           nix build --accept-flake-config --print-build-logs \
             .#logseq-cli.cliCljDeps \
             .#logseq-cli.cliPnpmDeps
+
+  validate-x86_64-linux:
+    runs-on: ubuntu-24.04
+    needs: validate
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v22
+        with:
+          determinate: false
+          extra-conf: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v17
+        with:
+          name: nix-logseq-git-flake
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Run nix flake check (x86_64-linux)
+        run: nix flake check
 
   validate-aarch64:
     runs-on: ubuntu-24.04-arm
