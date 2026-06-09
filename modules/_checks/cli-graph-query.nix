@@ -27,7 +27,7 @@ pkgs.runCommand "logseq-cli-graph-query-check" { } ''
   query="[:find ?content :where [?b :block/title ?content] [(clojure.string/includes? ?content \"$marker\")]]"
 
   fail() {
-    echo "$1" >&2
+    printf '%s\n' "$1" >&2
     printf '%s\n' "$2" >&2
     exit 1
   }
@@ -38,7 +38,7 @@ pkgs.runCommand "logseq-cli-graph-query-check" { } ''
   [ "$create_status" -eq 0 ] || fail "logseq-cli graph create exited $create_status" "$create_output"
   # server-start-timeout-orphan is upstream's worker-boot failure symptom; treat
   # it as failure even if the exit code is swallowed.
-  if echo "$create_output" | ${pkgs.gnugrep}/bin/grep -qF 'server-start-timeout-orphan'; then
+  if printf '%s\n' "$create_output" | ${pkgs.gnugrep}/bin/grep -qF 'server-start-timeout-orphan'; then
     fail "logseq-cli db-worker failed to start during graph create (server-start-timeout-orphan)" "$create_output"
   fi
 
@@ -48,7 +48,7 @@ pkgs.runCommand "logseq-cli-graph-query-check" { } ''
   pre_status=0
   pre_output=$(${cli}/bin/logseq-cli query -g probe --root-dir "$graph_root" -o json --query "$query" 2>&1) || pre_status=$?
   [ "$pre_status" -eq 0 ] || fail "logseq-cli pre-write control query exited $pre_status" "$pre_output"
-  if ! echo "$pre_output" | ${pkgs.gnugrep}/bin/grep -qF '"result":[]'; then
+  if ! printf '%s\n' "$pre_output" | ${pkgs.gnugrep}/bin/grep -qF '"result":[]'; then
     fail "pre-write control query returned a non-empty result (marker leaked or query does not filter)" "$pre_output"
   fi
 
@@ -63,7 +63,7 @@ pkgs.runCommand "logseq-cli-graph-query-check" { } ''
   restart_status=0
   restart_output=$(${cli}/bin/logseq-cli server restart -g probe --root-dir "$graph_root" 2>&1) || restart_status=$?
   [ "$restart_status" -eq 0 ] || fail "logseq-cli server restart exited $restart_status" "$restart_output"
-  if echo "$restart_output" | ${pkgs.gnugrep}/bin/grep -qF 'server-start-timeout-orphan'; then
+  if printf '%s\n' "$restart_output" | ${pkgs.gnugrep}/bin/grep -qF 'server-start-timeout-orphan'; then
     fail "logseq-cli db-worker failed to restart before read-back (server-start-timeout-orphan)" "$restart_output"
   fi
 
@@ -72,10 +72,10 @@ pkgs.runCommand "logseq-cli-graph-query-check" { } ''
   read_status=0
   read_output=$(${cli}/bin/logseq-cli query -g probe --root-dir "$graph_root" -o json --query "$query" 2>&1) || read_status=$?
   [ "$read_status" -eq 0 ] || fail "logseq-cli read-back query exited $read_status" "$read_output"
-  if ! echo "$read_output" | ${pkgs.gnugrep}/bin/grep -qF '"status":"ok"'; then
+  if ! printf '%s\n' "$read_output" | ${pkgs.gnugrep}/bin/grep -qF '"status":"ok"'; then
     fail "read-back query did not report status ok" "$read_output"
   fi
-  if ! echo "$read_output" | ${pkgs.gnugrep}/bin/grep -qF "$marker"; then
+  if ! printf '%s\n' "$read_output" | ${pkgs.gnugrep}/bin/grep -qF "$marker"; then
     fail "read-back query did not return the marker block; sqlite-wasm round-trip failed" "$read_output"
   fi
 
