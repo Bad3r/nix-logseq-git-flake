@@ -11,10 +11,12 @@
 # other prebuilt addons (lightningcss, rolldown, zvec), which are not on the CLI
 # query path.
 pkgs.runCommand "logseq-cli-graph-query-check" { } ''
-  export HOME=$TMPDIR
-  export XDG_CACHE_HOME=$TMPDIR/cache
+  set -euo pipefail
 
-  graph_root=$TMPDIR/graph
+  export HOME="$TMPDIR"
+  export XDG_CACHE_HOME="$TMPDIR/cache"
+
+  graph_root="$TMPDIR/graph"
   # Unique marker so a hit proves this write round-tripped, not a pre-existing
   # default page or block.
   marker="sqlite-wasm-roundtrip-marker-4711"
@@ -56,7 +58,16 @@ pkgs.runCommand "logseq-cli-graph-query-check" { } ''
   write_output=$(${cli}/bin/logseq-cli upsert block -g probe --root-dir "$graph_root" --target-page ProbePage -c "$marker" 2>&1) || write_status=$?
   [ "$write_status" -eq 0 ] || fail "logseq-cli upsert block exited $write_status" "$write_output"
 
-  # 4. Read it back via the Datascript query: the sqlite-wasm select path. The
+  # 4. Restart the worker so the read-back cannot be satisfied from the same
+  #    in-memory repo server that handled the write.
+  restart_status=0
+  restart_output=$(${cli}/bin/logseq-cli server restart -g probe --root-dir "$graph_root" 2>&1) || restart_status=$?
+  [ "$restart_status" -eq 0 ] || fail "logseq-cli server restart exited $restart_status" "$restart_output"
+  if echo "$restart_output" | ${pkgs.gnugrep}/bin/grep -qF 'server-start-timeout-orphan'; then
+    fail "logseq-cli db-worker failed to restart before read-back (server-start-timeout-orphan)" "$restart_output"
+  fi
+
+  # 5. Read it back via the Datascript query: the sqlite-wasm select path. The
   #    marker round-tripping through the on-disk store is the end-to-end proof.
   read_status=0
   read_output=$(${cli}/bin/logseq-cli query -g probe --root-dir "$graph_root" -o json --query "$query" 2>&1) || read_status=$?
@@ -68,5 +79,5 @@ pkgs.runCommand "logseq-cli-graph-query-check" { } ''
     fail "read-back query did not return the marker block; sqlite-wasm round-trip failed" "$read_output"
   fi
 
-  touch $out
+  touch "$out"
 ''
