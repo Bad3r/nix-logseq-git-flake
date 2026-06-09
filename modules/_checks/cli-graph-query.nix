@@ -51,6 +51,9 @@ pkgs.runCommand "logseq-cli-graph-query-check" { } ''
   if ! printf '%s\n' "$pre_output" | ${pkgs.gnugrep}/bin/grep -qF '"result":[]'; then
     fail "pre-write control query returned a non-empty result (marker leaked or query does not filter)" "$pre_output"
   fi
+  if printf '%s\n' "$pre_output" | ${pkgs.gnugrep}/bin/grep -qF "$marker"; then
+    fail "marker appeared in pre-write output; read-back output cannot distinguish CLI argument echoing from a stored row" "$pre_output"
+  fi
 
   # 3. Write a real block through the worker: the sqlite-wasm insert path.
   #    --target-page creates the page on demand, so no separate upsert page step.
