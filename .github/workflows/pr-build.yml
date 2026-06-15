@@ -268,12 +268,19 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: nix flake check --accept-flake-config
 
-      - name: Seed CLI fixed-output derivations to Cachix
+      # update-nightly.sh (above) already realized these FODs, so a plain
+      # `nix build` rebuilds nothing and the Cachix post-build-hook never
+      # uploads them. Push the resolved paths explicitly. Gated on
+      # push_to_cachix, so CACHIX_AUTH_TOKEN is present.
+      - name: Push CLI fixed-output derivations to Cachix
         if: ${{ steps.gate.outputs.run == 'true' && inputs.push_to_cachix }}
         run: |
-          nix build --accept-flake-config --print-build-logs \
+          set -euo pipefail
+          nix build --accept-flake-config --print-build-logs --no-link \
+            --print-out-paths \
             .#logseq-cli.cliCljDeps \
-            .#logseq-cli.cliPnpmDeps
+            .#logseq-cli.cliPnpmDeps \
+            | cachix push nix-logseq-git-flake
 
       - name: Capture regenerated manifest
         if: steps.gate.outputs.run == 'true'

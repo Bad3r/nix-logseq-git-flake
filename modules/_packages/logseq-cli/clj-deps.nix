@@ -7,7 +7,6 @@
   lib,
   src,
   stdenv,
-  version,
 }:
 # Fixed-output derivation that populates a Maven local repository (`m2/`) and
 # Clojure git-deps checkouts (`gitlibs/libs/`) for the `:cljs` alias in
@@ -17,8 +16,14 @@
 # cljc-fsrs, cljs-http-missionary, logseq-schema), so the fetch must happen in
 # an FOD with network access.
 stdenv.mkDerivation {
-  pname = "logseq-cli-clj-deps";
-  inherit version src;
+  # Unversioned name on purpose: this FOD's store path must stay stable across
+  # nightlies so a single Cachix push stays valid until the content
+  # (cliCljDepsHash) actually changes. A per-nightly version churns the path
+  # daily, re-uploading an identical Maven + gitlibs tree and leaving consumers
+  # pinned to an older commit on a cache miss. Mirrors fetchPnpmDeps, which
+  # names cliPnpmDeps `logseq-cli-pnpm-deps` without a version.
+  name = "logseq-cli-clj-deps";
+  inherit src;
 
   nativeBuildInputs = [
     clojure

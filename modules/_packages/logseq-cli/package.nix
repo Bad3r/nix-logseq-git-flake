@@ -49,7 +49,6 @@ let
       lib
       src
       stdenv
-      version
       ;
   };
   cliBuilt = import ./build.nix {
