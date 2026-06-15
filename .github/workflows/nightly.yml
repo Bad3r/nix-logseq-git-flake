@@ -115,14 +115,20 @@ jobs:
       - name: Update nightly manifest and CLI hashes
         run: bash scripts/update-nightly.sh
 
-      # Realize the architecture-independent CLI FODs with their freshly
-      # resolved hashes so Cachix uploads them; aarch64 jobs substitute these
-      # paths instead of rebuilding them.
-      - name: Seed CLI fixed-output derivations to Cachix
+      # update-nightly.sh already realized these architecture-independent CLI
+      # FODs while resolving their hashes, so a plain `nix build` here rebuilds
+      # nothing and the Cachix post-build-hook (which fires only on a fresh
+      # build) never uploads them. Push the resolved paths explicitly so
+      # aarch64 and cross-nixpkgs consumers substitute them instead of
+      # rebuilding the offline Maven + tools.gitlibs tree.
+      - name: Push CLI fixed-output derivations to Cachix
         run: |
-          nix build --accept-flake-config --print-build-logs \
+          set -euo pipefail
+          nix build --accept-flake-config --print-build-logs --no-link \
+            --print-out-paths \
             .#logseq-cli.cliCljDeps \
-            .#logseq-cli.cliPnpmDeps
+            .#logseq-cli.cliPnpmDeps \
+            | cachix push nix-logseq-git-flake
 
       - name: Configure git
         run: |
@@ -182,6 +188,55 @@ jobs:
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           git push "$repo_url" HEAD:main
+
+  cache-cli-aarch64:
+    # publish-release caches the x86_64 logseq-cli via `nix flake check`, but
+    # the aarch64 finals are only ever built by validate.yml, which never runs
+    # on the bot's manifest commit (a GITHUB_TOKEN push triggers no workflows).
+    # Build them here on native runners so aarch64 consumers substitute the CLI
+    # instead of compiling the shadow-cljs release locally. The architecture-
+    # independent FODs are already in Cachix from publish-release, so each leg
+    # only compiles cljs:release plus the wrapper. Best-effort: a failure here
+    # does not undo the already-published release.
+    needs: publish-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: aarch64-linux
+            runner: ubuntu-24.04-arm
+          - system: aarch64-darwin
+            runner: macos-26
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v17
+        with:
+          name: nix-logseq-git-flake
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      # cachix-action's post-build-hook pushes these fresh native builds; the
+      # help check doubles as an aarch64 smoke test (doctor + db-worker spawn).
+      - name: Build and push logseq-cli
+        env:
+          SYSTEM: ${{ matrix.system }}
+        run: |
+          set -euo pipefail
+          nix build --accept-flake-config --print-build-logs \
+            ".#packages.${SYSTEM}.logseq-cli" \
+            ".#checks.${SYSTEM}.logseq-cli-help"
 
   report-failure:
     if: ${{ always() && github.event_name == 'schedule' && (needs.build.result != 'success' || needs['publish-release'].result != 'success') }}
