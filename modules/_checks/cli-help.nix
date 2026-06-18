@@ -25,10 +25,10 @@ pkgs.runCommand "logseq-cli-help-check" { } ''
     exit 1
   fi
 
-  # Probe 2: `doctor` against an empty HOME forces the shadow-cljs release
-  # runtime to load and locate the bundled db-worker-node.js, catching a broken
-  # release build or a missing runtime asset. It is hermetic: no network, no
-  # auth, only local file and root-dir checks.
+  # Probe 2: `doctor` against an empty HOME exercises the OCaml/Melange CLI
+  # runtime and makes it locate the bundled shadow-cljs db-worker-node.js,
+  # catching a broken release build or a missing runtime asset. It is hermetic:
+  # no network, no auth, only local file and root-dir checks.
   doctor_status=0
   doctor_output=$(${cli}/bin/logseq-cli doctor 2>&1) || doctor_status=$?
   if [ "$doctor_status" -ne 0 ]; then
@@ -36,8 +36,12 @@ pkgs.runCommand "logseq-cli-help-check" { } ''
     echo "$doctor_output" >&2
     exit 1
   fi
-  if ! echo "$doctor_output" | ${pkgs.gnugrep}/bin/grep -qF 'Doctor: ok'; then
-    echo "logseq-cli doctor output missing expected 'Doctor: ok' substring:" >&2
+  # doctor prints a status table (one row per check), not a summary line; on
+  # success every row is `ok` and the command exits 0 (gated above). Require the
+  # db-worker-script check row so a degenerate banner that exits 0 without
+  # running the real checks is not rubber-stamped.
+  if ! echo "$doctor_output" | ${pkgs.gnugrep}/bin/grep -qF 'db-worker-script'; then
+    echo "logseq-cli doctor output missing expected 'db-worker-script' check row:" >&2
     echo "$doctor_output" >&2
     exit 1
   fi
