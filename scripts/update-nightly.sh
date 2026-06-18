@@ -43,12 +43,10 @@ echo "  cliSrcHash=$CLI_SRC_HASH"
 echo "::endgroup::"
 
 # ── Phase 3: Resolve CLI version ─────────────────────────────────────
-# Upstream removed `deps/cli` (the nbb sub-package) and now builds the CLI as a
-# shadow-cljs release target in `src/main/logseq/cli`. There is no standalone
-# CLI package.json to read a version from: `scripts/prepare-cli-package.mjs`
-# stamps the prepared package with the root project version, which the nightly
-# build sets to LOGSEQ_VERSION. Mirror that here instead of fetching a path that
-# no longer exists.
+# Upstream rewrote the CLI as an OCaml/Melange project under `cli/` (no
+# standalone JS package.json to read a version from). `scripts/prepare-cli-package.mjs`
+# stamps the prepared package with CLI_PACKAGE_VERSION, which the nightly build
+# sets to LOGSEQ_VERSION. Mirror that here.
 echo "::group::Phase 3: Resolve CLI version"
 CLI_VERSION="$LOGSEQ_VERSION"
 echo "  cliVersion=$CLI_VERSION"
@@ -70,6 +68,7 @@ jq -n \
   --arg logseqVersion "$LOGSEQ_VERSION" \
   --arg cliSrcHash "$CLI_SRC_HASH" \
   --arg cliPnpmDepsHash "$PLACEHOLDER" \
+  --arg cliBundlePnpmDepsHash "$PLACEHOLDER" \
   --arg cliCljDepsHash "$PLACEHOLDER" \
   --arg cliVersion "$CLI_VERSION" \
   '{
@@ -84,10 +83,11 @@ jq -n \
     logseqVersion: $logseqVersion,
     cliSrcHash: $cliSrcHash,
     cliPnpmDepsHash: $cliPnpmDepsHash,
+    cliBundlePnpmDepsHash: $cliBundlePnpmDepsHash,
     cliCljDepsHash: $cliCljDepsHash,
     cliVersion: $cliVersion
   }' >"$MANIFEST"
-echo "  Wrote $MANIFEST with placeholder cliPnpmDepsHash, cliCljDepsHash"
+echo "  Wrote $MANIFEST with placeholder cliPnpmDepsHash, cliBundlePnpmDepsHash, cliCljDepsHash"
 echo "::endgroup::"
 
 # Helper: build a single FOD with a placeholder hash, parse the real
@@ -126,10 +126,20 @@ jq --arg hash "$PNPM_HASH" '.cliPnpmDepsHash = $hash' "$MANIFEST" >"${MANIFEST}.
 mv "${MANIFEST}.tmp" "$MANIFEST"
 echo "::endgroup::"
 
-# ── Phase 6: Resolve cliCljDepsHash ─────────────────────────────────
-# cliCljDeps (Maven + git-deps for the shadow-cljs release) is independent of
-# cliPnpmDeps, so order between the two FODs does not matter.
-echo "::group::Phase 6: Resolve cliCljDepsHash"
+# ── Phase 6: Resolve cliBundlePnpmDepsHash ──────────────────────────
+# cli/pnpm-lock.yaml (vite + transit-js) is a separate workspace from the root
+# lock; the OCaml CLI's `dune build @bundle` runs cli/node_modules/.bin/vite.
+echo "::group::Phase 6: Resolve cliBundlePnpmDepsHash"
+BUNDLE_PNPM_HASH=$(extract_hash_from_build_failure cliBundlePnpmDepsHash logseq-cli.cliBundlePnpmDeps)
+echo "  cliBundlePnpmDepsHash=$BUNDLE_PNPM_HASH"
+jq --arg hash "$BUNDLE_PNPM_HASH" '.cliBundlePnpmDepsHash = $hash' "$MANIFEST" >"${MANIFEST}.tmp"
+mv "${MANIFEST}.tmp" "$MANIFEST"
+echo "::endgroup::"
+
+# ── Phase 7: Resolve cliCljDepsHash ─────────────────────────────────
+# cliCljDeps (Maven + git-deps for the db-worker shadow-cljs release) is
+# independent of the pnpm FODs, so order between them does not matter.
+echo "::group::Phase 7: Resolve cliCljDepsHash"
 CLJ_DEPS_HASH=$(extract_hash_from_build_failure cliCljDepsHash logseq-cli.cliCljDeps)
 echo "  cliCljDepsHash=$CLJ_DEPS_HASH"
 jq --arg hash "$CLJ_DEPS_HASH" '.cliCljDepsHash = $hash' "$MANIFEST" >"${MANIFEST}.tmp"
@@ -147,5 +157,6 @@ echo "  assetSha256(arm):           $ASSET_SHA256_AARCH64"
 echo "  assetSha256(darwin-arm64):  $ASSET_SHA256_AARCH64_DARWIN"
 echo "  cliSrcHash:                 $CLI_SRC_HASH"
 echo "  cliPnpmDepsHash:            $PNPM_HASH"
+echo "  cliBundlePnpmDepsHash:      $BUNDLE_PNPM_HASH"
 echo "  cliCljDepsHash:             $CLJ_DEPS_HASH"
 echo "  cliVersion:                 $CLI_VERSION"

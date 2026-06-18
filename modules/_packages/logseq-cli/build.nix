@@ -1,6 +1,7 @@
 {
   cctools,
   clang_20,
+  cliBundlePnpmDeps,
   cliCljDeps,
   cliPnpmDeps,
   clojure,
@@ -11,23 +12,30 @@
   libsecret,
   logseqNodejs,
   logseqRev,
+  ocamlBuildInputs,
   patchelf,
   pkg-config,
   pnpm_10,
   pnpmConfigHook,
   python3,
+  sqlite,
   src,
   stdenv,
   version,
   xcbuild,
+  zstd,
 }:
 # Build the Logseq CLI from source following upstream's release recipe
-# (.github/workflows/deps-cli.yml -> "Build logseq CLI"):
-#   clojure -M:cljs release logseq-cli        -> static/logseq-cli.js
+# (.github/workflows/deps-cli.yml + build-desktop-release.yml -> CLI steps):
+#   opam exec -- pnpm cli:release             -> static/logseq-cli.js (OCaml/Melange)
 #   pnpm db-worker-node:release:bundle        -> dist/db-worker-node.js (+assets)
 #   node scripts/prepare-cli-package.mjs      -> dist/cli-package/
-# The CLI is a shadow-cljs :node-script target; `dist/logseq.js` is a committed
-# launcher shim that requires `../static/logseq-cli.js`.
+# Since logseq/logseq dbd220c95d
+# (https://github.com/logseq/logseq/commit/dbd220c95d) the CLI front-end is OCaml
+# compiled via Melange and bundled with Vite (`dune build @bundle`), not a
+# shadow-cljs target; the db-worker-node sidecar it spawns at runtime is still a
+# shadow-cljs :node-script release. `dist/logseq.js` is a committed launcher shim
+# that requires `../static/logseq-cli.js`.
 stdenv.mkDerivation {
   pname = "logseq-cli-built";
   inherit version src;
@@ -57,6 +65,15 @@ stdenv.mkDerivation {
     pkg-config
     stdenv.cc
   ]
+  # pnpmConfigHook propagates zstd onto PATH but not the sqlite3 CLI; the cli/
+  # store extraction in buildPhase needs both.
+  ++ [
+    sqlite
+    zstd
+  ]
+  # OCaml 5.4 + melange* + humanize closure (opam-nix) for `dune build @bundle`;
+  # each carries setup hooks assembling OCAMLPATH so dune resolves the deps.
+  ++ ocamlBuildInputs
   ++ lib.optionals stdenv.hostPlatform.isLinux [
     patchelf
   ]
@@ -140,8 +157,9 @@ stdenv.mkDerivation {
     export GITLIBS="$TMPDIR/gitlibs"
     clj_sdeps="{:mvn/local-repo \"$TMPDIR/m2\"}"
 
-    # The shadow-cljs build-metadata hook reads $LOGSEQ_REVISION before falling
-    # back to `git describe` (impossible here: fetchFromGitHub strips .git).
+    # Both the shadow-cljs build-metadata hook (db-worker) and cli/vite.config.mjs
+    # (CLI bundle defines) read $LOGSEQ_REVISION before falling back to
+    # `git describe` (impossible here: fetchFromGitHub strips .git).
     # Stamp the upstream commit so REVISION changes with the source:
     # logseq.cli.server restarts a running db-worker whose revision differs
     # from the CLI's, and a constant placeholder revision would let a newer
@@ -154,14 +172,49 @@ stdenv.mkDerivation {
     LOGSEQ_BUILD_TIME="$(date -u -d "@''${SOURCE_DATE_EPOCH:-0}" +%Y-%m-%dT%H:%M:%SZ)"
     export LOGSEQ_BUILD_TIME
 
-    # Shadow-cljs release of the CLI entrypoint and the db-worker-node sidecar.
-    clojure -Sdeps "$clj_sdeps" -M:cljs release logseq-cli
-    clojure -Sdeps "$clj_sdeps" -M:cljs release db-worker-node
+    # Populate cli/node_modules offline from the cliBundlePnpmDeps store, which
+    # is a separate pnpm workspace (cli/pnpm-lock.yaml: vite + transit-js) from
+    # the monorepo root install pnpmConfigHook already materialized. This mirrors
+    # nixpkgs pnpm-config-hook.sh (extract store tarball, point store-dir at it,
+    # offline frozen install) for the cli/ directory.
+    cli_store="$(mktemp -d)"
+    tar --zstd -xf "${cliBundlePnpmDeps}/pnpm-store.tar.zst" -C "$cli_store"
+    chmod -R +w "$cli_store"
+    if [ -f "$cli_store/v11/index.db.sql" ]; then
+      sqlite3 "$cli_store/v11/index.db" <"$cli_store/v11/index.db.sql"
+      rm "$cli_store/v11/index.db.sql"
+    fi
+    (
+      cd cli
+      pnpm config set store-dir "$cli_store"
+      pnpm config set package-import-method clone-or-copy
+      pnpm install --offline --ignore-scripts --frozen-lockfile
+    )
+    # The @bundle rule execs cli/node_modules/.bin/vite directly; patch its
+    # shebang so it does not depend on /usr/bin/env node in the sandbox.
+    patchShebangs cli/node_modules
 
-    # Vite-bundle the db-worker-node runtime (scripts/build-db-worker-node-bundle.mjs).
+    # Compile the OCaml CLI to JS via Melange and bundle with Vite
+    # (`pnpm --dir cli bundle` == `dune build @bundle`, cli/dist/dune), then stage
+    # the result to static/logseq-cli.js. The opam closure (dune, melange,
+    # melange-*, humanize) is on PATH/OCAMLPATH via ocamlBuildInputs;
+    # LOGSEQ_REVISION/LOGSEQ_BUILD_TIME (exported above) feed vite.config.mjs's
+    # build defines.
+    (
+      cd cli
+      dune build @bundle
+    )
+    node ./scripts/stage-cli-runtime.mjs
+
+    # db-worker-node stays a shadow-cljs :node-script release (the OCaml CLI
+    # spawns it at runtime), then vite-bundles via build-db-worker-node-bundle.mjs.
+    clojure -Sdeps "$clj_sdeps" -M:cljs release db-worker-node
     node ./scripts/build-db-worker-node-bundle.mjs
 
-    # Assemble the publishable package layout under dist/cli-package/.
+    # Assemble the publishable package layout under dist/cli-package/. Upstream's
+    # prepare-cli-package.mjs reads the OCaml bundle (cli/_build/default/dist/
+    # logseq-cli.js + static/logseq-cli.js) plus the bundled db-worker and writes
+    # the dist/logseq.js bin shim + runtime package.json.
     export CLI_PACKAGE_VERSION=${lib.escapeShellArg version}
     node ./scripts/prepare-cli-package.mjs
 
@@ -230,6 +283,14 @@ stdenv.mkDerivation {
     fi
 
     cp -a dist/cli-package "$out/lib/logseq-cli"
+
+    # wrapper.nix pins $LOGSEQ_DB_WORKER_NODE_SCRIPT to this path. Fail loudly if
+    # upstream's prepare-cli-package.mjs relocates the bundled worker, rather than
+    # shipping a CLI whose doctor and db commands cannot locate it.
+    if [ ! -f "$out/lib/logseq-cli/static/js/db-worker-node.js" ]; then
+      echo "bundled db-worker-node.js missing at static/js/db-worker-node.js; update wrapper.nix" >&2
+      exit 1
+    fi
 
     runHook postInstall
   '';

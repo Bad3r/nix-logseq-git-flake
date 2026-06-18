@@ -8,11 +8,12 @@
 fetchPnpmDeps {
   pname = "logseq-cli";
   inherit version src;
-  # Upstream deleted `deps/cli` and migrated the CLI from an nbb sub-package to a
-  # shadow-cljs release target in `src/main/logseq/cli`. The build now runs from
-  # the repo root: `pnpm db-worker-node:release:bundle` needs vite + terser, and
-  # the prepared CLI package needs better-sqlite3, keytar, ws, mldoc, etc., all
-  # pinned by the root `pnpm-lock.yaml`.
+  # The CLI front-end moved to OCaml/Melange under `cli/` (its own pnpm
+  # workspace, cli-pnpm-deps.nix). This root-level FOD still feeds the
+  # db-worker-node sidecar and the prepared CLI runtime closure:
+  # `pnpm db-worker-node:release:bundle` needs vite + terser, and the prepared
+  # CLI package needs better-sqlite3, keytar, ws, mldoc, etc., all pinned by the
+  # root `pnpm-lock.yaml`.
   sourceRoot = src.name;
   pnpm = pnpm_10;
   fetcherVersion = 3;

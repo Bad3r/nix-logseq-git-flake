@@ -18,6 +18,7 @@ let
     "logseqVersion"
     "cliSrcHash"
     "cliPnpmDepsHash"
+    "cliBundlePnpmDepsHash"
     "cliCljDepsHash"
     "cliVersion"
   ];
@@ -61,6 +62,7 @@ throwIf (missing != [ ]) "Manifest missing required keys: ${concatStringsSep ", 
       foldl' validateAsset (foldl' validateHash parsed [
         "cliSrcHash"
         "cliPnpmDepsHash"
+        "cliBundlePnpmDepsHash"
         "cliCljDepsHash"
       ]) assetSystems
     )
