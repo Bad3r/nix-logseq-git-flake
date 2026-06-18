@@ -51,6 +51,7 @@ env:
   PNPM_VERSION: "10.33.0"
   JAVA_VERSION: "21"
   CLOJURE_VERSION: "1.12.4.1618"
+  OCAML_VERSION: "5.4.0"
 
 jobs:
   resolve-revision:
@@ -227,6 +228,25 @@ jobs:
         with:
           cli: ${{ env.CLOJURE_VERSION }}
 
+      # The CLI front-end is OCaml compiled via Melange since logseq/logseq
+      # dbd220c95d (https://github.com/logseq/logseq/commit/dbd220c95d);
+      # `pnpm cli:release` runs `dune build @bundle` and needs the opam dependency
+      # closure plus cli/'s own pnpm workspace (vite + transit-js). Mirrors
+      # upstream build-desktop-release.yml dcfdfbf78e
+      # (https://github.com/logseq/logseq/commit/dcfdfbf78e).
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: ${{ env.OCAML_VERSION }}
+
+      - name: Fetch OCaml deps
+        working-directory: logseq-src/cli
+        run: opam install . --deps-only --with-test --yes
+
+      - name: Fetch CLI pnpm deps
+        working-directory: logseq-src
+        run: pnpm --dir cli install --frozen-lockfile
+
       - name: Setup Python
         if: matrix.os == 'darwin'
         uses: actions/setup-python@v6
@@ -291,6 +311,7 @@ jobs:
           pnpm gulp:build
           pnpm cljs:release-electron
           pnpm db-worker-node:bundle
+          opam exec -- pnpm cli:release
           pnpm webpack-app-build
           pnpm desktop:prepare-runtime-js
 
@@ -305,6 +326,7 @@ jobs:
         run: |
           test -f ./static/js/db-worker-node.js
           test -f ./static/js/logseq-cli.js
+          test -f ./static/.agents/skills/logseq-cli/SKILL.md
 
       - name: Update APP Version
         env:
