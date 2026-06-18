@@ -3,7 +3,7 @@
 Nix flake for Logseq nightly packages.
 
 It packages the Logseq Desktop nightly artifacts built by this repository's
-workflow and builds the Logseq CLI from upstream's shadow-cljs source. The
+workflow and builds the Logseq CLI from upstream's OCaml/Melange source. The
 current manifest is [data/logseq-nightly.json](data/logseq-nightly.json).
 
 Supported systems:
@@ -82,8 +82,8 @@ logseq-cli doctor
 logseq-cli example <command>
 ```
 
-`doctor` is a smoke check for the shadow-cljs CLI runtime and bundled
-`db-worker-node.js`. The db-worker requires `keytar`, whose native binding is
+`doctor` is a smoke check for the OCaml/Melange CLI runtime and the bundled
+shadow-cljs `db-worker-node.js`. The db-worker requires `keytar`, whose native binding is
 built from source with node-gyp (and `libsecret` on Linux); the
 `logseq-cli-help` check boots the worker so a missing binding fails the build.
 
@@ -103,7 +103,7 @@ Global options include `-g/--graph`, `-o/--output`, `--root-dir`, `--config`,
 
 - per-system desktop artifact URLs and SRI hashes
 - upstream Logseq revision and version
-- CLI source, pnpm dependency, and Clojure dependency hashes
+- CLI source, root pnpm, `cli/` bundle pnpm, and Clojure dependency hashes
 
 `scripts/update-nightly.sh` rewrites the manifest during the nightly release
 flow. Manifest schema changes must update both that producer and
@@ -119,6 +119,11 @@ nix build .#checks.x86_64-linux.logseq-cli-help
 nix flake check --accept-flake-config --no-build --offline
 nix fmt
 ```
+
+Note: `logseq-cli` resolves its OCaml/Melange closure through opam-nix
+import-from-derivation (IFD), so the `--no-build`/`--offline` check above still
+realizes those intermediate opam derivations during evaluation; they must
+already be built or substitutable.
 
 The Darwin desktop package is validated by the `validate-aarch64-darwin`
 workflow job, which builds the package on macOS, verifies the app signature, and

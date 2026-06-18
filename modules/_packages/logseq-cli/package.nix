@@ -2,6 +2,7 @@
   cacert,
   cctools,
   clang_20,
+  cliBundlePnpmDepsHash,
   cliCljDepsHash,
   cliPnpmDepsHash,
   cliSrcHash,
@@ -16,14 +17,19 @@
   libsecret,
   logseqNodejs,
   logseqRev,
+  opamNix,
   patchelf,
   pkg-config,
+  pkgs,
   pnpm_10,
   pnpmConfigHook,
   python3,
+  sqlite,
   stdenv,
+  system,
   writeShellScript,
   xcbuild,
+  zstd,
 }:
 let
   version = cliVersion;
@@ -33,6 +39,16 @@ let
   cliPnpmDeps = import ./pnpm-deps.nix {
     inherit
       cliPnpmDepsHash
+      fetchPnpmDeps
+      pnpm_10
+      src
+      version
+      ;
+  };
+  # Vite + transit-js for `dune build @bundle`, from cli/pnpm-lock.yaml.
+  cliBundlePnpmDeps = import ./cli-pnpm-deps.nix {
+    inherit
+      cliBundlePnpmDepsHash
       fetchPnpmDeps
       pnpm_10
       src
@@ -51,10 +67,20 @@ let
       stdenv
       ;
   };
+  # OCaml 5.4.0 + melange* + humanize closure for the Melange CLI compile.
+  opamDeps = import ./opam-deps.nix {
+    inherit
+      opamNix
+      pkgs
+      src
+      system
+      ;
+  };
   cliBuilt = import ./build.nix {
     inherit
       cctools
       clang_20
+      cliBundlePnpmDeps
       cliCljDeps
       cliPnpmDeps
       clojure
@@ -70,11 +96,14 @@ let
       pnpm_10
       pnpmConfigHook
       python3
+      sqlite
       src
       stdenv
       version
       xcbuild
+      zstd
       ;
+    inherit (opamDeps) ocamlBuildInputs;
   };
   wrapper = import ./wrapper.nix {
     inherit
@@ -96,15 +125,15 @@ stdenv.mkDerivation {
     chmod +x $out/bin/logseq-cli
   '';
 
-  # Expose the FODs so `scripts/update-nightly.sh` can target them
-  # individually (`nix build .#logseq-cli.cliPnpmDeps` and `.cliCljDeps`).
+  # Expose the FODs so `scripts/update-nightly.sh` can target them individually
+  # (`nix build .#logseq-cli.cliPnpmDeps`, `.cliBundlePnpmDeps`, `.cliCljDeps`).
   passthru = {
-    inherit cliPnpmDeps cliCljDeps;
+    inherit cliPnpmDeps cliBundlePnpmDeps cliCljDeps;
   };
 
   meta = {
     description = "Logseq CLI for DB graphs - graph management and queries";
-    homepage = "https://github.com/logseq/logseq/tree/master/src/main/logseq/cli";
+    homepage = "https://github.com/logseq/logseq/tree/master/cli";
     license = lib.licenses.agpl3Plus;
     mainProgram = "logseq-cli";
     platforms = lib.platforms.linux ++ [ "aarch64-darwin" ];

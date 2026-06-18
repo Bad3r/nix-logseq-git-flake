@@ -10,7 +10,7 @@
 }:
 # Fixed-output derivation that populates a Maven local repository (`m2/`) and
 # Clojure git-deps checkouts (`gitlibs/libs/`) for the `:cljs` alias in
-# upstream `deps.edn`. The shadow-cljs release of the `logseq-cli` target needs
+# upstream `deps.edn`. The shadow-cljs release of the `db-worker-node` target needs
 # these on the classpath, but resolving them touches Maven Central, Clojars,
 # and several `:git/url` forks (datascript, malli, glogi, hsx, cljs-time,
 # cljc-fsrs, cljs-http-missionary, logseq-schema), so the fetch must happen in

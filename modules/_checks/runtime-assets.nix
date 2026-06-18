@@ -1,3 +1,7 @@
+# Verifies the desktop ASAR ships the runtime JS the app loads at startup. Derives
+# the required entries from upstream scripts/prepare-desktop-runtime-js.mjs: every
+# non-optional copyPairs destination under static/js/ must appear in the ASAR as
+# /js/<name>.
 {
   logseqSrc,
   payload,
@@ -41,12 +45,16 @@ pkgs.runCommand "logseq-runtime-assets-check"
     source = prepare_script.read_text()
 
     js_string = r"""(?:"(?P<dq>(?:\\.|[^"\\])*)"|'(?P<sq>(?:\\.|[^'\\])*)'|`(?P<bq>(?:\\.|[^`\\])*)`)"""
-    copy_to_static_js = re.compile(
+    const_string = re.compile(
+        r"const\s+(?P<name>[A-Za-z_$][\w$]*)\s*=\s*" + js_string + r"\s*;",
+        re.DOTALL,
+    )
+    to_static_js_literal = re.compile(
         r"to\s*:\s*path\.join\(\s*staticJsDir\s*,\s*" + js_string + r"\s*\)",
         re.DOTALL,
     )
-    remove_from_static_root = re.compile(
-        r"fs\.rm\(\s*path\.join\(\s*staticDir\s*,\s*" + js_string + r"\s*\)",
+    to_repo_root_spread = re.compile(
+        r"to\s*:\s*path\.join\(\s*repoRoot\s*,\s*\.\.\.\s*(?P<ident>[A-Za-z_$][\w$]*)\s*\.split\(",
         re.DOTALL,
     )
     optional_true = re.compile(r"\boptional\s*:\s*true\b")
@@ -67,24 +75,40 @@ pkgs.runCommand "logseq-runtime-assets-check"
                 result.append(item)
         return result
 
-    required_runtime_names = []
-    for match in copy_to_static_js.finditer(source):
+    def is_optional(match):
         object_start = source.rfind("{", 0, match.start())
         object_end = source.find("}", match.end())
         object_source = source[object_start:object_end] if object_start != -1 and object_end != -1 else ""
-        if not optional_true.search(object_source):
-            required_runtime_names.append(js_string_value(match))
+        return bool(optional_true.search(object_source))
 
-    forbidden_root_entries = [
-        "/" + js_string_value(match).lstrip("/")
-        for match in remove_from_static_root.finditer(source)
-    ]
+    string_consts = {}
+    for match in const_string.finditer(source):
+        string_consts[match.group("name")] = js_string_value(match)
+
+    # copyPairs destinations reach static/js/ either as path.join(staticJsDir,
+    # "<name>") or path.join(repoRoot, ...<const>.split("/")) where <const> is a
+    # "static/js/..." path string.
+    required_runtime_names = []
+    for match in to_static_js_literal.finditer(source):
+        if not is_optional(match):
+            required_runtime_names.append(js_string_value(match))
+    for match in to_repo_root_spread.finditer(source):
+        if is_optional(match):
+            continue
+        ident = match.group("ident")
+        dest = string_consts.get(ident)
+        if dest is None:
+            raise SystemExit(
+                "prepare-desktop-runtime-js.mjs: could not resolve string const "
+                f"{ident!r} referenced by a non-optional copyPairs spread; "
+                "update the parser in runtime-assets.nix"
+            )
+        parts = dest.split("/")
+        if parts[:2] == ["static", "js"] and parts[-1]:
+            required_runtime_names.append(parts[-1])
 
     Path("required-runtime-names").write_text(
         "".join(f"{name}\n" for name in unique(required_runtime_names))
-    )
-    Path("forbidden-root-entries").write_text(
-        "".join(f"{path}\n" for path in unique(forbidden_root_entries))
     )
     PY
 
@@ -92,41 +116,18 @@ pkgs.runCommand "logseq-runtime-assets-check"
       echo "could not derive required runtime entries from $prepare_script" >&2
       exit 1
     fi
-    if [ ! -s forbidden-root-entries ]; then
-      echo "could not derive removed root runtime entries from $prepare_script" >&2
-      exit 1
-    fi
 
     status=0
     while IFS= read -r name; do
-      static_entry="/js/$name"
-      root_entry="/$name"
-      if ! grep -qxF "$static_entry" entries && ! grep -qxF "$root_entry" entries; then
-        echo "missing required ASAR runtime entry derived from prepare-desktop-runtime-js.mjs: $static_entry or $root_entry" >&2
+      if ! grep -qxF "/js/$name" entries; then
+        echo "missing required ASAR runtime entry: /js/$name" >&2
         status=1
       fi
     done < required-runtime-names
 
-    while IFS= read -r path; do
-      name="''${path#/}"
-      if grep -qxF "/js/$name" entries && grep -qxF "$path" entries; then
-        echo "stale root-level ASAR runtime entry duplicates staged static/js entry: $path" >&2
-        status=1
-      fi
-    done < forbidden-root-entries
-
     if [ "$status" -ne 0 ]; then
-      echo "expected runtime entries in current static/js or legacy root layout:" >&2
-      while IFS= read -r name; do
-        echo "  /js/$name or /$name" >&2
-      done < required-runtime-names
-      echo "root-level runtime entries checked for duplicate cleanup:" >&2
-      sed 's/^/  /' forbidden-root-entries >&2
-      echo "matching runtime entries found in ASAR:" >&2
-      while IFS= read -r name; do
-        grep -xF "/$name" entries >&2 || true
-        grep -xF "/js/$name" entries >&2 || true
-      done < required-runtime-names
+      echo "runtime entries required from prepare-desktop-runtime-js.mjs:" >&2
+      sed 's:^:  /js/:' required-runtime-names >&2
       exit 1
     fi
 

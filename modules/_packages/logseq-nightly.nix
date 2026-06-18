@@ -1,7 +1,9 @@
 {
   lib,
   manifestPath,
+  opamNix,
   pkgs,
+  system,
 }:
 let
   manifest = import ../../lib/loadManifest.nix {
@@ -20,13 +22,19 @@ let
   };
   cli = pkgs.callPackage ./logseq-cli/package.nix {
     inherit (manifest)
+      cliBundlePnpmDepsHash
       cliCljDepsHash
       cliPnpmDepsHash
       cliSrcHash
       cliVersion
       logseqRev
       ;
-    inherit logseqNodejs;
+    inherit
+      logseqNodejs
+      opamNix
+      pkgs
+      system
+      ;
   };
 in
 desktopAssembly
