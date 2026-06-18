@@ -95,9 +95,14 @@ pkgs.runCommand "logseq-runtime-assets-check"
     for match in to_repo_root_spread.finditer(source):
         if is_optional(match):
             continue
-        dest = string_consts.get(match.group("ident"))
+        ident = match.group("ident")
+        dest = string_consts.get(ident)
         if dest is None:
-            continue
+            raise SystemExit(
+                "prepare-desktop-runtime-js.mjs: could not resolve string const "
+                f"{ident!r} referenced by a non-optional copyPairs spread; "
+                "update the parser in runtime-assets.nix"
+            )
         parts = dest.split("/")
         if parts[:2] == ["static", "js"] and parts[-1]:
             required_runtime_names.append(parts[-1])
