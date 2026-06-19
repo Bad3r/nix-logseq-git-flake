@@ -141,6 +141,7 @@ jobs:
         with:
           name: nix-logseq-git-flake
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          installCommand: nix profile install --inputs-from "$GITHUB_WORKSPACE" nixpkgs#cachix
           skipPush: true
 
       # Tag, notes, and assets come from the RELEASE_* env handoff exported
