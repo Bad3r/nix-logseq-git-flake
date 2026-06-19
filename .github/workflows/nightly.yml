@@ -107,11 +107,44 @@ jobs:
           set -euo pipefail
           rev_short="${BUILD_REVISION:0:7}"
           release_assets=("$X64_TARBALL" "$ARM64_TARBALL" "$DARWIN_ARM64_TARBALL")
-          gh release delete "$RELEASE_TAG" -y || true
-          gh release create "$RELEASE_TAG" "${release_assets[@]}" \
-            --title "logseq-nightly-${rev_short}" \
-            --notes-file "$RELEASE_NOTES" \
-            --target main
+          publish_release() {
+            gh release delete "$RELEASE_TAG" -y || true
+            gh release create "$RELEASE_TAG" "${release_assets[@]}" \
+              --title "logseq-nightly-${rev_short}" \
+              --notes-file "$RELEASE_NOTES" \
+              --target main
+          }
+          refresh_release_tag() {
+            local tag="$1"
+            local x64_url arm64_url darwin_arm64_url
+            x64_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/$(basename "$X64_TARBALL")"
+            arm64_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/$(basename "$ARM64_TARBALL")"
+            darwin_arm64_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/$(basename "$DARWIN_ARM64_TARBALL")"
+            NIGHTLY_TAG="$tag"
+            RELEASE_TAG="$tag"
+            ASSET_URL_X86_64="$x64_url"
+            ASSET_URL_AARCH64="$arm64_url"
+            ASSET_URL_AARCH64_DARWIN="$darwin_arm64_url"
+            {
+              echo "NIGHTLY_TAG=${NIGHTLY_TAG}"
+              echo "RELEASE_TAG=${RELEASE_TAG}"
+              echo "ASSET_URL_X86_64=${ASSET_URL_X86_64}"
+              echo "ASSET_URL_AARCH64=${ASSET_URL_AARCH64}"
+              echo "ASSET_URL_AARCH64_DARWIN=${ASSET_URL_AARCH64_DARWIN}"
+            } >>"$GITHUB_ENV"
+          }
+          if output="$(publish_release 2>&1)"; then
+            printf '%s\n' "$output"
+          else
+            printf '%s\n' "$output" >&2
+            if ! grep -Fq "tag_name was used by an immutable release" <<<"$output"; then
+              exit 1
+            fi
+            fallback_tag="${RELEASE_TAG}-${GITHUB_RUN_ID}"
+            echo "Release tag ${RELEASE_TAG} is reserved by a deleted immutable release; retrying as ${fallback_tag}" >&2
+            refresh_release_tag "$fallback_tag"
+            publish_release
+          fi
 
       - name: Update nightly manifest and CLI hashes
         run: bash scripts/update-nightly.sh
