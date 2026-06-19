@@ -251,6 +251,33 @@ jobs:
           opam --version
           ocaml -version
 
+      # install-nix-action writes the job GITHUB_TOKEN into /etc/nix/nix.conf as a
+      # github.com access-token. pr-build.yml runs this reusable job on arbitrary
+      # unpatched PR refs, so strip the token before any cloned opam/pnpm script
+      # runs, keeping the "untrusted code receives no secrets" boundary. The trusted
+      # `nix profile install` above already ran with the token present.
+      - name: Strip GitHub token from Nix config
+        run: |
+          set -euo pipefail
+          stripped=0
+          for cfg in /etc/nix/nix.conf "${XDG_CONFIG_HOME:-$HOME/.config}/nix/nix.conf"; do
+            [ -f "$cfg" ] || continue
+            grep -q access-tokens "$cfg" || continue
+            if [ -w "$cfg" ]; then
+              sed -i '/access-tokens/d' "$cfg"
+            else
+              sudo sed -i '/access-tokens/d' "$cfg"
+            fi
+            stripped=$((stripped + 1))
+          done
+          echo "Stripped access-tokens from ${stripped} nix.conf file(s)"
+          for cfg in /etc/nix/nix.conf "${XDG_CONFIG_HOME:-$HOME/.config}/nix/nix.conf"; do
+            if [ -f "$cfg" ] && grep -q access-tokens "$cfg"; then
+              echo "access-tokens still present in ${cfg}" >&2
+              exit 1
+            fi
+          done
+
       - name: Fetch OCaml deps
         working-directory: logseq-src/cli
         run: opam install . --deps-only --with-test --yes
