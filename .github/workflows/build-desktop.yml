@@ -234,6 +234,29 @@ jobs:
       # closure plus cli/'s own pnpm workspace (vite + transit-js). Mirrors
       # upstream build-desktop-release.yml dcfdfbf78e
       # (https://github.com/logseq/logseq/commit/dcfdfbf78e).
+      # ocaml/setup-ocaml runs Homebrew unconditionally on macOS from
+      # initializeOpam (`brew update` + `brew install darcs mercurial`). This CLI
+      # closure (dune/ocaml/melange*/humanize, with humanize pinned via git+https)
+      # needs neither darcs nor mercurial. The action only skips that phase when
+      # skipPackageManagement() sees RUNNER_ENVIRONMENT=self-hosted, but the runner
+      # re-injects its real github-hosted value and ignores workflow overrides of
+      # RUNNER_* defaults, so the env cannot be steered. setup-ocaml resolves
+      # `brew` via PATH and uses it for nothing else (opam is fetched directly), so
+      # shadow it with a no-op on the macOS leg to keep Homebrew out of the build.
+      - name: Shadow Homebrew with a no-op for setup-ocaml (Darwin)
+        if: matrix.os == 'darwin'
+        run: |
+          set -euo pipefail
+          shim_dir="${RUNNER_TEMP}/brew-shim"
+          mkdir -p "$shim_dir"
+          {
+            printf '%s\n' '#!/usr/bin/env bash'
+            printf '%s\n' 'echo "brew shim: skipping brew $*" >&2'
+            printf '%s\n' 'exit 0'
+          } >"$shim_dir/brew"
+          chmod +x "$shim_dir/brew"
+          printf '%s\n' "$shim_dir" >>"$GITHUB_PATH"
+
       - name: Setup OCaml
         uses: ocaml/setup-ocaml@v3
         with:
