@@ -281,10 +281,14 @@ jobs:
           for cfg in /etc/nix/nix.conf "${XDG_CONFIG_HOME:-$HOME/.config}/nix/nix.conf"; do
             [ -f "$cfg" ] || continue
             grep -q access-tokens "$cfg" || continue
+            # `-i.bak` (suffix attached), not bare `-i`: BSD sed on the macOS leg
+            # reads the next argument as the backup suffix, so bare `-i` swallows
+            # the script and aborts. The attached form works on GNU and BSD; drop
+            # the backup right after.
             if [ -w "$cfg" ]; then
-              sed -i '/access-tokens/d' "$cfg"
+              sed -i.bak '/access-tokens/d' "$cfg" && rm -f "$cfg.bak"
             else
-              sudo sed -i '/access-tokens/d' "$cfg"
+              sudo sed -i.bak '/access-tokens/d' "$cfg" && sudo rm -f "$cfg.bak"
             fi
             stripped=$((stripped + 1))
           done
