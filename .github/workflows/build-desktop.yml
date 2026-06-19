@@ -233,6 +233,18 @@ jobs:
           extra_nix_config: |
             accept-flake-config = true
 
+      # ocaml/setup-ocaml cached ~/.opam keyed on the opam files; reproduce that so
+      # each leg does not recompile the melange*/dune/transit-js closure from
+      # scratch. flake.lock is in the key because the ocaml-system switch tracks the
+      # nixpkgs ocaml, which a flake.lock bump can move.
+      - name: Cache opam state
+        uses: actions/cache@v5
+        with:
+          path: ~/.opam
+          key: ${{ runner.os }}-${{ runner.arch }}-opam-${{ hashFiles('flake.lock', 'logseq-src/cli/*.opam') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-opam-
+
       # The CLI front-end is OCaml compiled via Melange since logseq/logseq
       # dbd220c95d (https://github.com/logseq/logseq/commit/dbd220c95d);
       # `pnpm cli:release` runs `dune build @bundle` and needs the opam dependency
@@ -246,8 +258,14 @@ jobs:
             nixpkgs#opam nixpkgs#ocaml
           printf '%s\n' "$HOME/.nix-profile/bin" >>"$GITHUB_PATH"
           export PATH="$HOME/.nix-profile/bin:$PATH"
-          opam init --bare --disable-sandboxing --yes --no-setup
-          opam switch create default ocaml-system --yes
+          # Reuse the cached opam root when its switch still resolves the nixpkgs
+          # ocaml; rebuild the switch if a restored cache points at a moved store
+          # path, and bootstrap from scratch on a cold cache.
+          if ! opam exec --switch default -- ocaml -version >/dev/null 2>&1; then
+            [ -d "$HOME/.opam/repo" ] || opam init --bare --disable-sandboxing --yes --no-setup
+            opam switch remove default --yes 2>/dev/null || true
+            opam switch create default ocaml-system --yes
+          fi
           opam --version
           ocaml -version
 
