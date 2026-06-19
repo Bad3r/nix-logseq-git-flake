@@ -51,7 +51,6 @@ env:
   PNPM_VERSION: "10.33.0"
   JAVA_VERSION: "21"
   CLOJURE_VERSION: "1.12.4.1618"
-  OCAML_VERSION: "5.4.0"
 
 jobs:
   resolve-revision:
@@ -228,16 +227,78 @@ jobs:
         with:
           cli: ${{ env.CLOJURE_VERSION }}
 
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+
+      # ocaml/setup-ocaml cached ~/.opam keyed on the opam files; reproduce that so
+      # each leg does not recompile the melange*/dune/transit-js closure from
+      # scratch. flake.lock is in the key because the ocaml-system switch tracks the
+      # nixpkgs ocaml, which a flake.lock bump can move.
+      - name: Cache opam state
+        uses: actions/cache@v5
+        with:
+          path: ~/.opam
+          key: ${{ runner.os }}-${{ runner.arch }}-opam-${{ hashFiles('flake.lock', 'logseq-src/cli/*.opam') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-opam-
+
       # The CLI front-end is OCaml compiled via Melange since logseq/logseq
       # dbd220c95d (https://github.com/logseq/logseq/commit/dbd220c95d);
       # `pnpm cli:release` runs `dune build @bundle` and needs the opam dependency
       # closure plus cli/'s own pnpm workspace (vite + transit-js). Mirrors
       # upstream build-desktop-release.yml dcfdfbf78e
       # (https://github.com/logseq/logseq/commit/dcfdfbf78e).
-      - name: Setup OCaml
-        uses: ocaml/setup-ocaml@v3
-        with:
-          ocaml-compiler: ${{ env.OCAML_VERSION }}
+      - name: Setup OCaml toolchain from Nix
+        run: |
+          set -euo pipefail
+          nix profile install --inputs-from "$GITHUB_WORKSPACE" \
+            nixpkgs#opam nixpkgs#ocaml
+          printf '%s\n' "$HOME/.nix-profile/bin" >>"$GITHUB_PATH"
+          export PATH="$HOME/.nix-profile/bin:$PATH"
+          # Reuse the cached opam root when its switch still resolves the nixpkgs
+          # ocaml; rebuild the switch if a restored cache points at a moved store
+          # path, and bootstrap from scratch on a cold cache.
+          if ! opam exec --switch default -- ocaml -version >/dev/null 2>&1; then
+            [ -d "$HOME/.opam/repo" ] || opam init --bare --disable-sandboxing --yes --no-setup
+            opam switch remove default --yes 2>/dev/null || true
+            opam switch create default ocaml-system --yes
+          fi
+          opam --version
+          ocaml -version
+
+      # install-nix-action writes the job GITHUB_TOKEN into /etc/nix/nix.conf as a
+      # github.com access-token. pr-build.yml runs this reusable job on arbitrary
+      # unpatched PR refs, so strip the token before any cloned opam/pnpm script
+      # runs, keeping the "untrusted code receives no secrets" boundary. The trusted
+      # `nix profile install` above already ran with the token present.
+      - name: Strip GitHub token from Nix config
+        run: |
+          set -euo pipefail
+          stripped=0
+          for cfg in /etc/nix/nix.conf "${XDG_CONFIG_HOME:-$HOME/.config}/nix/nix.conf"; do
+            [ -f "$cfg" ] || continue
+            grep -q access-tokens "$cfg" || continue
+            # `-i.bak` (suffix attached), not bare `-i`: BSD sed on the macOS leg
+            # reads the next argument as the backup suffix, so bare `-i` swallows
+            # the script and aborts. The attached form works on GNU and BSD; drop
+            # the backup right after.
+            if [ -w "$cfg" ]; then
+              sed -i.bak '/access-tokens/d' "$cfg" && rm -f "$cfg.bak"
+            else
+              sudo sed -i.bak '/access-tokens/d' "$cfg" && sudo rm -f "$cfg.bak"
+            fi
+            stripped=$((stripped + 1))
+          done
+          echo "Stripped access-tokens from ${stripped} nix.conf file(s)"
+          for cfg in /etc/nix/nix.conf "${XDG_CONFIG_HOME:-$HOME/.config}/nix/nix.conf"; do
+            if [ -f "$cfg" ] && grep -q access-tokens "$cfg"; then
+              echo "access-tokens still present in ${cfg}" >&2
+              exit 1
+            fi
+          done
 
       - name: Fetch OCaml deps
         working-directory: logseq-src/cli
@@ -389,12 +450,6 @@ jobs:
             echo "electron:make attempt ${attempt} failed; retrying..." >&2
             sleep $((attempt * 20))
           done
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
 
       - name: Create tarball artifact
         working-directory: logseq-src/static
