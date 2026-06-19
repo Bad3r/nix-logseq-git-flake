@@ -145,6 +145,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+
       - name: Clone Logseq source
         env:
           LOGSEQ_REPO: ${{ needs.resolve-revision.outputs.repo }}
@@ -230,18 +236,21 @@ jobs:
 
       # The CLI front-end is OCaml compiled via Melange since logseq/logseq
       # dbd220c95d (https://github.com/logseq/logseq/commit/dbd220c95d);
-      # `pnpm cli:release` runs `dune build @bundle` and needs the opam dependency
-      # closure plus cli/'s own pnpm workspace (vite + transit-js). Mirrors
-      # upstream build-desktop-release.yml dcfdfbf78e
-      # (https://github.com/logseq/logseq/commit/dcfdfbf78e).
-      - name: Setup OCaml
-        uses: ocaml/setup-ocaml@v3
-        with:
-          ocaml-compiler: ${{ env.OCAML_VERSION }}
-
-      - name: Fetch OCaml deps
-        working-directory: logseq-src/cli
-        run: opam install . --deps-only --with-test --yes
+      # `pnpm cli:release` runs `dune build @bundle` and needs the Melange/opam
+      # closure plus cli/'s own pnpm workspace (vite + transit-js). Use the
+      # repo-pinned Nix shell so CI does not depend on a mutable opam switch.
+      - name: Setup OCaml/opam from Nix
+        run: |
+          set -euo pipefail
+          nix develop --accept-flake-config "${GITHUB_WORKSPACE}#logseq-cli-ocaml" --command bash -euo pipefail <<'BASH'
+          actual="$(ocamlc -version)"
+          if [ "$actual" != "$OCAML_VERSION" ]; then
+            echo "expected OCaml ${OCAML_VERSION}, got ${actual}" >&2
+            exit 1
+          fi
+          opam --version
+          dune --version
+          BASH
 
       - name: Fetch CLI pnpm deps
         working-directory: logseq-src
@@ -311,7 +320,7 @@ jobs:
           pnpm gulp:build
           pnpm cljs:release-electron
           pnpm db-worker-node:bundle
-          opam exec -- pnpm cli:release
+          nix develop --accept-flake-config "${GITHUB_WORKSPACE}#logseq-cli-ocaml" --command pnpm cli:release
           pnpm webpack-app-build
           pnpm desktop:prepare-runtime-js
 
@@ -389,12 +398,6 @@ jobs:
             echo "electron:make attempt ${attempt} failed; retrying..." >&2
             sleep $((attempt * 20))
           done
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
 
       - name: Create tarball artifact
         working-directory: logseq-src/static

@@ -129,6 +129,7 @@ stdenv.mkDerivation {
   # (`nix build .#logseq-cli.cliPnpmDeps`, `.cliBundlePnpmDeps`, `.cliCljDeps`).
   passthru = {
     inherit cliPnpmDeps cliBundlePnpmDeps cliCljDeps;
+    inherit (opamDeps) ocamlBuildInputs;
   };
 
   meta = {
