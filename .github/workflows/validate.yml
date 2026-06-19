@@ -30,6 +30,11 @@ jobs:
           extra-conf: |
             experimental-features = nix-command flakes
             accept-flake-config = true
+            # Build a path from source when a substituter rejects it (e.g. a
+            # corrupt cache.nixos.org NAR for a transitive dep such as openapv)
+            # instead of hard-failing. Without this, a bad upstream cache entry
+            # fails the whole job; the rejected NAR is still never trusted.
+            fallback = true
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v17
@@ -66,6 +71,11 @@ jobs:
           extra-conf: |
             experimental-features = nix-command flakes
             accept-flake-config = true
+            # Build a path from source when a substituter rejects it (e.g. a
+            # corrupt cache.nixos.org NAR for a transitive dep such as openapv)
+            # instead of hard-failing. Without this, a bad upstream cache entry
+            # fails the whole job; the rejected NAR is still never trusted.
+            fallback = true
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v17
@@ -93,6 +103,11 @@ jobs:
           extra-conf: |
             experimental-features = nix-command flakes
             accept-flake-config = true
+            # Build a path from source when a substituter rejects it (e.g. a
+            # corrupt cache.nixos.org NAR for a transitive dep such as openapv)
+            # instead of hard-failing. Without this, a bad upstream cache entry
+            # fails the whole job; the rejected NAR is still never trusted.
+            fallback = true
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v17
@@ -141,6 +156,11 @@ jobs:
           extra-conf: |
             experimental-features = nix-command flakes
             accept-flake-config = true
+            # Build a path from source when a substituter rejects it (e.g. a
+            # corrupt cache.nixos.org NAR for a transitive dep such as openapv)
+            # instead of hard-failing. Without this, a bad upstream cache entry
+            # fails the whole job; the rejected NAR is still never trusted.
+            fallback = true
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v17
