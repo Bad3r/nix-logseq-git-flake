@@ -51,7 +51,6 @@ env:
   PNPM_VERSION: "10.33.0"
   JAVA_VERSION: "21"
   CLOJURE_VERSION: "1.12.4.1618"
-  OCAML_VERSION: "5.4.0"
 
 jobs:
   resolve-revision:
@@ -228,16 +227,29 @@ jobs:
         with:
           cli: ${{ env.CLOJURE_VERSION }}
 
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+
       # The CLI front-end is OCaml compiled via Melange since logseq/logseq
       # dbd220c95d (https://github.com/logseq/logseq/commit/dbd220c95d);
       # `pnpm cli:release` runs `dune build @bundle` and needs the opam dependency
       # closure plus cli/'s own pnpm workspace (vite + transit-js). Mirrors
       # upstream build-desktop-release.yml dcfdfbf78e
       # (https://github.com/logseq/logseq/commit/dcfdfbf78e).
-      - name: Setup OCaml
-        uses: ocaml/setup-ocaml@v3
-        with:
-          ocaml-compiler: ${{ env.OCAML_VERSION }}
+      - name: Setup OCaml toolchain from Nix
+        run: |
+          set -euo pipefail
+          nix profile install --inputs-from "$GITHUB_WORKSPACE" \
+            nixpkgs#opam nixpkgs#ocaml
+          printf '%s\n' "$HOME/.nix-profile/bin" >>"$GITHUB_PATH"
+          export PATH="$HOME/.nix-profile/bin:$PATH"
+          opam init --bare --disable-sandboxing --yes --no-setup
+          opam switch create default ocaml-system --yes
+          opam --version
+          ocaml -version
 
       - name: Fetch OCaml deps
         working-directory: logseq-src/cli
@@ -389,12 +401,6 @@ jobs:
             echo "electron:make attempt ${attempt} failed; retrying..." >&2
             sleep $((attempt * 20))
           done
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
 
       - name: Create tarball artifact
         working-directory: logseq-src/static
