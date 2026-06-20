@@ -12,6 +12,7 @@
   libsecret,
   logseqNodejs,
   logseqRev,
+  makeWrapper,
   ocamlBuildInputs,
   patchelf,
   pkg-config,
@@ -37,7 +38,7 @@
 # shadow-cljs :node-script release. `dist/logseq.js` is a committed launcher shim
 # that requires `../static/logseq-cli.js`.
 stdenv.mkDerivation {
-  pname = "logseq-cli-built";
+  pname = "logseq-cli";
   inherit version src;
 
   # Temporary upstream fixes; each patch header documents the bug and its
@@ -64,6 +65,7 @@ stdenv.mkDerivation {
     gnumake
     pkg-config
     stdenv.cc
+    makeWrapper
   ]
   # pnpmConfigHook propagates zstd onto PATH but not the sqlite3 CLI; the cli/
   # store extraction in buildPhase needs both.
@@ -284,17 +286,48 @@ stdenv.mkDerivation {
 
     cp -a dist/cli-package "$out/lib/logseq-cli"
 
-    # wrapper.nix pins $LOGSEQ_DB_WORKER_NODE_SCRIPT to this path. Fail loudly if
-    # upstream's prepare-cli-package.mjs relocates the bundled worker, rather than
-    # shipping a CLI whose doctor and db commands cannot locate it.
+    # The makeWrapper call below pins $LOGSEQ_DB_WORKER_NODE_SCRIPT to this path.
+    # Fail loudly if upstream's prepare-cli-package.mjs relocates the bundled
+    # worker, rather than shipping a CLI whose doctor and db commands cannot
+    # locate it.
     if [ ! -f "$out/lib/logseq-cli/static/js/db-worker-node.js" ]; then
-      echo "bundled db-worker-node.js missing at static/js/db-worker-node.js; update wrapper.nix" >&2
+      echo "bundled db-worker-node.js missing at static/js/db-worker-node.js; update the makeWrapper call in build.nix" >&2
       exit 1
     fi
+
+    # Public CLI entrypoint. Two runtime needs the bundled CLI cannot satisfy
+    # from an arbitrary cwd:
+    # - LOGSEQ_DB_WORKER_NODE_SCRIPT: prepare-cli-package.mjs installs the
+    #   db-worker at static/js/db-worker-node.js, but the CLI's path-relative
+    #   resolver only checks dist/, dist/js/ and $cwd (server_runtime.ml), so it
+    #   is not found. Pin upstream's highest-priority override to the worker's
+    #   absolute path, keeping a caller-provided value if the variable is
+    #   already set (--set-default).
+    # - PATH: the CLI spawns the worker as a bare `node` with shell:false
+    #   (cli_unix.ml command_args strips the leading "env"), resolved against
+    #   PATH, so logseqNodejs must be on it.
+    makeWrapper ${logseqNodejs}/bin/node "$out/bin/logseq-cli" \
+      --add-flags "$out/lib/logseq-cli/dist/logseq.js" \
+      --prefix PATH : ${logseqNodejs}/bin \
+      --set-default LOGSEQ_DB_WORKER_NODE_SCRIPT "$out/lib/logseq-cli/static/js/db-worker-node.js"
 
     runHook postInstall
   '';
 
   dontStrip = true;
   dontPatchELF = true;
+
+  # Expose the FODs so `scripts/update-nightly.sh` can target them individually
+  # (`nix build .#logseq-cli.cliPnpmDeps`, `.cliBundlePnpmDeps`, `.cliCljDeps`).
+  passthru = {
+    inherit cliPnpmDeps cliBundlePnpmDeps cliCljDeps;
+  };
+
+  meta = {
+    description = "Logseq CLI for DB graphs - graph management and queries";
+    homepage = "https://github.com/logseq/logseq/tree/master/cli";
+    license = lib.licenses.agpl3Plus;
+    mainProgram = "logseq-cli";
+    platforms = lib.platforms.linux ++ [ "aarch64-darwin" ];
+  };
 }
