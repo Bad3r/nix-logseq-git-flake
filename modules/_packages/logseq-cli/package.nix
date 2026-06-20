@@ -17,6 +17,7 @@
   libsecret,
   logseqNodejs,
   logseqRev,
+  makeWrapper,
   opamNix,
   patchelf,
   pkg-config,
@@ -27,7 +28,6 @@
   sqlite,
   stdenv,
   system,
-  writeShellScript,
   xcbuild,
   zstd,
 }:
@@ -76,66 +76,37 @@ let
       system
       ;
   };
-  cliBuilt = import ./build.nix {
-    inherit
-      cctools
-      clang_20
-      cliBundlePnpmDeps
-      cliCljDeps
-      cliPnpmDeps
-      clojure
-      git
-      gnumake
-      jdk
-      lib
-      libsecret
-      logseqNodejs
-      logseqRev
-      patchelf
-      pkg-config
-      pnpm_10
-      pnpmConfigHook
-      python3
-      sqlite
-      src
-      stdenv
-      version
-      xcbuild
-      zstd
-      ;
-    inherit (opamDeps) ocamlBuildInputs;
-  };
-  wrapper = import ./wrapper.nix {
-    inherit
-      cliBuilt
-      logseqNodejs
-      writeShellScript
-      ;
-  };
 in
-stdenv.mkDerivation {
-  pname = "logseq-cli";
-  inherit version;
-
-  dontUnpack = true;
-
-  installPhase = ''
-    mkdir -p $out/bin
-    cp ${wrapper} $out/bin/logseq-cli
-    chmod +x $out/bin/logseq-cli
-  '';
-
-  # Expose the FODs so `scripts/update-nightly.sh` can target them individually
-  # (`nix build .#logseq-cli.cliPnpmDeps`, `.cliBundlePnpmDeps`, `.cliCljDeps`).
-  passthru = {
-    inherit cliPnpmDeps cliBundlePnpmDeps cliCljDeps;
-  };
-
-  meta = {
-    description = "Logseq CLI for DB graphs - graph management and queries";
-    homepage = "https://github.com/logseq/logseq/tree/master/cli";
-    license = lib.licenses.agpl3Plus;
-    mainProgram = "logseq-cli";
-    platforms = lib.platforms.linux ++ [ "aarch64-darwin" ];
-  };
+# build.nix produces the single public `logseq-cli` derivation (bin + lib). The
+# wrapper that pins the db-worker path and PATH is generated inside that
+# derivation's installPhase.
+import ./build.nix {
+  inherit
+    cctools
+    clang_20
+    cliBundlePnpmDeps
+    cliCljDeps
+    cliPnpmDeps
+    clojure
+    git
+    gnumake
+    jdk
+    lib
+    libsecret
+    logseqNodejs
+    logseqRev
+    makeWrapper
+    patchelf
+    pkg-config
+    pnpm_10
+    pnpmConfigHook
+    python3
+    sqlite
+    src
+    stdenv
+    version
+    xcbuild
+    zstd
+    ;
+  inherit (opamDeps) ocamlBuildInputs;
 }
