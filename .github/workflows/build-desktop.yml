@@ -232,6 +232,7 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+            fallback = true
 
       # ocaml/setup-ocaml cached ~/.opam keyed on the opam files; reproduce that so
       # each leg does not recompile the melange*/dune/transit-js closure from

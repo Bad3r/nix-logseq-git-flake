@@ -30,6 +30,7 @@ jobs:
           extra-conf: |
             experimental-features = nix-command flakes
             accept-flake-config = true
+            fallback = true
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v17
@@ -67,6 +68,7 @@ jobs:
           extra-conf: |
             experimental-features = nix-command flakes
             accept-flake-config = true
+            fallback = true
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v17
@@ -95,6 +97,7 @@ jobs:
           extra-conf: |
             experimental-features = nix-command flakes
             accept-flake-config = true
+            fallback = true
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v17
@@ -144,6 +147,7 @@ jobs:
           extra-conf: |
             experimental-features = nix-command flakes
             accept-flake-config = true
+            fallback = true
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v17

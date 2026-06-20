@@ -135,6 +135,7 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+            fallback = true
 
       - name: Setup Cachix (read-only, no push)
         uses: cachix/cachix-action@v17

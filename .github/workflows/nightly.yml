@@ -92,6 +92,7 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+            fallback = true
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v17
@@ -254,6 +255,7 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+            fallback = true
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v17
