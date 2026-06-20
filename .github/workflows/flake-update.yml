@@ -23,6 +23,7 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+            fallback = true
 
       - name: Update flake inputs
         run: nix flake update

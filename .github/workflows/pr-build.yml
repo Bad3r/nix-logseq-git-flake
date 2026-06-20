@@ -247,6 +247,7 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+            fallback = true
 
       - name: Setup Cachix
         if: steps.gate.outputs.run == 'true'
