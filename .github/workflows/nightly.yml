@@ -147,6 +147,13 @@ jobs:
             publish_release
           fi
 
+      # Refresh flake.lock before update-nightly.sh: a git/zlib bump changes the
+      # CLI cliCljDeps FOD bytes, so its hash must be re-resolved against the new
+      # lock in the same run. nix flake check below validates the lock + manifest
+      # together, and the commit step ships flake.lock with the bump.
+      - name: Update flake inputs
+        run: nix flake update
+
       - name: Update nightly manifest and CLI hashes
         run: bash scripts/update-nightly.sh
 
@@ -182,21 +189,39 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          if git diff --quiet -- data/logseq-nightly.json; then
-            echo "Manifest unchanged"
+          if git diff --quiet -- data/logseq-nightly.json flake.lock; then
+            echo "Manifest and flake.lock unchanged"
             exit 0
           fi
 
-          git add data/logseq-nightly.json
-          git commit -F - <<EOF
-          chore: bump nightly manifest
+          manifest_changed=false
+          lock_changed=false
+          git diff --quiet -- data/logseq-nightly.json || manifest_changed=true
+          git diff --quiet -- flake.lock || lock_changed=true
 
-          The nightly publish-release job rewrites data/logseq-nightly.json for ${NIGHTLY_TAG}.
-          It records upstream revision ${LOGSEQ_REV} and refreshed CLI fixed-output hashes.
+          if [ "$manifest_changed" = true ] && [ "$lock_changed" = true ]; then
+            subject="chore: bump nightly manifest and flake inputs"
+          elif [ "$lock_changed" = true ]; then
+            subject="chore: update flake inputs"
+          else
+            subject="chore: bump nightly manifest"
+          fi
 
-          Validation: nix fmt
-          Validation: nix flake check
-          EOF
+          git add data/logseq-nightly.json flake.lock
+          {
+            echo "$subject"
+            echo
+            if [ "$manifest_changed" = true ]; then
+              echo "The nightly publish-release job rewrites data/logseq-nightly.json for ${NIGHTLY_TAG}."
+              echo "It records upstream revision ${LOGSEQ_REV} and refreshed CLI fixed-output hashes."
+            fi
+            if [ "$lock_changed" = true ]; then
+              echo "nix flake update refreshes flake.lock so pinned inputs advance in the same nightly commit."
+            fi
+            echo
+            echo "Validation: nix fmt"
+            echo "Validation: nix flake check"
+          } | git commit -F -
 
           repo_url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git fetch "$repo_url" main
