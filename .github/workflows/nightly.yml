@@ -207,7 +207,12 @@ jobs:
             subject="chore: bump nightly manifest"
           fi
 
-          git add data/logseq-nightly.json flake.lock
+          # nix fmt above runs repo-wide, so a formatter input advanced by
+          # nix flake update can reformat tracked files beyond the manifest and
+          # lock. Stage every tracked modification: an unstaged file left here
+          # aborts the git rebase below on a dirty worktree, after the release
+          # is already published.
+          git add -u
           {
             echo "$subject"
             echo
