@@ -1,25 +1,25 @@
 {
-  "tag": "nightly-20260620",
-  "publishedAt": "2026-06-20T09:32:24Z",
+  "tag": "nightly-20260621",
+  "publishedAt": "2026-06-21T05:13:50Z",
   "assets": {
     "x86_64-linux": {
-      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260620/logseq-linux-x64-2.0.1-alpha+nightly.20260620.tar.gz",
-      "sha256": "sha256-hwf3v8nctMv2rnk5SuLUNNPWfsvj08XrZmsYwNuVkoQ="
+      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260621/logseq-linux-x64-2.0.1-alpha+nightly.20260621.tar.gz",
+      "sha256": "sha256-cGei5osUEHllkZSRbFS+XpD12lMXng8dVkI+0cyDTMg="
     },
     "aarch64-linux": {
-      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260620/logseq-linux-arm64-2.0.1-alpha+nightly.20260620.tar.gz",
-      "sha256": "sha256-HkKO5c4du28qq+YkA20NKrPVxVgtR8whCtOjJ+pOyGI="
+      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260621/logseq-linux-arm64-2.0.1-alpha+nightly.20260621.tar.gz",
+      "sha256": "sha256-dUWwGnhR6Os1wkLUNbBLCYoBS6K6rwUeBRDXNKO1yok="
     },
     "aarch64-darwin": {
-      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260620/logseq-darwin-arm64-2.0.1-alpha+nightly.20260620.tar.gz",
-      "sha256": "sha256-JUS021C5LnMms6aZwVlKDTh8N40rXNDfEor+OF8H3cI="
+      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260621/logseq-darwin-arm64-2.0.1-alpha+nightly.20260621.tar.gz",
+      "sha256": "sha256-/o2YAoM/8Q0BmyzLBh2PraWHVlKYNxHvdM2Zj3Sun48="
     }
   },
   "logseqRev": "b7431035cba3997e00ad0bd5f5b242158e93be35",
-  "logseqVersion": "2.0.1-alpha+nightly.20260620",
+  "logseqVersion": "2.0.1-alpha+nightly.20260621",
   "cliSrcHash": "sha256-OIML56HnbQoF0xfCiDllOO3P6keAQw4mhwSsrY7kmbs=",
   "cliPnpmDepsHash": "sha256-r68qKxB3jwdMjBCZ7UWyTMoYoO+qaeRUJxhzGd3QtDw=",
   "cliBundlePnpmDepsHash": "sha256-i5zJ+lvhcBF1CA1hFY4SlEg4p6IEfFrNPYTEYiFviiE=",
   "cliCljDepsHash": "sha256-BkZ5NadvDguRFlF43MhULec4YAH9mAGij6ES4ilgumM=",
-  "cliVersion": "2.0.1-alpha+nightly.20260620"
+  "cliVersion": "2.0.1-alpha+nightly.20260621"
 }
