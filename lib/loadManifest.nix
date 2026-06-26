@@ -128,17 +128,19 @@ throwIf (missing != [ ]) "Manifest missing required keys: ${concatStringsSep ", 
     (
       throwIf (!isList pinOverrides) "Manifest cliOpamPinOverrides must be a list." (
         throwIf (!isList patches) "Manifest patches must be a list." (
-          foldl' validatePatch (foldl' validateToolchain (foldl' validatePinOverride (foldl' validateAsset (
-            foldl'
-            validateHash
-            parsed
-            [
-              "cliSrcHash"
-              "cliPnpmDepsHash"
-              "cliBundlePnpmDepsHash"
-              "cliCljDepsHash"
-            ]
-          ) assetSystems) pinOverrides) toolchainKeys) patches
+          throwIf (!isAttrs toolchain) "Manifest toolchain must be an attribute set." (
+            foldl' validatePatch (foldl' validateToolchain (foldl' validatePinOverride (foldl' validateAsset (
+              foldl'
+              validateHash
+              parsed
+              [
+                "cliSrcHash"
+                "cliPnpmDepsHash"
+                "cliBundlePnpmDepsHash"
+                "cliCljDepsHash"
+              ]
+            ) assetSystems) pinOverrides) toolchainKeys) patches
+          )
         )
       )
     )
