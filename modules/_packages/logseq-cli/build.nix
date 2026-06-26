@@ -3,6 +3,7 @@
   clang_20,
   cliBundlePnpmDeps,
   cliCljDeps,
+  cliPatches,
   cliPnpmDeps,
   clojure,
   git,
@@ -42,12 +43,13 @@ stdenv.mkDerivation {
   inherit version src;
 
   # Temporary upstream fixes; each patch header documents the bug and its
-  # removal condition. Only patches touching files compiled into the CLI
-  # belong here. The nightly desktop build applies the full patches/ set in
-  # .github/workflows/build-desktop.yml; keep the two apply sites in sync
-  # when adding or removing a CLI-relevant patch. Patching here (not in the
-  # source FOD) keeps cliSrcHash and the dependency FODs unchanged.
-  patches = [ ../../../patches/logseq-cli-auth-bind-loopback-address-families.patch ];
+  # removal condition. The set is the manifest patches[] cli:true subset
+  # (data/logseq-nightly.json), mapped to basenames in logseq-nightly.nix; the
+  # nightly desktop build applies the full manifest patches[] list in
+  # .github/workflows/build-desktop.yml, so both sites read one source. Patching
+  # here (not in the source FOD) keeps cliSrcHash and the dependency FODs
+  # unchanged.
+  patches = map (name: ../../../patches + "/${name}") cliPatches;
 
   # keytar (db-worker OS-keychain access) ships no usable prebuilt for this Node
   # ABI, so its native addon is compiled from source with node-gyp (see the

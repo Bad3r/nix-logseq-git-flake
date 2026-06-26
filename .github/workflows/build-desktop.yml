@@ -38,19 +38,13 @@ on:
         type: boolean
         default: true
       apply_patches:
-        description: "Apply patches/logseq-*.patch to the cloned source (rev-pinned fixes for the nightly rev)"
+        description: "Apply the manifest patches[] list to the cloned source (rev-pinned fixes for the nightly rev)"
         required: false
         type: boolean
         default: true
 
 permissions:
   contents: read
-
-env:
-  NODE_VERSION: "24"
-  PNPM_VERSION: "10.33.0"
-  JAVA_VERSION: "21"
-  CLOJURE_VERSION: "1.12.4.1618"
 
 jobs:
   resolve-revision:
@@ -60,7 +54,33 @@ jobs:
       rev: ${{ steps.resolve.outputs.rev }}
       repo: ${{ steps.resolve.outputs.repo }}
       matrix: ${{ steps.matrix.outputs.matrix }}
+      node_version: ${{ steps.toolchain.outputs.node_version }}
+      pnpm_version: ${{ steps.toolchain.outputs.pnpm_version }}
+      java_version: ${{ steps.toolchain.outputs.java_version }}
+      clojure_version: ${{ steps.toolchain.outputs.clojure_version }}
     steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # CI toolchain versions are owned by the manifest (data/logseq-nightly.json),
+      # not the workflow: the Nix side pins nixpkgs attrs and does not read these,
+      # so this is the single CI-side source. build and metadata consume the
+      # outputs below via needs.resolve-revision.
+      - name: Resolve CI toolchain versions
+        id: toolchain
+        run: |
+          set -euo pipefail
+          manifest=data/logseq-nightly.json
+          for key in node pnpm java clojure; do
+            value="$(jq -r --arg k "$key" '.toolchain[$k] // ""' "$manifest")"
+            if [ -z "$value" ]; then
+              echo "manifest .toolchain.${key} is missing or empty" >&2
+              exit 1
+            fi
+            echo "${key}_version=${value}" >>"$GITHUB_OUTPUT"
+          done
+
       - name: Resolve source revision
         id: resolve
         env:
@@ -156,32 +176,36 @@ jobs:
           git fetch -q --depth 1 origin "${LOGSEQ_REV}"
           git checkout -q FETCH_HEAD
 
-      # Temporary upstream fixes tracked under patches/; each patch header
-      # documents the bug and its removal condition. Strict apply fails the
-      # build when upstream drifts or lands the fix, which is the signal to
-      # update or drop the patch file.
+      # Temporary upstream fixes declared in the manifest patches[] list and
+      # tracked under patches/; each patch header documents the bug and its
+      # removal condition. Strict apply fails the build when upstream drifts or
+      # lands the fix, which is the signal to update or drop the patch entry.
       - name: Apply upstream patches
         if: ${{ inputs.apply_patches }}
         working-directory: logseq-src
         run: |
           set -euo pipefail
+          # Read the manifest patch list up front so a jq failure aborts the step;
+          # a process-substitution feed would swallow it. The herestring keeps the
+          # counter in the main shell and works on bash 3.2 (the macOS leg).
+          patch_files="$(jq -r '.patches[].file' ../data/logseq-nightly.json)"
           applied=0
-          for patch in ../patches/logseq-*.patch; do
-            [ -e "$patch" ] || continue
-            git apply --verbose "$patch"
+          while IFS= read -r patch; do
+            [ -n "$patch" ] || continue
+            git apply --verbose "../patches/$patch"
             applied=$((applied + 1))
-          done
+          done <<<"$patch_files"
           echo "Applied ${applied} upstream patch(es)"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: ${{ needs.resolve-revision.outputs.node_version }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: ${{ env.PNPM_VERSION }}
+          version: ${{ needs.resolve-revision.outputs.pnpm_version }}
 
       - name: Get pnpm store directory path
         id: pnpm-store-dir-path
@@ -212,7 +236,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: "zulu"
-          java-version: ${{ env.JAVA_VERSION }}
+          java-version: ${{ needs.resolve-revision.outputs.java_version }}
 
       - name: Cache Clojure deps
         uses: actions/cache@v5
@@ -225,7 +249,7 @@ jobs:
       - name: Setup Clojure CLI
         uses: DeLaGuardo/setup-clojure@13
         with:
-          cli: ${{ env.CLOJURE_VERSION }}
+          cli: ${{ needs.resolve-revision.outputs.clojure_version }}
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
@@ -544,7 +568,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: ${{ needs.resolve-revision.outputs.node_version }}
 
       - name: Write build metadata
         env:

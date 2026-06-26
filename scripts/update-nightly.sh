@@ -111,6 +111,40 @@ done
 echo "  cliOpamPinOverrides=$CLI_OPAM_PIN_OVERRIDES"
 echo "::endgroup::"
 
+# ── Phase 3c: Preserve toolchain + regenerate patches[] ─────────────
+# The manifest owns the CI toolchain versions and the patch declaration list.
+# Preserve the committed toolchain block verbatim (a maintainer edits it on a
+# major bump, not this script) and regenerate patches[] from the patches/
+# directory so .file always matches what is on disk, carrying the hand-set cli
+# flag forward (default false for a newly added patch).
+echo "::group::Phase 3c: Preserve toolchain + regenerate patches[]"
+OLD_TOOLCHAIN="$(jq -c '.toolchain' "$MANIFEST")"
+if [ "$OLD_TOOLCHAIN" = "null" ] || [ -z "$OLD_TOOLCHAIN" ]; then
+  echo "ERROR: $MANIFEST has no .toolchain block to preserve" >&2
+  exit 1
+fi
+for key in node pnpm java clojure; do
+  value="$(jq -r --arg k "$key" '.toolchain[$k] // ""' "$MANIFEST")"
+  if [ -z "$value" ]; then
+    echo "ERROR: $MANIFEST .toolchain.${key} is missing or empty" >&2
+    exit 1
+  fi
+done
+# Enumerate patches/logseq-*.patch by basename, merging the prior cli flag by
+# filename (// false for a newly added file). jq -cs slurps the per-file objects
+# into one array; OLD_PATCHES is read once for the flag lookup.
+OLD_PATCHES="$(jq -c '.patches // []' "$MANIFEST")"
+PATCHES_JSON="$(
+  for patch in patches/logseq-*.patch; do
+    [ -e "$patch" ] || continue
+    jq -cn --arg file "$(basename "$patch")" --argjson old "$OLD_PATCHES" \
+      '{ file: $file, cli: (($old[] | select(.file == $file) | .cli) // false) }'
+  done | jq -cs '.'
+)"
+echo "  toolchain=$OLD_TOOLCHAIN"
+echo "  patches=$PATCHES_JSON"
+echo "::endgroup::"
+
 # ── Phase 4: Write manifest with placeholder hashes ─────────────────
 echo "::group::Phase 4: Write manifest (placeholder pnpm/vendor hashes)"
 PLACEHOLDER="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
@@ -131,6 +165,8 @@ jq -n \
   --arg cliBundlePnpmDepsHash "$PLACEHOLDER" \
   --arg cliCljDepsHash "$PLACEHOLDER" \
   --arg cliVersion "$CLI_VERSION" \
+  --argjson toolchain "$OLD_TOOLCHAIN" \
+  --argjson patches "$PATCHES_JSON" \
   '{
     tag: $tag,
     publishedAt: $publishedAt,
@@ -146,7 +182,9 @@ jq -n \
     cliPnpmDepsHash: $cliPnpmDepsHash,
     cliBundlePnpmDepsHash: $cliBundlePnpmDepsHash,
     cliCljDepsHash: $cliCljDepsHash,
-    cliVersion: $cliVersion
+    cliVersion: $cliVersion,
+    toolchain: $toolchain,
+    patches: $patches
   }' >"$MANIFEST"
 echo "  Wrote $MANIFEST with placeholder cliPnpmDepsHash, cliBundlePnpmDepsHash, cliCljDepsHash"
 echo "::endgroup::"
@@ -221,3 +259,5 @@ echo "  cliPnpmDepsHash:            $PNPM_HASH"
 echo "  cliBundlePnpmDepsHash:      $BUNDLE_PNPM_HASH"
 echo "  cliCljDepsHash:             $CLJ_DEPS_HASH"
 echo "  cliVersion:                 $CLI_VERSION"
+echo "  toolchain:                  $OLD_TOOLCHAIN"
+echo "  patches:                    $PATCHES_JSON"
