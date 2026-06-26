@@ -52,6 +52,65 @@ CLI_VERSION="$LOGSEQ_VERSION"
 echo "  cliVersion=$CLI_VERSION"
 echo "::endgroup::"
 
+# ── Phase 3b: Resolve opam pin-depends branch refs ──────────────────
+# Upstream cli/logseq-cli.opam (logseq/logseq 3684727952e6) pins some deps
+# (melange-edn, humanize, ...) at the mutable `#main` branch. opam-nix refuses a
+# git pin without an explicit 40-char sha1 in pure evaluation mode, so opam-deps.nix
+# rewrites each branch ref to a commit before resolving. Resolve those branches to
+# their current HEAD here so the pin advances every nightly with LOGSEQ_REV instead
+# of freezing at a hardcoded commit. Entries already pinned to a sha1 are left alone,
+# so this self-clears once upstream restores explicit commits.
+#
+# Resolve a branch/tag fragment to a commit sha1 on $remote. awk matches $2
+# exactly because `git ls-remote <pattern>` tail-matches, so a bare `main` also
+# returns refs/heads/feature/main and a positional NR==1 pick could grab the
+# wrong ref. Prefer a branch head, then a peeled annotated tag
+# (refs/tags/<f>^{} is the commit the tag points at; opam-nix needs a commit,
+# not the tag object), then a lightweight tag or an already-qualified ref.
+resolve_ref_sha() {
+  local remote="$1" frag="$2"
+  git ls-remote "$remote" \
+    "refs/heads/$frag" "refs/tags/$frag^{}" "refs/tags/$frag" "$frag" |
+    awk -v f="$frag" '
+      $2 == "refs/heads/" f      { head = $1 }
+      $2 == "refs/tags/" f "^{}" { peeled = $1 }
+      $2 == "refs/tags/" f       { tag = $1 }
+      $2 == f                    { bare = $1 }
+      END {
+        if (head != "")        print head
+        else if (peeled != "") print peeled
+        else if (tag != "")    print tag
+        else if (bare != "")   print bare
+      }'
+}
+echo "::group::Phase 3b: Resolve opam pin-depends branch refs"
+OPAM_RAW_URL="https://raw.githubusercontent.com/logseq/logseq/${LOGSEQ_REV}/cli/logseq-cli.opam"
+OPAM_TMP="$(mktemp)"
+trap 'rm -f "$OPAM_TMP"' EXIT
+curl -fsSL "$OPAM_RAW_URL" -o "$OPAM_TMP"
+CLI_OPAM_PIN_OVERRIDES="[]"
+# pin-depends URLs are the only git+<proto>://...#<frag> tokens; dev-repo carries no
+# fragment and is excluded. `|| true`: no git pins is a valid opam file, not an error.
+mapfile -t PIN_URLS < <(grep -oE 'git\+[a-z]+://[^"#]+#[^"]+' "$OPAM_TMP" | sort -u || true)
+for url in "${PIN_URLS[@]}"; do
+  frag="${url##*#}"
+  if [[ $frag =~ ^[0-9a-f]{40}$ ]]; then
+    continue
+  fi
+  base="${url%#*}"
+  remote="${base#git+}"
+  sha="$(resolve_ref_sha "$remote" "$frag")"
+  if [[ ! $sha =~ ^[0-9a-f]{40}$ ]]; then
+    echo "ERROR: could not resolve ${remote} ref ${frag} to a commit sha1" >&2
+    exit 1
+  fi
+  CLI_OPAM_PIN_OVERRIDES="$(jq -c --arg from "$url" --arg to "${base}#${sha}" \
+    '. + [{ from: $from, to: $to }]' <<<"$CLI_OPAM_PIN_OVERRIDES")"
+  echo "  ${url} -> ${base}#${sha}"
+done
+echo "  cliOpamPinOverrides=$CLI_OPAM_PIN_OVERRIDES"
+echo "::endgroup::"
+
 # ── Phase 4: Write manifest with placeholder hashes ─────────────────
 echo "::group::Phase 4: Write manifest (placeholder pnpm/vendor hashes)"
 PLACEHOLDER="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
@@ -67,6 +126,7 @@ jq -n \
   --arg logseqRev "$LOGSEQ_REV" \
   --arg logseqVersion "$LOGSEQ_VERSION" \
   --arg cliSrcHash "$CLI_SRC_HASH" \
+  --argjson cliOpamPinOverrides "$CLI_OPAM_PIN_OVERRIDES" \
   --arg cliPnpmDepsHash "$PLACEHOLDER" \
   --arg cliBundlePnpmDepsHash "$PLACEHOLDER" \
   --arg cliCljDepsHash "$PLACEHOLDER" \
@@ -82,6 +142,7 @@ jq -n \
     logseqRev: $logseqRev,
     logseqVersion: $logseqVersion,
     cliSrcHash: $cliSrcHash,
+    cliOpamPinOverrides: $cliOpamPinOverrides,
     cliPnpmDepsHash: $cliPnpmDepsHash,
     cliBundlePnpmDepsHash: $cliBundlePnpmDepsHash,
     cliCljDepsHash: $cliCljDepsHash,

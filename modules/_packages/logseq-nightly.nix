@@ -24,6 +24,7 @@ let
     inherit (manifest)
       cliBundlePnpmDepsHash
       cliCljDepsHash
+      cliOpamPinOverrides
       cliPnpmDepsHash
       cliSrcHash
       cliVersion

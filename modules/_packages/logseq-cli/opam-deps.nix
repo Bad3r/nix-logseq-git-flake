@@ -1,4 +1,6 @@
 {
+  cliOpamPinOverrides,
+  lib,
   opamNix,
   pkgs,
   src,
@@ -24,7 +26,31 @@
 # compiles from source.
 let
   on = opamNix.lib.${system};
-  baseScope = on.buildOpamProject { inherit pkgs; } "logseq-cli" "${src}/cli" {
+  # Upstream cli/logseq-cli.opam (since logseq/logseq 3684727952e6) pins some
+  # pin-depends (melange-edn, humanize, ...) at a mutable `#main` branch. opam-nix's
+  # fetchGitURL refuses a git pin whose fragment is not a 40-char sha1 in pure
+  # evaluation mode and throws "[opam-nix] a git dependency without an explicit
+  # sha1 is not supported in pure evaluation mode". Native opam (the desktop build
+  # legs) accepts the branch ref, so only this opam-nix path needs explicit revs.
+  # scripts/update-nightly.sh resolves each branch ref to its current commit and
+  # records the rewrites in manifest.cliOpamPinOverrides ({from,to} URL pairs), so
+  # the pin advances with logseqRev every nightly instead of freezing. Apply those
+  # rewrites before opam-nix reads the file. When the override list is empty (every
+  # pin already a sha1) the project is read in place, unchanged.
+  pinRewrites = lib.concatMapStringsSep "\n" (
+    o:
+    "substituteInPlace \"$out/logseq-cli.opam\" --replace-fail ${lib.escapeShellArg o.from} ${lib.escapeShellArg o.to}"
+  ) cliOpamPinOverrides;
+  cliProject =
+    if cliOpamPinOverrides == [ ] then
+      "${src}/cli"
+    else
+      pkgs.runCommandLocal "logseq-cli-opam-project" { } ''
+        cp -R ${src}/cli "$out"
+        chmod -R u+w "$out"
+        ${pinRewrites}
+      '';
+  baseScope = on.buildOpamProject { inherit pkgs; } "logseq-cli" "${cliProject}" {
     ocaml-base-compiler = "5.4.0";
   };
   # melc locates its own stdlib relative to its binary: `melc -where` yields
