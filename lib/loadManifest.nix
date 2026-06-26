@@ -5,6 +5,7 @@ let
     foldl'
     fromJSON
     hasAttr
+    isAttrs
     isBool
     isList
     isString
@@ -98,11 +99,25 @@ let
   # build (build.nix) applies only the cli:true subset. update-nightly.sh
   # regenerates file from patches/ preserving the hand-set cli flag.
   patches = if hasAttr "patches" parsed then parsed.patches else [ ];
+  # isAttrs guards hasAttr: hasAttr on a non-attrset throws an opaque builtin
+  # error, so a malformed patches[] element (e.g. a bare string) would crash the
+  # eval instead of hitting the throwIf message. The file charset excludes `/`
+  # (and any path separator): both consumers concatenate file into a filesystem
+  # path (workflow `git apply "../patches/$file"`, build.nix `../../../patches +
+  # "/${file}"`), and `.*` would let a hand-edited `logseq-../...patch` escape
+  # patches/. This validator is the only schema check on the field.
   validatePatch =
     acc: entry:
     throwIf
-      (!(hasAttr "file" entry && isString entry.file && match "logseq-.*\\.patch" entry.file != null))
-      "Manifest patches[].file must name a logseq-*.patch file."
+      (
+        !(
+          isAttrs entry
+          && hasAttr "file" entry
+          && isString entry.file
+          && match "logseq-[A-Za-z0-9._-]+\\.patch" entry.file != null
+        )
+      )
+      "Manifest patches[].file must name a logseq-*.patch basename."
       (
         throwIf (!(hasAttr "cli" entry && isBool entry.cli)) "Manifest patches[].cli must be a boolean." acc
       );
