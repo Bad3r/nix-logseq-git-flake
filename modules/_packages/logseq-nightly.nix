@@ -21,7 +21,7 @@ let
       ;
   };
   # CLI-relevant patch basenames (manifest patches[] cli:true subset). build.nix
-  # resolves these against patches/; the workflow applies the full patches[] list.
+  # resolves these against patches/; the desktop workflow globs patches/ directly.
   cliPatches = map (p: p.file) (lib.filter (p: p.cli) manifest.patches);
   cli = pkgs.callPackage ./logseq-cli/package.nix {
     inherit (manifest)

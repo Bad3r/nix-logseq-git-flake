@@ -44,11 +44,11 @@ stdenv.mkDerivation {
 
   # Temporary upstream fixes; each patch header documents the bug and its
   # removal condition. The set is the manifest patches[] cli:true subset
-  # (data/logseq-nightly.json), mapped to basenames in logseq-nightly.nix; the
-  # nightly desktop build applies the full manifest patches[] list in
-  # .github/workflows/build-desktop.yml, so both sites read one source. Patching
-  # here (not in the source FOD) keeps cliSrcHash and the dependency FODs
-  # unchanged.
+  # (data/logseq-nightly.json), mapped to basenames in logseq-nightly.nix. The
+  # nightly desktop build applies the patches/logseq-*.patch glob directly in
+  # .github/workflows/build-desktop.yml; the manifest list only owns the
+  # per-patch cli flag the CLI build reads. Patching here (not in the source
+  # FOD) keeps cliSrcHash and the dependency FODs unchanged.
   patches = map (name: ../../../patches + "/${name}") cliPatches;
 
   # keytar (db-worker OS-keychain access) ships no usable prebuilt for this Node
