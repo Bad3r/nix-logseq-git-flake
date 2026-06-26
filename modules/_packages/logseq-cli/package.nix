@@ -4,6 +4,7 @@
   clang_20,
   cliBundlePnpmDepsHash,
   cliCljDepsHash,
+  cliOpamPinOverrides,
   cliPnpmDepsHash,
   cliSrcHash,
   cliVersion,
@@ -70,6 +71,8 @@ let
   # OCaml 5.4.0 + melange* + humanize closure for the Melange CLI compile.
   opamDeps = import ./opam-deps.nix {
     inherit
+      cliOpamPinOverrides
+      lib
       opamNix
       pkgs
       src

@@ -18,6 +18,7 @@
   "logseqRev": "186e699528f2cf9c8fae47e5412bdab78f0cbd58",
   "logseqVersion": "2.0.1-alpha+nightly.20260625",
   "cliSrcHash": "sha256-iIIcMmejTW324pKjqPW1xn8UiGuZQqwwnhUO90NqhXU=",
+  "cliOpamPinOverrides": [],
   "cliPnpmDepsHash": "sha256-r68qKxB3jwdMjBCZ7UWyTMoYoO+qaeRUJxhzGd3QtDw=",
   "cliBundlePnpmDepsHash": "sha256-i5zJ+lvhcBF1CA1hFY4SlEg4p6IEfFrNPYTEYiFviiE=",
   "cliCljDepsHash": "sha256-BkZ5NadvDguRFlF43MhULec4YAH9mAGij6ES4ilgumM=",
