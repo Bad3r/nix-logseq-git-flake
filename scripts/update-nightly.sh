@@ -60,6 +60,29 @@ echo "::endgroup::"
 # their current HEAD here so the pin advances every nightly with LOGSEQ_REV instead
 # of freezing at a hardcoded commit. Entries already pinned to a sha1 are left alone,
 # so this self-clears once upstream restores explicit commits.
+#
+# Resolve a branch/tag fragment to a commit sha1 on $remote. awk matches $2
+# exactly because `git ls-remote <pattern>` tail-matches, so a bare `main` also
+# returns refs/heads/feature/main and a positional NR==1 pick could grab the
+# wrong ref. Prefer a branch head, then a peeled annotated tag
+# (refs/tags/<f>^{} is the commit the tag points at; opam-nix needs a commit,
+# not the tag object), then a lightweight tag or an already-qualified ref.
+resolve_ref_sha() {
+  local remote="$1" frag="$2"
+  git ls-remote "$remote" \
+    "refs/heads/$frag" "refs/tags/$frag^{}" "refs/tags/$frag" "$frag" |
+    awk -v f="$frag" '
+      $2 == "refs/heads/" f      { head = $1 }
+      $2 == "refs/tags/" f "^{}" { peeled = $1 }
+      $2 == "refs/tags/" f       { tag = $1 }
+      $2 == f                    { bare = $1 }
+      END {
+        if (head != "")        print head
+        else if (peeled != "") print peeled
+        else if (tag != "")    print tag
+        else if (bare != "")   print bare
+      }'
+}
 echo "::group::Phase 3b: Resolve opam pin-depends branch refs"
 OPAM_RAW_URL="https://raw.githubusercontent.com/logseq/logseq/${LOGSEQ_REV}/cli/logseq-cli.opam"
 OPAM_TMP="$(mktemp)"
@@ -76,7 +99,7 @@ for url in "${PIN_URLS[@]}"; do
   fi
   base="${url%#*}"
   remote="${base#git+}"
-  sha="$(git ls-remote "$remote" "$frag" | awk 'NR==1{print $1}')"
+  sha="$(resolve_ref_sha "$remote" "$frag")"
   if [[ ! $sha =~ ^[0-9a-f]{40}$ ]]; then
     echo "ERROR: could not resolve ${remote} ref ${frag} to a commit sha1" >&2
     exit 1
