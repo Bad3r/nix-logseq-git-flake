@@ -38,7 +38,7 @@ on:
         type: boolean
         default: true
       apply_patches:
-        description: "Apply the manifest patches[] list to the cloned source (rev-pinned fixes for the nightly rev)"
+        description: "Apply patches/logseq-*.patch to the cloned source (rev-pinned fixes for the nightly rev)"
         required: false
         type: boolean
         default: true
@@ -176,25 +176,28 @@ jobs:
           git fetch -q --depth 1 origin "${LOGSEQ_REV}"
           git checkout -q FETCH_HEAD
 
-      # Temporary upstream fixes declared in the manifest patches[] list and
-      # tracked under patches/; each patch header documents the bug and its
-      # removal condition. Strict apply fails the build when upstream drifts or
-      # lands the fix, which is the signal to update or drop the patch entry.
+      # Temporary upstream fixes tracked under patches/; each patch header
+      # documents the bug and its removal condition. Apply the patches/ glob
+      # directly rather than the manifest patches[] list: the directory is the
+      # source of which patches exist (update-nightly.sh regenerates
+      # manifest.patches[].file from it in the later publish-release job), so
+      # globbing here keeps the desktop tarballs in lockstep with patches/ even
+      # on a commit that lands or drops a patch before the manifest catches up.
+      # The manifest still owns the per-patch cli flag (build.nix applies the
+      # cli:true subset) and is schema-validated by loadManifest.nix. Strict
+      # apply fails the build when upstream drifts or lands the fix, which is the
+      # signal to update or drop the patch file.
       - name: Apply upstream patches
         if: ${{ inputs.apply_patches }}
         working-directory: logseq-src
         run: |
           set -euo pipefail
-          # Read the manifest patch list up front so a jq failure aborts the step;
-          # a process-substitution feed would swallow it. The herestring keeps the
-          # counter in the main shell and works on bash 3.2 (the macOS leg).
-          patch_files="$(jq -r '.patches[].file' ../data/logseq-nightly.json)"
           applied=0
-          while IFS= read -r patch; do
-            [ -n "$patch" ] || continue
-            git apply --verbose "../patches/$patch"
+          for patch in ../patches/logseq-*.patch; do
+            [ -e "$patch" ] || continue
+            git apply --verbose "$patch"
             applied=$((applied + 1))
-          done <<<"$patch_files"
+          done
           echo "Applied ${applied} upstream patch(es)"
 
       - name: Setup Node.js

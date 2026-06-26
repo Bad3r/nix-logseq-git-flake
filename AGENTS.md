@@ -71,12 +71,12 @@ When a nightly fails, first check whether upstream renamed a path, changed the p
 
 ### Upstream patches
 
-`patches/` holds temporary unified diffs against the upstream Logseq tree for bugs that upstream has not fixed yet. The manifest `patches[]` list (each entry `{ file, cli }`) is the single declaration; two consumers read it:
+`patches/` holds temporary unified diffs against the upstream Logseq tree for bugs that upstream has not fixed yet. The manifest `patches[]` list (each entry `{ file, cli }`) declares the per-patch `cli` flag and is validated by `lib/loadManifest.nix`; `scripts/update-nightly.sh` regenerates each `.file` from the `patches/` directory. Two apply sites consume patches:
 
-- `.github/workflows/build-desktop.yml` applies every `patches[].file` with `git apply` right after cloning upstream (a `jq`-driven loop over the manifest), so the desktop tarballs (and the bundled `static/js/logseq-cli.js`) ship the fixes.
+- `.github/workflows/build-desktop.yml` strict-applies the `patches/logseq-*.patch` glob (the directory, not the manifest list) right after cloning upstream, so the desktop tarballs (and the bundled `static/js/logseq-cli.js`) ship the fixes. Globbing the directory keeps the desktop build in lockstep with `patches/` even on a commit that lands or drops a patch before `update-nightly.sh` resyncs the manifest in the later `publish-release` job.
 - `modules/_packages/logseq-cli/build.nix` applies only the `cli:true` subset (the patches that touch files compiled into the CLI), resolved to basenames in `logseq-nightly.nix`. Patching happens in the build derivation, not the source FOD, so `cliSrcHash`, `cliPnpmDepsHash`, `cliBundlePnpmDepsHash`, and `cliCljDepsHash` stay unchanged.
 
-`scripts/update-nightly.sh` regenerates `patches[].file` from the `patches/` directory every nightly (preserving each hand-set `cli` flag), and `lib/loadManifest.nix` validates the list shape, so adding or removing a patch flows through the manifest without editing either apply site.
+Adding or removing a patch reaches the desktop build on the next run without a manifest edit (the workflow globs `patches/` directly). The CLI build reads the manifest `cli:true` subset, so a CLI patch must set `cli: true` in the manifest; a local `nix build .#logseq-cli` exercises that subset. `scripts/update-nightly.sh` regenerates `patches[].file` from the directory every nightly (preserving each hand-set `cli` flag), and `lib/loadManifest.nix` validates the list shape.
 
 Rules: every patch header must explain the bug and name its removal condition. Strict apply is the drift guard; when a nightly or CLI build fails at patch application, upstream either landed the fix (delete the patch file; its manifest entry clears on the next nightly) or moved the code (regenerate the patch against the new tree). Set `cli: true` for a patch that touches CLI-compiled files. Verify a new or regenerated patch with `git apply --check` against a checkout of `manifest.logseqRev` before committing.
 
