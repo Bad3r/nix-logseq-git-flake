@@ -131,15 +131,21 @@ for key in node pnpm java clojure; do
   fi
 done
 # Enumerate patches/logseq-*.patch by basename, merging the prior cli flag by
-# filename (// false for a newly added file). jq -cs slurps the per-file objects
-# into one array; OLD_PATCHES is read once for the flag lookup.
+# filename (default false for a newly added file). One jq pass slurps the
+# basenames (-Rcs) and resolves each cli flag with `any` over OLD_PATCHES, so a
+# duplicate prior entry still collapses to a single boolean. `|| continue` (not
+# `&& basename`) keeps the loop status zero when patches/ is empty; otherwise
+# pipefail would propagate the failed `[ -e ]` test and abort the script.
 OLD_PATCHES="$(jq -c '.patches // []' "$MANIFEST")"
 PATCHES_JSON="$(
   for patch in patches/logseq-*.patch; do
     [ -e "$patch" ] || continue
-    jq -cn --arg file "$(basename "$patch")" --argjson old "$OLD_PATCHES" \
-      '{ file: $file, cli: (($old[] | select(.file == $file) | .cli) // false) }'
-  done | jq -cs '.'
+    basename "$patch"
+  done | jq -Rcs --argjson old "$OLD_PATCHES" '
+    split("\n")
+    | map(select(length > 0))
+    | map(. as $f | { file: $f, cli: (any($old[]; .file == $f and .cli)) })
+  '
 )"
 echo "  toolchain=$OLD_TOOLCHAIN"
 echo "  patches=$PATCHES_JSON"
