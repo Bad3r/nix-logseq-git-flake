@@ -5,6 +5,8 @@ let
     foldl'
     fromJSON
     hasAttr
+    isAttrs
+    isBool
     isList
     isString
     match
@@ -24,6 +26,8 @@ let
     "cliBundlePnpmDepsHash"
     "cliCljDepsHash"
     "cliVersion"
+    "toolchain"
+    "patches"
   ];
   missing = lib.filter (key: !hasAttr key parsed) requiredKeys;
   requiredAssetSystems = [
@@ -73,18 +77,71 @@ let
           !(hasAttr "sha256" entry && hasPrefix "sha256-" entry.sha256)
         ) "Manifest assets.${system}.sha256 must begin with sha256- (Nix SRI)." acc
       );
+
+  # CI toolchain versions consumed by build-desktop.yml setup-* steps via
+  # resolve-revision outputs. No Nix file reads these (the Nix side pins nixpkgs
+  # attrs), so they have zero Nix consumers; validated here to keep the workflow
+  # producer/consumer schema honest.
+  toolchain = if hasAttr "toolchain" parsed then parsed.toolchain else { };
+  toolchainKeys = [
+    "node"
+    "pnpm"
+    "java"
+    "clojure"
+  ];
+  validateToolchain =
+    acc: key:
+    throwIf (
+      !(hasAttr key toolchain && isString toolchain.${key} && toolchain.${key} != "")
+    ) "Manifest toolchain.${key} must be a non-empty string." acc;
+
+  # Both apply sites read this list: build-desktop.yml applies every file; the CLI
+  # build (build.nix) applies only the cli:true subset. update-nightly.sh
+  # regenerates file from patches/ preserving the hand-set cli flag.
+  patches = if hasAttr "patches" parsed then parsed.patches else [ ];
+  # isAttrs guards hasAttr: hasAttr on a non-attrset throws an opaque builtin
+  # error, so a malformed patches[] element (e.g. a bare string) would crash the
+  # eval instead of hitting the throwIf message. The file charset excludes `/`
+  # (and any path separator): both consumers concatenate file into a filesystem
+  # path (workflow `git apply "../patches/$file"`, build.nix `../../../patches +
+  # "/${file}"`), and `.*` would let a hand-edited `logseq-../...patch` escape
+  # patches/. This validator is the only schema check on the field.
+  validatePatch =
+    acc: entry:
+    throwIf
+      (
+        !(
+          isAttrs entry
+          && hasAttr "file" entry
+          && isString entry.file
+          && match "logseq-[A-Za-z0-9._-]+\\.patch" entry.file != null
+        )
+      )
+      "Manifest patches[].file must name a logseq-*.patch basename."
+      (
+        throwIf (!(hasAttr "cli" entry && isBool entry.cli)) "Manifest patches[].cli must be a boolean." acc
+      );
 in
 throwIf (missing != [ ]) "Manifest missing required keys: ${concatStringsSep ", " missing}" (
   throwIf (missingAssetSystems != [ ])
     "Manifest missing required desktop asset systems: ${concatStringsSep ", " missingAssetSystems}"
     (
       throwIf (!isList pinOverrides) "Manifest cliOpamPinOverrides must be a list." (
-        foldl' validatePinOverride (foldl' validateAsset (foldl' validateHash parsed [
-          "cliSrcHash"
-          "cliPnpmDepsHash"
-          "cliBundlePnpmDepsHash"
-          "cliCljDepsHash"
-        ]) assetSystems) pinOverrides
+        throwIf (!isList patches) "Manifest patches must be a list." (
+          throwIf (!isAttrs toolchain) "Manifest toolchain must be an attribute set." (
+            foldl' validatePatch (foldl' validateToolchain (foldl' validatePinOverride (foldl' validateAsset (
+              foldl'
+              validateHash
+              parsed
+              [
+                "cliSrcHash"
+                "cliPnpmDepsHash"
+                "cliBundlePnpmDepsHash"
+                "cliCljDepsHash"
+              ]
+            ) assetSystems) pinOverrides) toolchainKeys) patches
+          )
+        )
       )
     )
 )

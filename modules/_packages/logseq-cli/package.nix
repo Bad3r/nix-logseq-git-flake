@@ -5,6 +5,7 @@
   cliBundlePnpmDepsHash,
   cliCljDepsHash,
   cliOpamPinOverrides,
+  cliPatches,
   cliPnpmDepsHash,
   cliSrcHash,
   cliVersion,
@@ -89,6 +90,7 @@ import ./build.nix {
     clang_20
     cliBundlePnpmDeps
     cliCljDeps
+    cliPatches
     cliPnpmDeps
     clojure
     git

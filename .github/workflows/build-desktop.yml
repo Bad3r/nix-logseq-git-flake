@@ -46,12 +46,6 @@ on:
 permissions:
   contents: read
 
-env:
-  NODE_VERSION: "24"
-  PNPM_VERSION: "10.33.0"
-  JAVA_VERSION: "21"
-  CLOJURE_VERSION: "1.12.4.1618"
-
 jobs:
   resolve-revision:
     runs-on: ubuntu-24.04
@@ -60,7 +54,33 @@ jobs:
       rev: ${{ steps.resolve.outputs.rev }}
       repo: ${{ steps.resolve.outputs.repo }}
       matrix: ${{ steps.matrix.outputs.matrix }}
+      node_version: ${{ steps.toolchain.outputs.node_version }}
+      pnpm_version: ${{ steps.toolchain.outputs.pnpm_version }}
+      java_version: ${{ steps.toolchain.outputs.java_version }}
+      clojure_version: ${{ steps.toolchain.outputs.clojure_version }}
     steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # CI toolchain versions are owned by the manifest (data/logseq-nightly.json),
+      # not the workflow: the Nix side pins nixpkgs attrs and does not read these,
+      # so this is the single CI-side source. build and metadata consume the
+      # outputs below via needs.resolve-revision.
+      - name: Resolve CI toolchain versions
+        id: toolchain
+        run: |
+          set -euo pipefail
+          manifest=data/logseq-nightly.json
+          for key in node pnpm java clojure; do
+            value="$(jq -r --arg k "$key" '.toolchain[$k] // ""' "$manifest")"
+            if [ -z "$value" ]; then
+              echo "manifest .toolchain.${key} is missing or empty" >&2
+              exit 1
+            fi
+            echo "${key}_version=${value}" >>"$GITHUB_OUTPUT"
+          done
+
       - name: Resolve source revision
         id: resolve
         env:
@@ -157,9 +177,16 @@ jobs:
           git checkout -q FETCH_HEAD
 
       # Temporary upstream fixes tracked under patches/; each patch header
-      # documents the bug and its removal condition. Strict apply fails the
-      # build when upstream drifts or lands the fix, which is the signal to
-      # update or drop the patch file.
+      # documents the bug and its removal condition. Apply the patches/ glob
+      # directly rather than the manifest patches[] list: the directory is the
+      # source of which patches exist (update-nightly.sh regenerates
+      # manifest.patches[].file from it in the later publish-release job), so
+      # globbing here keeps the desktop tarballs in lockstep with patches/ even
+      # on a commit that lands or drops a patch before the manifest catches up.
+      # The manifest still owns the per-patch cli flag (build.nix applies the
+      # cli:true subset) and is schema-validated by loadManifest.nix. Strict
+      # apply fails the build when upstream drifts or lands the fix, which is the
+      # signal to update or drop the patch file.
       - name: Apply upstream patches
         if: ${{ inputs.apply_patches }}
         working-directory: logseq-src
@@ -176,12 +203,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: ${{ needs.resolve-revision.outputs.node_version }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: ${{ env.PNPM_VERSION }}
+          version: ${{ needs.resolve-revision.outputs.pnpm_version }}
 
       - name: Get pnpm store directory path
         id: pnpm-store-dir-path
@@ -212,7 +239,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: "zulu"
-          java-version: ${{ env.JAVA_VERSION }}
+          java-version: ${{ needs.resolve-revision.outputs.java_version }}
 
       - name: Cache Clojure deps
         uses: actions/cache@v5
@@ -225,7 +252,7 @@ jobs:
       - name: Setup Clojure CLI
         uses: DeLaGuardo/setup-clojure@13
         with:
-          cli: ${{ env.CLOJURE_VERSION }}
+          cli: ${{ needs.resolve-revision.outputs.clojure_version }}
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
@@ -544,7 +571,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: ${{ needs.resolve-revision.outputs.node_version }}
 
       - name: Write build metadata
         env:

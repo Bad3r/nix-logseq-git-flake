@@ -27,5 +27,17 @@
   "cliPnpmDepsHash": "sha256-r68qKxB3jwdMjBCZ7UWyTMoYoO+qaeRUJxhzGd3QtDw=",
   "cliBundlePnpmDepsHash": "sha256-i5zJ+lvhcBF1CA1hFY4SlEg4p6IEfFrNPYTEYiFviiE=",
   "cliCljDepsHash": "sha256-BkZ5NadvDguRFlF43MhULec4YAH9mAGij6ES4ilgumM=",
-  "cliVersion": "2.0.1-alpha+nightly.20260627"
+  "cliVersion": "2.0.1-alpha+nightly.20260627",
+  "toolchain": {
+    "node": "24",
+    "pnpm": "10.33.0",
+    "java": "21",
+    "clojure": "1.12.4.1618"
+  },
+  "patches": [
+    {
+      "file": "logseq-cli-auth-bind-loopback-address-families.patch",
+      "cli": true
+    }
+  ]
 }
