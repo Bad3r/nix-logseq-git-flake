@@ -68,6 +68,10 @@
           inherit pkgs;
           inherit (logseqNightly) cli;
         };
+      }
+      # The desktop entry ships only in the Linux package.
+      // lib.optionalAttrs (!isDarwin) {
+        logseq-desktop-entry = import ./_checks/desktop-entry.nix { inherit pkgs; };
       };
     };
 }
