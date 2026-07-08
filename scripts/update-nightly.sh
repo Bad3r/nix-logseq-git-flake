@@ -27,6 +27,15 @@ echo "::group::Phase 1: Validate inputs"
 : "${ASSET_URL_AARCH64_DARWIN:?must be set}"
 : "${ASSET_SHA256_AARCH64_DARWIN:?must be set}"
 : "${NIGHTLY_TAG:?must be set}"
+# Each ASSET_SHA256_* value lands in the manifest verbatim; a malformed one
+# would only surface at the first flake eval in Phase 5. Reject it before
+# anything is written, naming the variable and value.
+for var in ASSET_SHA256_X86_64 ASSET_SHA256_AARCH64 ASSET_SHA256_AARCH64_DARWIN; do
+  if [[ ${!var} != sha256-* ]]; then
+    echo "ERROR: $var must be an SRI hash beginning with sha256- (got: '${!var}')" >&2
+    exit 1
+  fi
+done
 PUBLISHED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 echo "All inputs validated"
 echo "  LOGSEQ_REV=$LOGSEQ_REV"
