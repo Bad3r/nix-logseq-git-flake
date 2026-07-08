@@ -12,6 +12,12 @@
             logseqNightly.logseqDesktop
             logseqNightly.cli
           ];
+          # Without mainProgram, `nix run` falls back to bin/<name>, and the
+          # joined tree ships no bin/logseq-nightly.
+          meta = {
+            description = "Logseq nightly desktop app and CLI";
+            mainProgram = "logseq";
+          };
         };
       };
 
