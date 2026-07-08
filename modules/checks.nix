@@ -11,6 +11,10 @@
     in
     {
       checks = {
+        logseq-manifest-validation = import ./_checks/manifest-validation.nix {
+          inherit lib pkgs;
+        };
+
         logseq-runtime-assets = import ./_checks/runtime-assets.nix {
           inherit pkgs;
           inherit (logseqNightly) payload logseqSrc;
