@@ -11,6 +11,10 @@
     in
     {
       checks = {
+        logseq-manifest-validation = import ./_checks/manifest-validation.nix {
+          inherit lib pkgs;
+        };
+
         logseq-runtime-assets = import ./_checks/runtime-assets.nix {
           inherit pkgs;
           inherit (logseqNightly) payload logseqSrc;
@@ -64,6 +68,10 @@
           inherit pkgs;
           inherit (logseqNightly) cli;
         };
+      }
+      # The desktop entry ships only in the Linux package.
+      // lib.optionalAttrs (!isDarwin) {
+        logseq-desktop-entry = import ./_checks/desktop-entry.nix { inherit pkgs; };
       };
     };
 }

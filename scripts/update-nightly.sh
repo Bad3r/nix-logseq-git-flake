@@ -27,6 +27,15 @@ echo "::group::Phase 1: Validate inputs"
 : "${ASSET_URL_AARCH64_DARWIN:?must be set}"
 : "${ASSET_SHA256_AARCH64_DARWIN:?must be set}"
 : "${NIGHTLY_TAG:?must be set}"
+# Each ASSET_SHA256_* value lands in the manifest verbatim; a malformed one
+# would only surface at the first flake eval in Phase 5. Reject it before
+# anything is written, naming the variable and value.
+for var in ASSET_SHA256_X86_64 ASSET_SHA256_AARCH64 ASSET_SHA256_AARCH64_DARWIN; do
+  if [[ ${!var} != sha256-* ]]; then
+    echo "ERROR: $var must be an SRI hash beginning with sha256- (got: '${!var}')" >&2
+    exit 1
+  fi
+done
 PUBLISHED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 echo "All inputs validated"
 echo "  LOGSEQ_REV=$LOGSEQ_REV"
@@ -39,6 +48,13 @@ echo "::endgroup::"
 echo "::group::Phase 2: Compute CLI source hash (nix-prefetch-github)"
 CLI_SRC_HASH=$(nix shell nixpkgs#nix-prefetch-github nixpkgs#nix-prefetch-git -c \
   nix-prefetch-github logseq logseq --rev "$LOGSEQ_REV" --json | jq -r '.hash')
+# jq -r turns a missing key into the literal string "null"; written into the
+# manifest, that only surfaces at the next flake eval (Phase 5's placeholder
+# build), buried in a hash-extraction failure. Fail here with the value instead.
+if [[ $CLI_SRC_HASH != sha256-* ]]; then
+  echo "ERROR: nix-prefetch-github did not return an SRI hash for $LOGSEQ_REV (got: '$CLI_SRC_HASH')" >&2
+  exit 1
+fi
 echo "  cliSrcHash=$CLI_SRC_HASH"
 echo "::endgroup::"
 

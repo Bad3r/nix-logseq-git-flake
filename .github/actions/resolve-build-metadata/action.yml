@@ -102,12 +102,18 @@ runs:
         } >>"$GITHUB_ENV"
         assets_json="[]"
         present_tarballs=()
+        url_encode_segment() {
+          jq -rn --arg value "$1" '$value | @uri'
+        }
+        encoded_tag="$(url_encode_segment "$tag")"
         emit_system() {
           local system="$1" glob="$2" hashname="$3" tarvar="$4" urlvar="$5" shavar="$6"
-          local tarball hash_file url hash
+          local tarball hash_file asset_name encoded_asset url hash
           tarball="$(find_one "$glob" "$system tarball")"
           hash_file="$(find_one "$hashname" "$system hash")"
-          url="https://github.com/${REPO}/releases/download/${tag}/$(basename "$tarball")"
+          asset_name="$(basename "$tarball")"
+          encoded_asset="$(url_encode_segment "$asset_name")"
+          url="https://github.com/${REPO}/releases/download/${encoded_tag}/${encoded_asset}"
           hash="$(tr -d '\r\n' <"$hash_file")"
           [[ "$hash" =~ ^sha256-[A-Za-z0-9+/=]+$ ]] || { echo "Invalid sha256 hash in $hash_file: $hash" >&2; exit 1; }
           {

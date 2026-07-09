@@ -17,6 +17,7 @@ fetchPnpmDeps {
   sourceRoot = "${src.name}/cli";
   pnpm = pnpm_10;
   fetcherVersion = 3;
+  pnpmInstallFlags = [ "--ignore-workspace" ];
   hash = cliBundlePnpmDepsHash;
   env.npm_config_manage_package_manager_versions = "false";
 }

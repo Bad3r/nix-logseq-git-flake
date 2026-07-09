@@ -332,10 +332,6 @@ jobs:
         working-directory: logseq-src/cli
         run: opam install . --deps-only --with-test --yes
 
-      - name: Fetch CLI pnpm deps
-        working-directory: logseq-src
-        run: pnpm --dir cli install --frozen-lockfile
-
       - name: Setup Python
         if: matrix.os == 'darwin'
         uses: actions/setup-python@v6
@@ -400,6 +396,16 @@ jobs:
           pnpm gulp:build
           pnpm cljs:release-electron
           pnpm db-worker-node:bundle
+          # The root install can leave the nested cli workspace without
+          # node_modules; cli/dist/dune execs this vite binary directly.
+          (
+            cd cli
+            pnpm install --ignore-workspace --frozen-lockfile
+          )
+          if [ ! -x cli/node_modules/.bin/vite ]; then
+            echo "cli/node_modules/.bin/vite missing after cli pnpm install" >&2
+            exit 1
+          fi
           opam exec -- pnpm cli:release
           pnpm webpack-app-build
           pnpm desktop:prepare-runtime-js
@@ -459,14 +465,18 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ matrix.os }}" = "darwin" ]; then
-            pnpm install --frozen-lockfile \
+            pnpm install --ignore-workspace --frozen-lockfile \
               --config.supportedArchitectures.os=darwin \
               --config.supportedArchitectures.cpu=arm64
             pnpm rebuild:all
             package_command=(pnpm electron:make-macos-arm64)
           else
-            pnpm install --frozen-lockfile
+            pnpm install --ignore-workspace --frozen-lockfile
             package_command=(pnpm electron:make)
+          fi
+          if [ ! -x node_modules/.bin/electron-builder ]; then
+            echo "static/node_modules/.bin/electron-builder missing after static pnpm install" >&2
+            exit 1
           fi
           for attempt in 1 2 3; do
             if "${package_command[@]}"; then
