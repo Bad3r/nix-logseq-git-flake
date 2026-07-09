@@ -192,7 +192,7 @@ stdenv.mkDerivation {
       cd cli
       pnpm config set store-dir "$cli_store"
       pnpm config set package-import-method clone-or-copy
-      pnpm install --offline --ignore-scripts --frozen-lockfile
+      pnpm install --offline --ignore-workspace --ignore-scripts --frozen-lockfile
     )
     # The @bundle rule execs cli/node_modules/.bin/vite directly; patch its
     # shebang so it does not depend on /usr/bin/env node in the sandbox.
