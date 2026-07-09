@@ -83,9 +83,13 @@ let
       throwIf (!(hasAttr "url" entry && isString entry.url))
         "Manifest assets.${system}.url must be a string."
         (
-          throwIf (
-            !(hasAttr "sha256" entry && isString entry.sha256 && hasPrefix "sha256-" entry.sha256)
-          ) "Manifest assets.${system}.sha256 must be a string beginning with sha256- (Nix SRI)." acc
+          throwIf (match ".*\\+.*" entry.url != null)
+            "Manifest assets.${system}.url must encode plus signs as %2B."
+            (
+              throwIf (
+                !(hasAttr "sha256" entry && isString entry.sha256 && hasPrefix "sha256-" entry.sha256)
+              ) "Manifest assets.${system}.sha256 must be a string beginning with sha256- (Nix SRI)." acc
+            )
         )
     );
 

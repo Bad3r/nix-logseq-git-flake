@@ -45,6 +45,13 @@ let
         };
       };
     };
+    rawPlusAssetUrl = base // {
+      assets = base.assets // {
+        x86_64-linux = base.assets.x86_64-linux // {
+          url = "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260630/logseq-linux-x64-2.0.1-alpha+nightly.20260630.tar.gz";
+        };
+      };
+    };
     listVersion = base // {
       logseqVersion = [ "2.0.0" ];
     };
