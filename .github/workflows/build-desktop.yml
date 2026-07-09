@@ -400,7 +400,7 @@ jobs:
           # node_modules; cli/dist/dune execs this vite binary directly.
           (
             cd cli
-            pnpm install --frozen-lockfile
+            pnpm install --ignore-workspace --frozen-lockfile
           )
           if [ ! -x cli/node_modules/.bin/vite ]; then
             echo "cli/node_modules/.bin/vite missing after cli pnpm install" >&2
