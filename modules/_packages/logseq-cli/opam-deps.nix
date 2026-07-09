@@ -69,6 +69,8 @@ let
       });
     }
   );
+  melangeTransit = scope.melange-transit or scope.melange-transit-melange;
+  melangeEdn = scope.melange-edn or scope.melange-edn-melange;
 in
 {
   ocamlBuildInputs = [
@@ -76,8 +78,8 @@ in
     scope.dune
     scope.melange
     scope.melange-fetch
-    scope.melange-transit
-    scope.melange-edn
+    melangeTransit
+    melangeEdn
     scope.melange-fest
     scope.humanize
   ];
