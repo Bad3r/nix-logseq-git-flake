@@ -465,14 +465,18 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ matrix.os }}" = "darwin" ]; then
-            pnpm install --frozen-lockfile \
+            pnpm install --ignore-workspace --frozen-lockfile \
               --config.supportedArchitectures.os=darwin \
               --config.supportedArchitectures.cpu=arm64
             pnpm rebuild:all
             package_command=(pnpm electron:make-macos-arm64)
           else
-            pnpm install --frozen-lockfile
+            pnpm install --ignore-workspace --frozen-lockfile
             package_command=(pnpm electron:make)
+          fi
+          if [ ! -x node_modules/.bin/electron-builder ]; then
+            echo "static/node_modules/.bin/electron-builder missing after static pnpm install" >&2
+            exit 1
           fi
           for attempt in 1 2 3; do
             if "${package_command[@]}"; then
