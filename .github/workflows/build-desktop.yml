@@ -398,7 +398,10 @@ jobs:
           pnpm db-worker-node:bundle
           # The root install can leave the nested cli workspace without
           # node_modules; cli/dist/dune execs this vite binary directly.
-          pnpm --dir cli install --frozen-lockfile
+          (
+            cd cli
+            pnpm install --frozen-lockfile
+          )
           if [ ! -x cli/node_modules/.bin/vite ]; then
             echo "cli/node_modules/.bin/vite missing after cli pnpm install" >&2
             exit 1
