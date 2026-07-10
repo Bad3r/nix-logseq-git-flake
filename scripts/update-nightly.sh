@@ -36,6 +36,12 @@ for var in ASSET_SHA256_X86_64 ASSET_SHA256_AARCH64 ASSET_SHA256_AARCH64_DARWIN;
     exit 1
   fi
 done
+# Tarball filenames embed the version build-metadata "+" (2.0.1-alpha+nightly.<date>).
+# lib/loadManifest.nix rejects a raw "+" in assets.<system>.url and requires %2B, so
+# percent-encode here. The replacement is idempotent: an already-encoded %2B has no "+".
+ASSET_URL_X86_64="${ASSET_URL_X86_64//+/%2B}"
+ASSET_URL_AARCH64="${ASSET_URL_AARCH64//+/%2B}"
+ASSET_URL_AARCH64_DARWIN="${ASSET_URL_AARCH64_DARWIN//+/%2B}"
 PUBLISHED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 echo "All inputs validated"
 echo "  LOGSEQ_REV=$LOGSEQ_REV"
