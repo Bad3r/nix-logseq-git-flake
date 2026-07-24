@@ -264,9 +264,16 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - name: Checkout
+      # Load the local detector from the trusted base commit, not the
+      # pull_request merge ref (which contains PR head code). Otherwise a PR
+      # could rewrite .github/actions/detect-sensitive-changes to force
+      # sensitive=false and bypass this gate while changing a sensitive path.
+      # The detector lists changed files through the API, so the base-pinned
+      # action still sees the real PR diff.
+      - name: Checkout base ref (trusted detector source)
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 1
           persist-credentials: false
 
