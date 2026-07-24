@@ -3,6 +3,16 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # Dedicated nixpkgs for building the packages (desktop + OCaml/Melange CLI),
+    # kept separate from `nixpkgs` so a consumer who overrides this flake's
+    # `nixpkgs` (e.g. `inputs.<this>.inputs.nixpkgs.follows` for dedup) cannot
+    # re-hash the package closure and miss the Cachix cache. The opam-nix closure
+    # is nixpkgs-dependent: building it against a consumer's nixpkgs forces a full
+    # local opam-nix `resolve` (import-from-derivation) instead of substituting
+    # the prebuilt paths. Packages and the opam toolchain follow this input; only
+    # the dev shell, formatter, and check runners use `nixpkgs`. Consumers do not
+    # override this input, so they inherit the exact rev CI built and pushed.
+    nixpkgs-pinned.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     import-tree.url = "github:denful/import-tree";
     git-hooks = {
@@ -19,7 +29,9 @@
     # explicit flake.lock bump.
     opam-nix = {
       url = "github:tweag/opam-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
+      # Follow nixpkgs-pinned (not nixpkgs) so the resolved OCaml closure stays on
+      # the CI-built rev even when a consumer overrides this flake's nixpkgs.
+      inputs.nixpkgs.follows = "nixpkgs-pinned";
       inputs.opam-repository.follows = "opam-repository";
     };
     opam-repository = {

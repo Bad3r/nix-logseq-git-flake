@@ -51,6 +51,12 @@ Add the input:
 }
 ```
 
+`inputs.nixpkgs.follows` above is optional and affects only this flake's dev
+shell, formatter, and checks. The packages (`logseq`, `logseq-cli`) build against
+a separate pinned nixpkgs (`nixpkgs-pinned`) that you do not override, so they are
+served from the Cachix cache instead of rebuilt locally. Overriding `nixpkgs` no
+longer triggers a local OCaml/Melange (opam-nix) rebuild.
+
 Use the packages directly from a module where `inputs` and `pkgs` are in scope:
 
 ```nix
@@ -123,7 +129,9 @@ nix fmt
 Note: `logseq-cli` resolves its OCaml/Melange closure through opam-nix
 import-from-derivation (IFD), so the `--no-build`/`--offline` check above still
 realizes those intermediate opam derivations during evaluation; they must
-already be built or substitutable.
+already be built or substitutable. Because the closure builds against
+`nixpkgs-pinned` (not the flake's overridable `nixpkgs`), the CI-pushed opam
+derivations stay substitutable for consumers regardless of their own nixpkgs.
 
 The Darwin desktop package is validated by the `validate-aarch64-darwin`
 workflow job, which builds the package on macOS, verifies the app signature, and

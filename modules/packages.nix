@@ -1,12 +1,12 @@
 { self, ... }:
 {
   perSystem =
-    { pkgs, logseqNightly, ... }:
+    { pkgsPinned, logseqNightly, ... }:
     {
       packages = {
         logseq = logseqNightly.logseqDesktop;
         logseq-cli = logseqNightly.cli;
-        default = pkgs.symlinkJoin {
+        default = pkgsPinned.symlinkJoin {
           name = "logseq-nightly";
           paths = [
             logseqNightly.logseqDesktop

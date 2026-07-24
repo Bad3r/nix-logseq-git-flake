@@ -167,6 +167,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-pinned": {
+      "locked": {
+        "lastModified": 1783776592,
+        "narHash": "sha256-UgCQzxeWI75XM8G+hPrPh+MKzEPjG3SpAj7dtqSbksA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs-python38": {
       "locked": {
         "lastModified": 1708815994,
@@ -205,7 +221,7 @@
         "flake-utils": "flake-utils",
         "mirage-opam-overlays": "mirage-opam-overlays",
         "nixpkgs": [
-          "nixpkgs"
+          "nixpkgs-pinned"
         ],
         "nixpkgs-llvm17": "nixpkgs-llvm17",
         "nixpkgs-python38": "nixpkgs-python38",
@@ -290,6 +306,7 @@
         "git-hooks": "git-hooks",
         "import-tree": "import-tree",
         "nixpkgs": "nixpkgs",
+        "nixpkgs-pinned": "nixpkgs-pinned",
         "opam-nix": "opam-nix",
         "opam-repository": "opam-repository"
       }

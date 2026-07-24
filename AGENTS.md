@@ -50,7 +50,7 @@ The manifest is the single source of truth for downstream consumers. Adding a fi
 
 ### Manifest fan-out inside flake modules
 
-- `modules/logseq-scope.nix` loads `data/logseq-nightly.json` through `lib/loadManifest.nix` and exposes the shared package set as a per-system module argument.
+- `modules/logseq-scope.nix` loads `data/logseq-nightly.json` through `lib/loadManifest.nix` and exposes the shared package set as a per-system module argument. It builds that set from `pkgsPinned` (`nixpkgs-pinned.legacyPackages.<system>`), a nixpkgs input kept separate from the flake's overridable `nixpkgs`; `opam-nix` follows `nixpkgs-pinned` too. Consumers do not override `nixpkgs-pinned`, so the nixpkgs-dependent opam-nix/Melange closure stays on the rev CI built and pushed to Cachix even when a consumer sets `inputs.<this>.inputs.nixpkgs.follows` for dedup. Overriding `nixpkgs` used to re-hash that closure and force a multi-hour local opam-nix `resolve`. Do not point package builds back at the overridable `pkgs` (that reintroduces the cache miss); `pkgs` stays for the dev shell, formatter, and check runners only.
 - `modules/_packages/desktop/payload.nix` selects the per-system desktop bundle from `manifest.assets.<system>` (`url` + `sha256`), keyed by `pkgs.stdenv.hostPlatform.system`, and throws on an unsupported system.
 - `modules/_packages/desktop/tree.nix` branches by OS. Linux expects the flat Electron payload with an executable `logseq`; Darwin expects exactly one top-level `*.app` bundle containing `Contents/MacOS/Logseq` and `Contents/Resources/app.asar`.
 - `modules/_packages/desktop/upstream-source.nix` fetches `logseq/logseq` at `manifest.logseqRev` with `manifest.cliSrcHash`; this source is shared by the desktop icon and CLI build.
