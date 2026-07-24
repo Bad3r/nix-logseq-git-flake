@@ -2,11 +2,11 @@
 
 name: Detect sensitive changes
 description: >-
-  Flag pull request changes to security-sensitive paths (CI workflow files and
-  flake.lock) that need a maintainer security review. Single source of truth for
-  the pattern list shared by the enforcing gate (validate.yml) and the reviewer
-  notification (sensitive-change-review.yml); keep the two consumers in sync by
-  editing the pattern list here only.
+  Flag pull request changes to security-sensitive paths (CI workflow files,
+  composite actions, and flake.lock) that need a maintainer security review.
+  Single source of truth for the pattern list shared by the enforcing gate
+  (validate.yml) and the reviewer notification (sensitive-change-review.yml);
+  keep the two consumers in sync by editing the pattern list here only.
 
 outputs:
   sensitive:
@@ -26,6 +26,7 @@ runs:
         script: |
           const sensitivePatterns = [
             /^\.github\/workflows\/.*/,
+            /^\.github\/actions\/.*/,
             /(^|\/)flake\.lock$/
           ];
 

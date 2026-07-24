@@ -3,10 +3,11 @@
 name: Sensitive Change Review
 
 # Notify contributors when a pull request touches security-sensitive paths (CI
-# workflows, flake.lock) and still needs the status(security-review-approved)
-# label. Enforcement lives in validate.yml's sensitive-change-policy job and
-# test-build.yml's test-build-approval job; this workflow only posts, refreshes,
-# or removes an advisory comment and never fails the PR.
+# workflows, composite actions, flake.lock) and still needs the
+# status(security-review-approved) label. Enforcement lives in validate.yml's
+# sensitive-change-policy job and test-build.yml's test-build-approval job; this
+# workflow only posts, refreshes, or removes an advisory comment and never fails
+# the PR.
 #
 # pull_request_target (not pull_request) so the comment can be posted on
 # fork-authored PRs: their pull_request-triggered runs get a read-only token
@@ -95,7 +96,8 @@ jobs:
               "### Security review required",
               "",
               "This pull request changes security-sensitive paths (CI workflow " +
-                "files or `flake.lock`), so a maintainer must review it and add " +
+                "files, composite actions, or `flake.lock`), so a maintainer " +
+                "must review it and add " +
                 "the `" + requiredLabel + "` label before the required build " +
                 "and merge checks can pass:",
               "",
