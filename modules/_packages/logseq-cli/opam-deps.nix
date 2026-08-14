@@ -10,10 +10,11 @@
 # project. logseq/logseq dbd220c95d
 # (https://github.com/logseq/logseq/commit/dbd220c95d) migrated the CLI from
 # ClojureScript to OCaml compiled via Melange. The melange* libraries and the
-# `humanize` git pin (cli/logseq-cli.opam pin-depends) are absent from nixpkgs,
-# so opam-nix builds each dependency from the pinned opam-repository (flake
-# input) as its own derivation. OCaml is pinned to 5.4.0 to match upstream's
-# OCAML_VERSION (.github/workflows/deps-cli.yml / build-desktop-release.yml).
+# git pins (cli/logseq-cli.opam pin-depends: humanize, rrbvec, ...) are absent
+# from nixpkgs, so opam-nix builds each dependency from the pinned
+# opam-repository (flake input) as its own derivation. OCaml is pinned to 5.4.0
+# to match upstream's OCAML_VERSION (.github/workflows/deps-cli.yml /
+# build-desktop-release.yml).
 #
 # buildOpamProject reads the committed cli/logseq-cli.opam (do not use
 # buildDuneProject: it bootstraps opam-file generation with a dune older than the
@@ -50,7 +51,8 @@ let
         chmod -R u+w "$out"
         ${pinRewrites}
       '';
-  baseScope = on.buildOpamProject { inherit pkgs; } "logseq-cli" "${cliProject}" {
+  projectName = "logseq-cli";
+  baseScope = on.buildOpamProject { inherit pkgs; } projectName "${cliProject}" {
     ocaml-base-compiler = "5.4.0";
   };
   # melc locates its own stdlib relative to its binary: `melc -where` yields
@@ -69,18 +71,23 @@ let
       });
     }
   );
-  melangeTransit = scope.melange-transit or scope.melange-transit-melange;
-  melangeEdn = scope.melange-edn or scope.melange-edn-melange;
-in
-{
-  ocamlBuildInputs = [
-    scope.ocaml
-    scope.dune
-    scope.melange
-    scope.melange-fetch
-    melangeTransit
-    melangeEdn
-    scope.melange-fest
-    scope.humanize
+  # Take the closure from the resolved root package rather than naming each
+  # library: buildInputs is opam-nix's own mapping of cli/logseq-cli.opam
+  # `depends:` onto scope entries, so a dependency upstream adds reaches
+  # `dune build @bundle` without an edit here. A hand-listed set dropped
+  # `rrbvec` (logseq/logseq 322cb65ac4), failing every nightly from 2026-07-13
+  # with `Error: Library "rrbvec" not found`. Unresolvable names come back null.
+  closure = builtins.filter (dep: dep != null) scope.${projectName}.buildInputs;
+  # These entries are structural to `dune build @bundle`; fail during
+  # evaluation if one stops landing in the resolved root package inputs.
+  missing = lib.subtractLists (map lib.getName closure) [
+    "ocaml"
+    "dune"
+    "melange"
   ];
-}
+in
+lib.throwIf (missing != [ ])
+  "opam-nix did not resolve ${lib.concatStringsSep ", " missing} for ${projectName}; check cli/logseq-cli.opam depends:."
+  {
+    ocamlBuildInputs = closure;
+  }

@@ -13,8 +13,8 @@
     # from ClojureScript (shadow-cljs `:logseq-cli`) to OCaml compiled via Melange
     # (logseq/logseq dbd220c95d,
     # https://github.com/logseq/logseq/commit/dbd220c95d). The melange* libraries
-    # and the `humanize` git pin are not in nixpkgs, so opam-nix resolves the
-    # `cli/logseq-cli.opam` closure. opam-repository is pinned here (not
+    # and git-pinned dependencies (`humanize`, `rrbvec`, ...) are not in nixpkgs,
+    # so opam-nix resolves the `cli/logseq-cli.opam` closure. opam-repository is pinned here (not
     # opam-nix's bundled default) so the resolved dependency set moves only on an
     # explicit flake.lock bump.
     opam-nix = {

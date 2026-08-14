@@ -75,7 +75,7 @@ stdenv.mkDerivation {
     sqlite
     zstd
   ]
-  # OCaml 5.4 + melange* + humanize closure (opam-nix) for `dune build @bundle`;
+  # cli/logseq-cli.opam's dependency closure (opam-nix) for `dune build @bundle`;
   # each carries setup hooks assembling OCAMLPATH so dune resolves the deps.
   ++ ocamlBuildInputs
   ++ lib.optionals stdenv.hostPlatform.isLinux [
@@ -200,8 +200,8 @@ stdenv.mkDerivation {
 
     # Compile the OCaml CLI to JS via Melange and bundle with Vite
     # (`pnpm --dir cli bundle` == `dune build @bundle`, cli/dist/dune), then stage
-    # the result to static/logseq-cli.js. The opam closure (dune, melange,
-    # melange-*, humanize) is on PATH/OCAMLPATH via ocamlBuildInputs;
+    # the result to static/logseq-cli.js. The opam closure resolved from
+    # cli/logseq-cli.opam is on PATH/OCAMLPATH via ocamlBuildInputs;
     # LOGSEQ_REVISION/LOGSEQ_BUILD_TIME (exported above) feed vite.config.mjs's
     # build defines.
     (
