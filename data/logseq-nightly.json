@@ -34,7 +34,7 @@
   ],
   "cliPnpmDepsHash": "sha256-vkR6AbgdYA3GFZ54/CtcWwMIx9LBTMaadEpzMn9vgiQ=",
   "cliBundlePnpmDepsHash": "sha256-i5zJ+lvhcBF1CA1hFY4SlEg4p6IEfFrNPYTEYiFviiE=",
-  "cliCljDepsHash": "sha256-jvky4YiP2BWVqvp2lLEyDls5zhKTThgq46Um4os+ALM=",
+  "cliCljDepsHash": "sha256-YI17pxlKGBZFQL4ScoUEv6bqff801XknWDN5P6hDsNs=",
   "cliVersion": "2.0.1-alpha+nightly.20260712",
   "toolchain": {
     "node": "24",
