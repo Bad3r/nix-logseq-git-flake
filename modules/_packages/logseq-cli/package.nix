@@ -69,7 +69,8 @@ let
       stdenv
       ;
   };
-  # OCaml 5.4.0 + melange* + humanize closure for the Melange CLI compile.
+  # cli/logseq-cli.opam's dependency closure, derived by opam-deps.nix via
+  # opam-nix, for the Melange CLI compile.
   opamDeps = import ./opam-deps.nix {
     inherit
       cliOpamPinOverrides

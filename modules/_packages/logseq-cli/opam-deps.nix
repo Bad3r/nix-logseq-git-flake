@@ -78,9 +78,16 @@ let
   # `rrbvec` (logseq/logseq 322cb65ac4), failing every nightly from 2026-07-13
   # with `Error: Library "rrbvec" not found`. Unresolvable names come back null.
   closure = builtins.filter (dep: dep != null) scope.${projectName}.buildInputs;
+  # These entries are structural to `dune build @bundle`; fail during
+  # evaluation if one stops landing in the resolved root package inputs.
+  missing = lib.subtractLists (map lib.getName closure) [
+    "ocaml"
+    "dune"
+    "melange"
+  ];
 in
-lib.throwIf (closure == [ ])
-  "opam-nix resolved no dependencies for ${projectName}; cli/logseq-cli.opam lost its depends list."
+lib.throwIf (missing != [ ])
+  "opam-nix did not resolve ${lib.concatStringsSep ", " missing} for ${projectName}; check cli/logseq-cli.opam depends:."
   {
     ocamlBuildInputs = closure;
   }

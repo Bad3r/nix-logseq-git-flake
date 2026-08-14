@@ -123,7 +123,9 @@ nix fmt
 Note: `logseq-cli` resolves its OCaml/Melange closure through opam-nix
 import-from-derivation (IFD), so the `--no-build`/`--offline` check above still
 realizes those intermediate opam derivations during evaluation; they must
-already be built or substitutable.
+already be built or substitutable. `opam-deps.nix` derives the closure from
+`cli/logseq-cli.opam` and checks that the `ocaml`, `dune`, and `melange`
+toolchain entries are present before the build proceeds.
 
 The Darwin desktop package is validated by the `validate-aarch64-darwin`
 workflow job, which builds the package on macOS, verifies the app signature, and
