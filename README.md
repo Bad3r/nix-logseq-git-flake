@@ -1,3 +1,5 @@
+
+
 # nix-logseq-git-flake
 
 Nix flake for Logseq nightly packages.
@@ -116,12 +118,12 @@ nix build .#logseq
 nix build .#logseq-cli
 nix build .#checks.x86_64-linux.logseq-runtime-assets
 nix build .#checks.x86_64-linux.logseq-cli-help
-nix flake check --accept-flake-config --no-build --offline
+nix flake check --accept-flake-config --offline
 nix fmt
 ```
 
 Note: `logseq-cli` resolves its OCaml/Melange closure through opam-nix
-import-from-derivation (IFD), so the `--no-build`/`--offline` check above still
+import-from-derivation (IFD), so the `--offline` check above still
 realizes those intermediate opam derivations during evaluation; they must
 already be built or substitutable. `opam-deps.nix` derives the closure from
 `cli/logseq-cli.opam` and checks that the `ocaml`, `dune`, and `melange`
