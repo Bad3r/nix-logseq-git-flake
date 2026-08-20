@@ -1,23 +1,23 @@
 {
-  "tag": "nightly-20260819",
-  "publishedAt": "2026-08-19T01:59:36Z",
+  "tag": "nightly-20260820",
+  "publishedAt": "2026-08-20T02:00:40Z",
   "assets": {
     "x86_64-linux": {
-      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260819/logseq-linux-x64-2.0.1-alpha%2Bnightly.20260819.tar.gz",
-      "sha256": "sha256-PnTTb8zBuNa+3OR8tync3vsa1sqrrEPFxC+iwz22Ic0="
+      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260820/logseq-linux-x64-2.0.1-alpha%2Bnightly.20260820.tar.gz",
+      "sha256": "sha256-pR6M/z6WwdN/AkYNdfyPBN83SCBO042+Q9qxZBjkTAg="
     },
     "aarch64-linux": {
-      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260819/logseq-linux-arm64-2.0.1-alpha%2Bnightly.20260819.tar.gz",
-      "sha256": "sha256-qUudtYw4epZaz7ghsdbY1TACjrixa00bHHwTm9gTyiM="
+      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260820/logseq-linux-arm64-2.0.1-alpha%2Bnightly.20260820.tar.gz",
+      "sha256": "sha256-5lC+FpaGqmMQy4UTvkG/QeXFgrJFhyDp5F3O34yLydA="
     },
     "aarch64-darwin": {
-      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260819/logseq-darwin-arm64-2.0.1-alpha%2Bnightly.20260819.tar.gz",
-      "sha256": "sha256-M2Ep3bg2DIWnTVZyzHw1uwX2VHJqjekfhPNY8+0kX50="
+      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20260820/logseq-darwin-arm64-2.0.1-alpha%2Bnightly.20260820.tar.gz",
+      "sha256": "sha256-H23vCYzD9X70YP5oLJsOjGMsNTZnHLEQJoLyNjyDICY="
     }
   },
-  "logseqRev": "047acf36eee456b125d01df5987d92b5aa41e171",
-  "logseqVersion": "2.0.1-alpha+nightly.20260819",
-  "cliSrcHash": "sha256-ss4p5OFqBIAhqz4Q+fMerZNfEJsHKV+E+/0H3ev1+QI=",
+  "logseqRev": "be7c1d19186ee738c10c0ebc9a0c021c637c319d",
+  "logseqVersion": "2.0.1-alpha+nightly.20260820",
+  "cliSrcHash": "sha256-SL68F7kyaXkYjSZ5SlNBWJRgHIrNSqsje8d+Pp/8nKs=",
   "cliOpamPinOverrides": [
     {
       "from": "git+https://github.com/RCmerci/melange-edn.git#main",
@@ -39,7 +39,7 @@
   "cliPnpmDepsHash": "sha256-xdEEk5N/G0wGHBYvFLe8N2EL66DYUpVpCSHkvvbsIuE=",
   "cliBundlePnpmDepsHash": "sha256-i5zJ+lvhcBF1CA1hFY4SlEg4p6IEfFrNPYTEYiFviiE=",
   "cliCljDepsHash": "sha256-+ATudcK9ZHXwQZA4omv1B9NvQ5aZtRtABdKBASsysB4=",
-  "cliVersion": "2.0.1-alpha+nightly.20260819",
+  "cliVersion": "2.0.1-alpha+nightly.20260820",
   "toolchain": {
     "node": "24",
     "pnpm": "10.33.0",
