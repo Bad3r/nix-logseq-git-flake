@@ -13,8 +13,10 @@ name: Test Build
 # approval+build+publish chain. Nightly manifest bumps (scheduled or manually
 # dispatched with publish_release=true) get the same context from nightly.yml
 # after the real publish-release path validates the generated manifest commit.
-# The approval job reads the PR labels live from the API instead of the event
-# payload, so the maintainer flow after adding
+# The approval job trusts PRs authored by the repo owner, org members, and
+# collaborators (author_association) and requires the label only for everyone
+# else. It reads that association and the PR labels live from the API instead of
+# the event payload, so the maintainer flow after adding
 # status(security-review-approved) is "Re-run failed jobs" on this workflow;
 # label events deliberately do not re-trigger the pipeline.
 on:
@@ -95,6 +97,17 @@ jobs:
           if [ "$EVENT_NAME" != "pull_request" ]; then
             exit 0
           fi
+          # Owners, org members, and collaborators are trusted to modify
+          # sensitive paths without the label. author_association is computed by
+          # GitHub and cannot be set by the PR author; read it live so adding a
+          # contributor as a collaborator and re-running takes effect.
+          assoc="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.author_association')"
+          case "$assoc" in
+            OWNER | MEMBER | COLLABORATOR)
+              echo "Author association '$assoc' is trusted; label not required."
+              exit 0
+              ;;
+          esac
           # Read labels live instead of from the event payload so a re-run
           # picks up a label added after the run first failed. Capture first:
           # a pipe into grep -q can mask an API failure under pipefail.
