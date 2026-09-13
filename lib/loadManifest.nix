@@ -150,20 +150,20 @@ throwIf (!isAttrs parsed) "Manifest must be a JSON object." (
                 throwIf (!isAttrs toolchain) "Manifest toolchain must be an attribute set." (
                   foldl' validatePatch (foldl' validateToolchain (foldl' validatePinOverride (foldl' validateAsset (
                     foldl'
-                    validateHash
-                    (foldl' validateString parsed [
-                      "tag"
-                      "publishedAt"
-                      "logseqRev"
-                      "logseqVersion"
-                      "cliVersion"
-                    ])
-                    [
-                      "cliSrcHash"
-                      "cliPnpmDepsHash"
-                      "cliBundlePnpmDepsHash"
-                      "cliCljDepsHash"
-                    ]
+                      validateHash
+                      (foldl' validateString parsed [
+                        "tag"
+                        "publishedAt"
+                        "logseqRev"
+                        "logseqVersion"
+                        "cliVersion"
+                      ])
+                      [
+                        "cliSrcHash"
+                        "cliPnpmDepsHash"
+                        "cliBundlePnpmDepsHash"
+                        "cliCljDepsHash"
+                      ]
                   ) assetSystems) pinOverrides) toolchainKeys) patches
                 )
               )
