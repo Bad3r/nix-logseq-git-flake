@@ -294,6 +294,7 @@ jobs:
             opam switch remove default --yes 2>/dev/null || true
             opam switch create default ocaml-system --yes
           fi
+          opam update --yes
           opam --version
           ocaml -version
 
