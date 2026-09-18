@@ -78,6 +78,8 @@ stdenv.mkDerivation {
     cp -r "$TMPDIR/gitlibs" "$out/gitlibs"
     shopt -s nullglob
     if [ -d "$out/gitlibs/_repos" ]; then
+      find "$out/gitlibs/_repos" -type f -name config -exec \
+        sed -i '/^\tignorecase = true$/d; /^\tprecomposeunicode = true$/d' {} +
       while IFS= read -r -d "" objects; do
         repo="$(dirname "$objects")"
         export GIT_DIR="$repo"

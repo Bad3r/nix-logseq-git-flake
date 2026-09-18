@@ -12,8 +12,8 @@
 # ClojureScript to OCaml compiled via Melange. The melange* libraries and the
 # git pins (cli/logseq-cli.opam pin-depends: humanize, rrbvec, ...) are absent
 # from nixpkgs, so opam-nix builds each dependency from the pinned
-# opam-repository (flake input) as its own derivation. OCaml is pinned to 5.4.0
-# to match upstream's OCAML_VERSION (.github/workflows/deps-cli.yml /
+# opam-repository (flake input) as its own derivation. OCaml is pinned to
+# 5.1.1 to match upstream's OCAML_VERSION (.github/workflows/deps-cli.yml /
 # build-desktop-release.yml).
 #
 # buildOpamProject reads the committed cli/logseq-cli.opam (do not use
@@ -53,7 +53,7 @@ let
       '';
   projectName = "logseq-cli";
   baseScope = on.buildOpamProject { inherit pkgs; } projectName "${cliProject}" {
-    ocaml-base-compiler = "5.4.0";
+    ocaml-base-compiler = "5.1.1";
   };
   # melc locates its own stdlib relative to its binary: `melc -where` yields
   # $out/lib/melange/{melange,js/melange}. opam-nix installs OCaml libraries

@@ -282,18 +282,18 @@ jobs:
       - name: Setup OCaml toolchain from Nix
         run: |
           set -euo pipefail
-          nix profile install --inputs-from "$GITHUB_WORKSPACE" \
-            nixpkgs#opam nixpkgs#ocaml
-          printf '%s\n' "$HOME/.nix-profile/bin" >>"$GITHUB_PATH"
-          export PATH="$HOME/.nix-profile/bin:$PATH"
-          # Reuse the cached opam root when its switch still resolves the nixpkgs
-          # ocaml; rebuild the switch if a restored cache points at a moved store
-          # path, and bootstrap from scratch on a cold cache.
+          nix profile install --inputs-from "$GITHUB_WORKSPACE" nixpkgs#opam
+          printf '%s\n' "$HOME/.nix-profile/bin" "$HOME/.opam/default/bin" >>"$GITHUB_PATH"
+          export PATH="$HOME/.nix-profile/bin:$HOME/.opam/default/bin:$PATH"
+          # Reuse the cached opam root when its switch still resolves; rebuild
+          # the switch if a restored cache points at a moved store path, and
+          # bootstrap from scratch on a cold cache.
           if ! opam exec --switch default -- ocaml -version >/dev/null 2>&1; then
             [ -d "$HOME/.opam/repo" ] || opam init --bare --disable-sandboxing --yes --no-setup
             opam switch remove default --yes 2>/dev/null || true
-            opam switch create default ocaml-system --yes
+            opam switch create default ocaml-base-compiler.5.1.1 --yes
           fi
+          opam update --yes
           opam --version
           ocaml -version
 
