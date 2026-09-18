@@ -37,7 +37,7 @@ jobs:
         with:
           name: nix-logseq-git-flake
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          installCommand: nix profile install --inputs-from "$GITHUB_WORKSPACE" nixpkgs#cachix
+          installCommand: bash "$GITHUB_WORKSPACE/scripts/install-cachix.sh"
 
       - name: Check formatting
         run: nix fmt -- --ci
@@ -75,7 +75,7 @@ jobs:
         with:
           name: nix-logseq-git-flake
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          installCommand: nix profile install --inputs-from "$GITHUB_WORKSPACE" nixpkgs#cachix
+          installCommand: bash "$GITHUB_WORKSPACE/scripts/install-cachix.sh"
 
       - name: Run nix flake check (x86_64-linux)
         run: nix flake check
@@ -104,7 +104,7 @@ jobs:
         with:
           name: nix-logseq-git-flake
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          installCommand: nix profile install --inputs-from "$GITHUB_WORKSPACE" nixpkgs#cachix
+          installCommand: bash "$GITHUB_WORKSPACE/scripts/install-cachix.sh"
 
       - name: Build and smoke-test logseq-cli (aarch64)
         run: |
@@ -154,7 +154,7 @@ jobs:
         with:
           name: nix-logseq-git-flake
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          installCommand: nix profile install --inputs-from "$GITHUB_WORKSPACE" nixpkgs#cachix
+          installCommand: bash "$GITHUB_WORKSPACE/scripts/install-cachix.sh"
 
       - name: Build and smoke-test logseq-cli (aarch64-darwin)
         run: |
