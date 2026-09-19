@@ -255,7 +255,7 @@ jobs:
         with:
           name: nix-logseq-git-flake
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          installCommand: nix profile install --inputs-from "$GITHUB_WORKSPACE" nixpkgs#cachix
+          installCommand: bash "$GITHUB_WORKSPACE/scripts/install-cachix.sh"
           skipPush: ${{ !inputs.push_to_cachix }}
 
       - name: Regenerate manifest and CLI hashes
