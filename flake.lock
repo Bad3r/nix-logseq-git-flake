@@ -249,11 +249,11 @@
     "opam-repository": {
       "flake": false,
       "locked": {
-        "lastModified": 1790197182,
-        "narHash": "sha256-Yoc47cVl8K2P347pEw4Vq/x4v47wmXac9UbM7CZsdJ8=",
+        "lastModified": 1790272292,
+        "narHash": "sha256-8MGN88ZWXPibRrwBjOrpobmLWU99qIDYaVXJ2/X0rJs=",
         "owner": "ocaml",
         "repo": "opam-repository",
-        "rev": "3287ecd1a16166c55410821974c5e27ce090aeb6",
+        "rev": "43a58bf452ff14f0a4800883b248a482ff85ac72",
         "type": "github"
       },
       "original": {
