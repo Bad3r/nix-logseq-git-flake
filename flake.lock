@@ -76,11 +76,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1790091288,
-        "narHash": "sha256-2dUuLTiQrf2gUFVLlayDq/hgluitplAMv6Y9bYwQQ+c=",
+        "lastModified": 1790500375,
+        "narHash": "sha256-XN3sDtn8TU9hAc9xqZ+SqRB/HHm2wjxM6aSWYLJU+oo=",
         "owner": "cachix",
         "repo": "git-hooks.nix",
-        "rev": "0d3997c4d3253505f77c9bcea63904bb575da3c5",
+        "rev": "a0e4241b51206fbcbf52fd322eb5f0cd80f153c4",
         "type": "github"
       },
       "original": {
@@ -249,11 +249,11 @@
     "opam-repository": {
       "flake": false,
       "locked": {
-        "lastModified": 1790456307,
-        "narHash": "sha256-OUAh6AEoBRoQZfV8KRo5F6ei0pWwyaGxeOy5etZaXFA=",
+        "lastModified": 1790506235,
+        "narHash": "sha256-Qpetbps5aCp//EWU/oZ3k3SEyBG+RWX/zDP9I0HGVJA=",
         "owner": "ocaml",
         "repo": "opam-repository",
-        "rev": "111df5da0558d727ddd436665be5f9403cd9fb36",
+        "rev": "bbc4314c37cbe5902ab659460c440b099fe729a3",
         "type": "github"
       },
       "original": {
