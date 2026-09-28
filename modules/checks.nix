@@ -22,7 +22,12 @@
 
         logseq-desktop-revision = import ./_checks/desktop-revision.nix {
           inherit pkgs;
-          inherit (logseqNightly) logseqNodejs logseqRev logseqTree;
+          inherit (logseqNightly)
+            cli
+            logseqNodejs
+            logseqRev
+            logseqTree
+            ;
         };
 
         logseq =

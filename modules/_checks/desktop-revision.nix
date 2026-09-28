@@ -13,7 +13,14 @@
 # falls back to git on the checkout, which the workflow's patch step leaves
 # dirty; only a build that honours LOGSEQ_REVISION carries the plain 40-char
 # manifest.logseqRev that logseq-cli/build.nix stamps.
+#
+# manifest.logseqRev is the shared reference, but comparing only the desktop
+# side against it would leave the CLI half unobserved: if build.nix's
+# LOGSEQ_REVISION export regresses, the CLI stamps something else and the two
+# evict each other's workers while this check stays green. Probe 3 reads the
+# Nix CLI's own stamp so both halves of the invariant are measured.
 {
+  cli,
   logseqNodejs,
   logseqRev,
   logseqTree,
@@ -92,6 +99,22 @@ pkgs.runCommand "logseq-desktop-revision-check"
         exit 1
       fi
     done
+
+    # Probe 3: the Nix-built CLI, the other side of the parity invariant. Same
+    # OCaml bundle probe 1 reads out of the ASAR, built here from source.
+    cli_status=0
+    cli_output=$(${cli}/bin/logseq-cli --version 2>&1) || cli_status=$?
+    if [ "$cli_status" -ne 0 ]; then
+      echo "logseq-cli --version exited $cli_status" >&2
+      echo "$cli_output" >&2
+      exit 1
+    fi
+    cli_stamped=$(printf '%s\n' "$cli_output" | sed -n 's/^Revision: //p')
+    if [ "$cli_stamped" != "${logseqRev}" ]; then
+      echo "logseq-cli stamps revision '$cli_stamped', manifest.logseqRev is '${logseqRev}'" >&2
+      echo "check the LOGSEQ_REVISION export in modules/_packages/logseq-cli/build.nix" >&2
+      exit 1
+    fi
 
     touch $out
   ''
