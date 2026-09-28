@@ -440,7 +440,13 @@ jobs:
       # logseq.cli.server arbitrates workers on exact revision equality across
       # owner-source, so the Nix logseq-cli (which stamps manifest.logseqRev) and
       # this payload must carry the identical string.
+      # Scoped to the patched-source flows (nightly and test-build). pr-build is
+      # the only caller passing apply_patches: false, and it builds arbitrary
+      # repo+ref to report whether that PR compiles and to publish its tarball. A
+      # PR head that reworks LOGSEQ_REVISION handling or the `Revision: ` line is
+      # not a build failure there, and failing the leg would withhold its tarball.
       - name: Verify runtime revision stamp
+        if: ${{ inputs.apply_patches }}
         working-directory: logseq-src
         env:
           LOGSEQ_REV: ${{ needs.resolve-revision.outputs.rev }}
@@ -449,7 +455,17 @@ jobs:
           # The CLI validates a readable/writable root-dir before printing
           # --version; point HOME at a scratch dir so the probe leaves no ~/logseq.
           probe_home="$(mktemp -d)"
-          stamped="$(HOME="$probe_home" node ./static/js/logseq-cli.js --version | sed -n 's/^Revision: //p')"
+          # Capture status explicitly: under `set -euo pipefail` a bundle that
+          # crashes on --version would abort the step before the diagnostics below,
+          # leaving only a bare exit code in the log.
+          version_status=0
+          version_output="$(HOME="$probe_home" node ./static/js/logseq-cli.js --version 2>&1)" || version_status=$?
+          if [ "$version_status" -ne 0 ]; then
+            echo "bundled CLI --version exited ${version_status}:" >&2
+            echo "$version_output" >&2
+            exit 1
+          fi
+          stamped="$(printf '%s\n' "$version_output" | sed -n 's/^Revision: //p')"
           if [ "$stamped" != "$LOGSEQ_REV" ]; then
             echo "bundled CLI stamped revision '${stamped}', expected '${LOGSEQ_REV}'" >&2
             echo "LOGSEQ_REVISION did not reach cli/vite.config.mjs" >&2
