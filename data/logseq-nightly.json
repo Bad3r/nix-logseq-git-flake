@@ -50,6 +50,10 @@
     {
       "file": "logseq-cli-auth-bind-loopback-address-families.patch",
       "cli": true
+    },
+    {
+      "file": "logseq-graph-lifecycle-ownership-respect-home.patch",
+      "cli": true
     }
   ]
 }

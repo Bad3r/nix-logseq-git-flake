@@ -20,6 +20,16 @@
           inherit (logseqNightly) payload logseqSrc;
         };
 
+        logseq-desktop-revision = import ./_checks/desktop-revision.nix {
+          inherit pkgs;
+          inherit (logseqNightly)
+            cli
+            logseqNodejs
+            logseqRev
+            logseqTree
+            ;
+        };
+
         logseq =
           pkgs.runCommand "logseq-check"
             {

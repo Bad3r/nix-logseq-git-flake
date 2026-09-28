@@ -65,6 +65,7 @@ in
   inherit
     logseqDesktop
     logseqSrc
+    logseqTree
     payload
     ;
 }

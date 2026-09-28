@@ -1,0 +1,47 @@
+Resolve the graph ownership lock root through os.homedir().
+
+deps/graph-lifecycle/ownership.cjs runtimeRoot() derives the runtime-locks
+directory from os.userInfo().homedir. Node documents that field as coming from
+the operating system password file, unlike os.homedir(), which consults the HOME
+environment variable first and only falls back to the password entry. Every
+other home lookup in the tree uses os.homedir(), including index.cjs in this
+same deps/graph-lifecycle package (line 52, tilde expansion for the root dir),
+logseq.cli.root-dir/default-root-dir, and frontend.worker.platform.node, so
+ownership.cjs is the sole place where an exported HOME is ignored.
+
+That divergence breaks any caller that relocates HOME, because acquireOwnership
+mkdirs runtimeRoot() before it opens lock.sqlite. In the Nix build sandbox on
+Darwin the build user's password entry points at /var/empty, so the checks fail
+with
+
+  Error (server-cleanup-failed): EACCES: permission denied, mkdir
+  '/var/empty/Library/Application Support/Logseq/runtime-locks/<hash>'
+
+even though the check exports HOME to a writable directory. Linux escapes it
+only by accident: the Linux sandbox's synthetic passwd entry already points at
+the writable build directory, so both lookups agree there. The same divergence
+hits any sandbox, container, CI runner, or multi-user setup that sets HOME to
+something other than the password-file value.
+
+Fix: call os.homedir() in runtimeRoot(). This keeps the password entry as the
+fallback for callers with no HOME set, so behavior is unchanged when HOME
+matches the passwd value, and it makes the ownership root agree with the root
+dir that the rest of the CLI already resolves through os.homedir().
+
+Removal condition: drop this patch when upstream resolves the ownership runtime
+root through os.homedir() (or another HOME-aware lookup) in
+deps/graph-lifecycle/ownership.cjs. A failed strict apply in the nightly build
+or the CLI build is the drift signal.
+
+diff --git a/deps/graph-lifecycle/ownership.cjs b/deps/graph-lifecycle/ownership.cjs
+--- a/deps/graph-lifecycle/ownership.cjs
++++ b/deps/graph-lifecycle/ownership.cjs
+@@ -6,7 +6,7 @@
+ const crypto = require('node:crypto');
+
+ function runtimeRoot() {
+-  const home = os.userInfo().homedir;
++  const home = os.homedir();
+   switch (process.platform) {
+     case 'darwin': return path.join(home, 'Library', 'Application Support', 'Logseq', 'runtime-locks');
+     case 'win32': return path.join(home, 'AppData', 'Local', 'Logseq', 'runtime-locks');
