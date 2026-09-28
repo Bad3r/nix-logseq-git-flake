@@ -16,15 +16,18 @@
 {
   logseqNodejs,
   logseqRev,
-  payload,
+  logseqTree,
   pkgs,
 }:
 let
+  # Read the normalized tree, not the raw payload: tree.nix globs the Darwin
+  # bundle as `*.app` and renames it, so an upstream productName change keeps
+  # working here instead of turning into a path-not-found with no explanation.
   asarPath =
     if pkgs.stdenv.hostPlatform.isDarwin then
-      "${payload}/Logseq.app/Contents/Resources/app.asar"
+      "${logseqTree}/Logseq.app/Contents/Resources/app.asar"
     else
-      "${payload}/resources/app.asar";
+      "${logseqTree}/share/logseq/resources/app.asar";
 in
 pkgs.runCommand "logseq-desktop-revision-check"
   {
