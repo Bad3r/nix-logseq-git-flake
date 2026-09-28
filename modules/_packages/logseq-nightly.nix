@@ -44,6 +44,5 @@ let
 in
 desktopAssembly
 // {
-  inherit (manifest) logseqRev;
-  inherit cli logseqNodejs;
+  inherit cli;
 }

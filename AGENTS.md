@@ -57,10 +57,8 @@ Parity is functional, not cosmetic. `logseq.cli.server` compares a running db-wo
 
 Two producers set the stamp and both pin the same value:
 
-- `.github/workflows/build-desktop.yml` exports `LOGSEQ_REVISION` on the `Compile Logseq assets` step. Without it the patch step leaves the tree dirty and the desktop payload ships an abbreviated `-dirty` hash instead. The `Verify runtime revision stamp` step then fails the leg before `electron:make`: it runs `static/js/logseq-cli.js --version` for the vite define and greps `static/electron.js` and `static/js/db-worker-node.js` for the shadow-cljs one.
+- `.github/workflows/build-desktop.yml` exports `LOGSEQ_REVISION` on the `Compile Logseq assets` step. Without it the patch step leaves the tree dirty and the desktop payload ships an abbreviated `-dirty` hash instead. The `Verify runtime revision stamp` step then fails the leg before `electron:make`: it runs `static/js/logseq-cli.js --version` for the vite define and greps `static/electron.js` and `static/js/db-worker-node.js` for the shadow-cljs one. It is gated on `apply_patches`, so it covers the nightly and `test-build` flows but not `pr-build`, which compiles arbitrary PR source.
 - `modules/_packages/logseq-cli/build.nix` exports `LOGSEQ_REVISION=manifest.logseqRev` (`fetchFromGitHub` strips `.git`, so the git fallback is impossible there).
-
-`checks.<system>.logseq-desktop-revision` closes the loop against the published artifact, probing the same three bundles out of the ASAR. Both mechanisms are checked because they are independent; a build that fed only one would still split the app and the CLI. That check fails on desktop tarballs published before the workflow set `LOGSEQ_REVISION`, and goes green on the first nightly built with it.
 
 ### Manifest fan-out inside flake modules
 
@@ -159,7 +157,6 @@ nix develop -c pre-commit run --all-files
 
 ```bash
 nix build .#checks.x86_64-linux.logseq-runtime-assets
-nix build .#checks.x86_64-linux.logseq-desktop-revision
 nix build .#checks.x86_64-linux.logseq
 nix build .#checks.x86_64-linux.logseq-cli
 nix build .#checks.x86_64-linux.logseq-cli-help
