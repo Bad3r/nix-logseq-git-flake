@@ -49,6 +49,17 @@ End-to-end data flow:
 
 The manifest is the single source of truth for downstream consumers. Adding a field requires updating **both** `scripts/update-nightly.sh` (producer) **and** `lib/loadManifest.nix` (validator) in the same change.
 
+### Revision stamping
+
+The desktop package and `logseq-cli` must stamp the **same** revision string, and that string is `manifest.logseqRev` (the plain 40-char upstream commit) on both sides. Upstream embeds it as `logseq.common.version/REVISION` through the shadow-cljs `build-metadata-hook` (the `app`, `db-worker`, `db-worker-node`, `electron`, and `publishing` builds) and as `LOGSEQ_CLI_REVISION` through `cli/vite.config.mjs`. Both read `LOGSEQ_REVISION` first and otherwise fall back to git on the checkout, with different formats: the hook runs `git describe --long --always --dirty`, Vite runs `git rev-parse --short HEAD` plus a `-dirty` suffix.
+
+Parity is functional, not cosmetic. `logseq.cli.server` compares a running db-worker's revision against the requester's by exact string equality and, on a mismatch, stops and restarts that worker through `stop-version-mismatched-server!`, which passes `allow-cross-owner? true`. The Electron app (`owner-source :electron`) and `logseq-cli` (`owner-source :cli`) share `~/logseq/graphs/<graph>/db-worker.lock` and `~/logseq/server-list` by default, so two differing stamps make the app and the CLI evict each other's worker on every alternation.
+
+Two producers set the stamp and both pin the same value:
+
+- `.github/workflows/build-desktop.yml` exports `LOGSEQ_REVISION` on the `Compile Logseq assets` step. Without it the patch step leaves the tree dirty and the desktop payload ships an abbreviated `-dirty` hash instead. The `Verify runtime revision stamp` step then fails the leg before `electron:make`: it runs `static/js/logseq-cli.js --version` for the vite define and greps `static/electron.js` and `static/js/db-worker-node.js` for the shadow-cljs one. It is gated on `apply_patches`, so it covers the nightly and `test-build` flows but not `pr-build`, which compiles arbitrary PR source.
+- `modules/_packages/logseq-cli/build.nix` exports `LOGSEQ_REVISION=manifest.logseqRev` (`fetchFromGitHub` strips `.git`, so the git fallback is impossible there).
+
 ### Manifest fan-out inside flake modules
 
 - `modules/logseq-scope.nix` loads `data/logseq-nightly.json` through `lib/loadManifest.nix` and exposes the shared package set as a per-system module argument.

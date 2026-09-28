@@ -386,11 +386,20 @@ jobs:
           PY
         working-directory: logseq-src
 
+      # LOGSEQ_REVISION is read by the shadow-cljs build-metadata hook (app,
+      # db-worker, db-worker-node, electron, publishing) and by
+      # cli/vite.config.mjs; without it both fall back to git on the checkout,
+      # which yields the abbreviated hash plus `-dirty` once the patch step above
+      # touches the tree. modules/_packages/logseq-cli/build.nix stamps the plain
+      # 40-char manifest.logseqRev, and logseq.cli.server treats a revision that
+      # differs from its own as an outdated db-worker to stop and restart, so the
+      # desktop payload has to stamp the same string the Nix CLI does.
       - name: Compile Logseq assets
         working-directory: logseq-src
         env:
           LOGSEQ_SENTRY_DSN: ""
           LOGSEQ_POSTHOG_TOKEN: ""
+          LOGSEQ_REVISION: ${{ needs.resolve-revision.outputs.rev }}
         run: |
           pnpm install --frozen-lockfile
           pnpm gulp:build
@@ -422,6 +431,57 @@ jobs:
           test -f ./static/js/db-worker-node.js
           test -f ./static/js/logseq-cli.js
           test -f ./static/.agents/skills/logseq-cli/SKILL.md
+
+      # Fails on the stamp drift LOGSEQ_REVISION exists to prevent, before the
+      # expensive electron:make step. Both mechanisms are probed because they are
+      # independent: cli/vite.config.mjs defines LOGSEQ_CLI_REVISION for the CLI
+      # bundle, the shadow-cljs build-metadata hook defines
+      # logseq.common.version/REVISION for electron.js and db-worker-node.js.
+      # logseq.cli.server arbitrates workers on exact revision equality across
+      # owner-source, so the Nix logseq-cli (which stamps manifest.logseqRev) and
+      # this payload must carry the identical string.
+      # Scoped to the patched-source flows (nightly and test-build). pr-build is
+      # the only caller passing apply_patches: false, and it builds arbitrary
+      # repo+ref to report whether that PR compiles and to publish its tarball. A
+      # PR head that reworks LOGSEQ_REVISION handling or the `Revision: ` line is
+      # not a build failure there, and failing the leg would withhold its tarball.
+      - name: Verify runtime revision stamp
+        if: ${{ inputs.apply_patches }}
+        working-directory: logseq-src
+        env:
+          LOGSEQ_REV: ${{ needs.resolve-revision.outputs.rev }}
+        run: |
+          set -euo pipefail
+          # The CLI validates a readable/writable root-dir before printing
+          # --version; point HOME at a scratch dir so the probe leaves no ~/logseq.
+          probe_home="$(mktemp -d)"
+          # Capture status explicitly: under `set -euo pipefail` a bundle that
+          # crashes on --version would abort the step before the diagnostics below,
+          # leaving only a bare exit code in the log.
+          version_status=0
+          version_output="$(HOME="$probe_home" node ./static/js/logseq-cli.js --version 2>&1)" || version_status=$?
+          if [ "$version_status" -ne 0 ]; then
+            echo "bundled CLI --version exited ${version_status}:" >&2
+            echo "$version_output" >&2
+            exit 1
+          fi
+          stamped="$(printf '%s\n' "$version_output" | sed -n 's/^Revision: //p')"
+          if [ "$stamped" != "$LOGSEQ_REV" ]; then
+            echo "bundled CLI stamped revision '${stamped}', expected '${LOGSEQ_REV}'" >&2
+            echo "LOGSEQ_REVISION did not reach cli/vite.config.mjs" >&2
+            exit 1
+          fi
+          # electron.js and db-worker-node.js do not run standalone; assert the
+          # define is embedded. A git-fallback build carries the abbreviated
+          # `-dirty` hash and cannot contain the full rev.
+          for bundle in ./static/electron.js ./static/js/db-worker-node.js; do
+            if ! grep -qF "$LOGSEQ_REV" "$bundle"; then
+              echo "${bundle} does not embed revision '${LOGSEQ_REV}'" >&2
+              echo "LOGSEQ_REVISION did not reach the shadow-cljs build-metadata hook" >&2
+              exit 1
+            fi
+          done
+          echo "runtime revision stamp: ${stamped}"
 
       - name: Update APP Version
         env:
