@@ -1,0 +1,127 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: Sensitive Change Review
+
+# Notify contributors when a pull request touches security-sensitive paths (CI
+# workflows, composite actions, flake.lock) and still needs the
+# status(security-review-approved) label. Enforcement lives in validate.yml's
+# sensitive-change-policy job and test-build.yml's test-build-approval job; this
+# workflow only posts, refreshes, or removes an advisory comment and never fails
+# the PR.
+#
+# pull_request_target (not pull_request) so the comment can be posted on
+# fork-authored PRs: their pull_request-triggered runs get a read-only token
+# with no write access, and forks are exactly the PRs that still need the label
+# (owners/members/collaborators are bypassed). This job reads only PR metadata
+# through the API and runs the base-branch composite action; it never checks out
+# or executes PR head code, so the write-capable token never reaches untrusted
+# code.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+concurrency:
+  group: sensitive-change-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  notify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout base repo (composite action only)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Detect sensitive changes
+        id: detect
+        uses: ./.github/actions/detect-sensitive-changes
+
+      - name: Upsert security review notice
+        uses: actions/github-script@v9
+        env:
+          SENSITIVE: ${{ steps.detect.outputs.sensitive }}
+          MATCHED_FILES: ${{ steps.detect.outputs.files }}
+        with:
+          script: |
+            const marker = "<!-- sensitive-change-review -->";
+            const requiredLabel = "status(security-review-approved)";
+            const trusted = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+
+            const pr = context.payload.pull_request;
+            const assoc = pr.author_association;
+            const labels = (pr.labels || []).map((label) => label.name);
+            const sensitive = process.env.SENSITIVE === "true";
+            const required =
+              sensitive && !trusted.has(assoc) && !labels.includes(requiredLabel);
+
+            const { owner, repo } = context.repo;
+            const issue_number = pr.number;
+
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number, per_page: 100 }
+            );
+            const existing = comments.find(
+              (c) => c.user?.type === "Bot" && c.body?.includes(marker)
+            );
+
+            if (!required) {
+              if (existing) {
+                await github.rest.issues.deleteComment({
+                  owner,
+                  repo,
+                  comment_id: existing.id
+                });
+                core.info("Review satisfied; removed prior notice.");
+              } else {
+                core.info("No review required; nothing to post.");
+              }
+              return;
+            }
+
+            const fileList = (process.env.MATCHED_FILES || "")
+              .split("\n")
+              .filter(Boolean)
+              .map((file) => "- `" + file + "`")
+              .join("\n");
+            const body = [
+              marker,
+              "### Security review required",
+              "",
+              "This pull request changes security-sensitive paths (CI workflow " +
+                "files, composite actions, or `flake.lock`), so a maintainer " +
+                "must review it and add " +
+                "the `" + requiredLabel + "` label before the required build " +
+                "and merge checks can pass:",
+              "",
+              fileList,
+              "",
+              "No action is needed from you beyond the review. New commits that " +
+                "keep these files changed refresh this notice; it is removed " +
+                "automatically once the label is added."
+            ].join("\n");
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body
+              });
+              core.info("Updated existing security review notice.");
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body
+              });
+              core.info("Posted security review notice.");
+            }
