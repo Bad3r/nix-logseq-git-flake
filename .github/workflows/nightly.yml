@@ -147,10 +147,11 @@ jobs:
             publish_release
           fi
 
-      # Refresh flake.lock before update-nightly.sh: a git/zlib bump changes the
-      # CLI cliCljDeps FOD bytes, so its hash must be re-resolved against the new
-      # lock in the same run. nix flake check below validates the lock + manifest
-      # together, and the commit step ships flake.lock with the bump.
+      # Refresh flake.lock before update-nightly.sh: a clojure bump (tools.deps,
+      # tools.gitlibs, Maven resolver) can change the CLI cliCljDeps FOD layout,
+      # so its hash must be re-resolved against the new lock in the same run.
+      # nix flake check below validates the lock + manifest together, and the
+      # commit step ships flake.lock with the bump.
       - name: Update flake inputs
         run: nix flake update
 
