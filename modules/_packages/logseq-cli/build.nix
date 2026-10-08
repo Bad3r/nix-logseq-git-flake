@@ -145,18 +145,13 @@ stdenv.mkDerivation {
       exit 1
     fi
 
-    # tools.deps needs a writable Maven local repo and gitlibs tree; the FOD
-    # outputs are read-only in the store, so copy them into $TMPDIR.
+    # Maven needs a writable local repo and the FOD output is read-only in the
+    # store, so copy it into $TMPDIR. gitlibs is only read, but copying it too
+    # keeps the FOD store path off the classpath, so a compiled-in source path
+    # cannot pull the FOD into the CLI's runtime closure.
     cp -r ${cliCljDeps}/m2 "$TMPDIR/m2"
     cp -r ${cliCljDeps}/gitlibs "$TMPDIR/gitlibs"
     chmod -R u+w "$TMPDIR/m2" "$TMPDIR/gitlibs"
-
-    # The FOD froze the worktree gitlinks' absolute build-dir path to the fixed
-    # `@GITLIBS@` placeholder for byte-reproducibility. Restore the real path so
-    # tools.gitlibs can resolve the `libs/<coord>/<sha>` worktrees offline.
-    while IFS= read -r -d "" link; do
-      substituteInPlace "$link" --replace-fail "@GITLIBS@" "$TMPDIR/gitlibs"
-    done < <(grep -rFIlZ '@GITLIBS@' "$TMPDIR/gitlibs" 2>/dev/null || true)
 
     export GITLIBS="$TMPDIR/gitlibs"
     clj_sdeps="{:mvn/local-repo \"$TMPDIR/m2\"}"
@@ -168,8 +163,9 @@ stdenv.mkDerivation {
     # logseq.cli.server restarts a running db-worker whose revision differs
     # from the CLI's, and a constant placeholder revision would let a newer
     # CLI silently reuse a stale worker from an older nightly. The git in
-    # nativeBuildInputs stays: tools.gitlibs still shells out to it when
-    # resolving the offline git deps tree.
+    # nativeBuildInputs stays: the hook evaluates its `git describe` fallback
+    # even when LOGSEQ_REVISION is set, and clojure.java.shell/sh throws when
+    # the git binary is missing.
     export LOGSEQ_REVISION=${lib.escapeShellArg logseqRev}
     # The hook's BUILD_TIME fallback is wall-clock; pin it to SOURCE_DATE_EPOCH
     # so rebuilds stay byte-identical.
