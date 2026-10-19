@@ -264,53 +264,55 @@ jobs:
       contents: read
       pull-requests: read
     steps:
+      # Load the local detector from the trusted base commit, not the
+      # pull_request merge ref (which contains PR head code). Otherwise a PR
+      # could rewrite .github/actions/detect-sensitive-changes to force
+      # sensitive=false and bypass this gate while changing a sensitive path.
+      # The detector lists changed files through the API, so the base-pinned
+      # action still sees the real PR diff.
+      - name: Checkout base ref (trusted detector source)
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Detect sensitive changes
         id: detect
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const sensitivePatterns = [
-              /^\.github\/workflows\/.*/,
-              /(^|\/)flake\.lock$/
-            ];
-
-            const prNumber = context.payload.pull_request.number;
-            const files = await github.paginate(
-              github.rest.pulls.listFiles,
-              {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: prNumber,
-                per_page: 100
-              }
-            );
-
-            const matched = files
-              .map((f) => f.filename)
-              .filter((filename) =>
-                sensitivePatterns.some((pattern) => pattern.test(filename))
-              );
-
-            core.info(`Sensitive files changed: ${matched.length}`);
-            core.setOutput("sensitive_changed", matched.length > 0 ? "true" : "false");
-            core.setOutput("matched_files", matched.join("\n"));
+        uses: ./.github/actions/detect-sensitive-changes
 
       - name: Enforce security review label for sensitive changes
-        if: steps.detect.outputs.sensitive_changed == 'true'
+        if: steps.detect.outputs.sensitive == 'true'
         uses: actions/github-script@v9
         env:
-          MATCHED_FILES: ${{ steps.detect.outputs.matched_files }}
+          MATCHED_FILES: ${{ steps.detect.outputs.files }}
         with:
           script: |
             const requiredLabel = "status(security-review-approved)";
-            const labels = (context.payload.pull_request.labels || []).map((label) => label.name);
-            if (!labels.includes(requiredLabel)) {
-              const changed = process.env.MATCHED_FILES;
-              core.setFailed(
-                [
-                  `Sensitive file changes detected:\n${changed}`,
-                  `Missing required label: ${requiredLabel}`,
-                  "Add the label and ensure CODEOWNER approval before merge."
-                ].join("\n\n")
+            // Owners, org members, and collaborators are trusted to change
+            // sensitive paths without the label. author_association is computed
+            // by GitHub and cannot be set by the PR author.
+            const trusted = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+            const assoc = context.payload.pull_request.author_association;
+            if (trusted.has(assoc)) {
+              core.info(
+                `Author association '${assoc}' is trusted; ` +
+                  `'${requiredLabel}' not required.`
               );
+              return;
             }
+            const labels = (context.payload.pull_request.labels || []).map(
+              (label) => label.name
+            );
+            if (labels.includes(requiredLabel)) {
+              return;
+            }
+            const changed = process.env.MATCHED_FILES;
+            core.setFailed(
+              [
+                `Sensitive file changes detected:\n${changed}`,
+                `Missing required label: ${requiredLabel}`,
+                `Author association '${assoc}' is not owner/member/collaborator.`,
+                "A maintainer must review the changes and add the label before merge."
+              ].join("\n\n")
+            );
