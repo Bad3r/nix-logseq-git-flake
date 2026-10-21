@@ -1,23 +1,23 @@
 {
   "tag": "nightly-20261021",
-  "publishedAt": "2026-10-21T04:40:09Z",
+  "publishedAt": "2026-10-21T19:26:10Z",
   "assets": {
     "x86_64-linux": {
       "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20261021/logseq-linux-x64-2.0.2-alpha%2Bnightly.20261021.tar.gz",
-      "sha256": "sha256-NPg/jcmy3luUw2fh8iObyWPuFQ27mYsIWBntozlZzEU="
+      "sha256": "sha256-X0bRtNpWAuicy6DfCN+qqMzmw9lbKbdW1eKKtVSIBUU="
     },
     "aarch64-linux": {
       "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20261021/logseq-linux-arm64-2.0.2-alpha%2Bnightly.20261021.tar.gz",
-      "sha256": "sha256-GPdh2eGOh/sZ/DCwEFJLCmniqNBs7y2ti5JFeCna6RM="
+      "sha256": "sha256-X2w304onKW9OTvdQ+AkSnZ8YiT81IX8sm39Uw7GQhNc="
     },
     "aarch64-darwin": {
       "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20261021/logseq-darwin-arm64-2.0.2-alpha%2Bnightly.20261021.tar.gz",
-      "sha256": "sha256-SUqMltipQak7SsQp/23z30TEAJrdWQyEXcYTVw27AvM="
+      "sha256": "sha256-453WxeRLsoXq4mXasj+8EwZOqO2Id45OfkIso3mbfG8="
     }
   },
-  "logseqRev": "e8c4c37ed43299f22ca36ef898466eae02f45416",
+  "logseqRev": "05c3ae73e08498e9e20f1b11c3eac5525e5e588d",
   "logseqVersion": "2.0.2-alpha+nightly.20261021",
-  "cliSrcHash": "sha256-6/Mzxrw1XK1wHZonyM+7yNOGejoM8anBhnBGX/TAA6k=",
+  "cliSrcHash": "sha256-HpEGQPSnE0kETNvFEIukQledHTUF8R0caVNDM1zkE7I=",
   "cliOpamPinOverrides": [
     {
       "from": "git+https://github.com/logseq/melange-edn.git#main",
