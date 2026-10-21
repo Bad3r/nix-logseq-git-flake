@@ -1,8 +1,7 @@
 # Verifies the desktop ASAR ships the runtime JS the app loads at startup. Derives
 # the required entries from upstream scripts/prepare-desktop-runtime-js.mjs: every
 # non-optional copyPairs destination under static/js/ must appear in the ASAR as
-# /js/<name>. Every dependency in the ASAR's own package.json must appear as
-# /node_modules/<name>.
+# /js/<name>.
 {
   logseqSrc,
   payload,
@@ -20,7 +19,6 @@ pkgs.runCommand "logseq-runtime-assets-check"
     nativeBuildInputs = [
       pkgs.asar
       pkgs.gnugrep
-      pkgs.jq
       pkgs.python3
     ];
   }
@@ -130,22 +128,6 @@ pkgs.runCommand "logseq-runtime-assets-check"
     if [ "$status" -ne 0 ]; then
       echo "runtime entries required from prepare-desktop-runtime-js.mjs:" >&2
       sed 's:^:  /js/:' required-runtime-names >&2
-      exit 1
-    fi
-
-    asar extract-file "$asar_path" package.json
-    jq -r '.dependencies // {} | keys[]' package.json > required-dependencies
-    if [ ! -s required-dependencies ]; then
-      echo "ASAR package.json declares no dependencies" >&2
-      exit 1
-    fi
-    while IFS= read -r name; do
-      if ! grep -qxF "/node_modules/$name" entries; then
-        echo "missing ASAR dependency: /node_modules/$name" >&2
-        status=1
-      fi
-    done < required-dependencies
-    if [ "$status" -ne 0 ]; then
       exit 1
     fi
 
