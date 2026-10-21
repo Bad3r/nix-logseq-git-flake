@@ -528,7 +528,7 @@ jobs:
           # resolves the root workspace (where static/ is not a member), reports no
           # deps, and falls back to packaging the root node_modules. Upstream packages
           # in a separate job without the root workspace; drop it here to match.
-          rm ../pnpm-workspace.yaml
+          rm -f ../pnpm-workspace.yaml
           if [ "${{ matrix.os }}" = "darwin" ]; then
             pnpm install --ignore-workspace --frozen-lockfile \
               --config.supportedArchitectures.os=darwin \
