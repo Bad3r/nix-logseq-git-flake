@@ -1,22 +1,22 @@
 {
-  "tag": "nightly-20261024",
-  "publishedAt": "2026-10-24T04:31:46Z",
+  "tag": "nightly-20261025",
+  "publishedAt": "2026-10-25T04:30:11Z",
   "assets": {
     "x86_64-linux": {
-      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20261024/logseq-linux-x64-2.0.2-alpha%2Bnightly.20261024.tar.gz",
-      "sha256": "sha256-bVOumfnmn21nBHrTVobz9CNqMCRs0BtT0EHhmG7shY4="
+      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20261025/logseq-linux-x64-2.0.2-alpha%2Bnightly.20261025.tar.gz",
+      "sha256": "sha256-ezu3oABFNUI8NE9swqJ4R/+uhdjbKDv7siXwEzpLWj8="
     },
     "aarch64-linux": {
-      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20261024/logseq-linux-arm64-2.0.2-alpha%2Bnightly.20261024.tar.gz",
-      "sha256": "sha256-I3JVuyMofRhdSposrtf8F68xpFL9C95CESiMsdEGag4="
+      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20261025/logseq-linux-arm64-2.0.2-alpha%2Bnightly.20261025.tar.gz",
+      "sha256": "sha256-I5hmEcYRBOQX802D3jdIndn3RONPwUdmolKqiMTAMRk="
     },
     "aarch64-darwin": {
-      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20261024/logseq-darwin-arm64-2.0.2-alpha%2Bnightly.20261024.tar.gz",
-      "sha256": "sha256-zsIDrc//b0aj8LnLnUy5Yew8zGBtqQM5RKWA/qtgFvk="
+      "url": "https://github.com/Bad3r/nix-logseq-git-flake/releases/download/nightly-20261025/logseq-darwin-arm64-2.0.2-alpha%2Bnightly.20261025.tar.gz",
+      "sha256": "sha256-5RpANs0yH+VgGSQpgH+aaAzmfiSe7MHuX72nXBy2rtM="
     }
   },
   "logseqRev": "408198a4feba58788e9163b35ae5f44aca9451d3",
-  "logseqVersion": "2.0.2-alpha+nightly.20261024",
+  "logseqVersion": "2.0.2-alpha+nightly.20261025",
   "cliSrcHash": "sha256-DH6rKvXzAwJdPqZgLvjzETzu0HjBX/lq2gIhTUxEKW8=",
   "cliOpamPinOverrides": [
     {
@@ -39,7 +39,7 @@
   "cliPnpmDepsHash": "sha256-xdEEk5N/G0wGHBYvFLe8N2EL66DYUpVpCSHkvvbsIuE=",
   "cliBundlePnpmDepsHash": "sha256-EWSyhc/6oJGMqz1vcfspJiOuQSzqTRS3Oyy/Fpg7Jrk=",
   "cliCljDepsHash": "sha256-2h4nICQ5r8sVx4xLbXK45ik65xh/tXYeQPGvVU5V0ZQ=",
-  "cliVersion": "2.0.2-alpha+nightly.20261024",
+  "cliVersion": "2.0.2-alpha+nightly.20261025",
   "toolchain": {
     "node": "24",
     "pnpm": "10.33.0",
