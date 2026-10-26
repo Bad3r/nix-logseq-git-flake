@@ -221,6 +221,9 @@ jobs:
               echo "The nightly publish-release job rewrites data/logseq-nightly.json for ${NIGHTLY_TAG}."
               echo "It records upstream revision ${LOGSEQ_REV} and refreshed CLI fixed-output hashes."
             fi
+            if ! git diff --cached --quiet -- modules/_packages/logseq-cli/opam-defs.json; then
+              echo "update-nightly.sh re-solves the logseq-cli opam closure in modules/_packages/logseq-cli/opam-defs.json."
+            fi
             if [ "$lock_changed" = true ]; then
               echo "nix flake update refreshes flake.lock so pinned inputs advance in the same nightly commit."
             fi

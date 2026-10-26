@@ -291,6 +291,9 @@ jobs:
           mkdir -p pr-build-out
           cp data/logseq-nightly.json pr-build-out/logseq-nightly.json
           git --no-pager diff -- data/logseq-nightly.json >pr-build-out/logseq-nightly.json.diff || true
+          # cliOpamDefsRev in the manifest vouches for this solve; ship them together.
+          cp modules/_packages/logseq-cli/opam-defs.json pr-build-out/opam-defs.json
+          git --no-pager diff -- modules/_packages/logseq-cli/opam-defs.json >pr-build-out/opam-defs.json.diff || true
 
       - name: Upload regenerated manifest
         if: steps.gate.outputs.run == 'true'
