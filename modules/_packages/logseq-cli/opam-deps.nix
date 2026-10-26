@@ -82,6 +82,7 @@ let
         os-version
         ;
     };
+  ocamlCompilerVersion = "5.1.1";
   opamDefs = pkgs.linkFarm "logseq-cli-opam-defs" (
     map (target: {
       name = "${target}.json";
@@ -94,13 +95,22 @@ let
           projectName
           "${cliProject}"
           {
-            ocaml-base-compiler = "5.1.1";
+            ocaml-base-compiler = ocamlCompilerVersion;
           };
     }) opamDefsSystems
   );
-  defsFile = builtins.toFile "logseq-cli-opam-defs-${system}.json" (
-    builtins.toJSON (lib.importJSON ./opam-defs.json // { __opam_nix_env = platformEnv system; })
-  );
+  defs = lib.importJSON ./opam-defs.json;
+  # The committed solve, not ocamlCompilerVersion, picks the compiler that
+  # builds, so a bump without a re-solve would otherwise keep the old one.
+  solvedCompiler = defs.ocaml-base-compiler.version or null;
+  defsFile =
+    lib.throwIf (solvedCompiler != ocamlCompilerVersion)
+      "opam-defs.json was solved with ocaml-base-compiler ${toString solvedCompiler}, not ${ocamlCompilerVersion}; re-solve with scripts/update-nightly.sh Phase 4b, or copy the jq -S output of .#logseq-cli.opamDefs without __opam_nix_env into opam-defs.json."
+      (
+        builtins.toFile "logseq-cli-opam-defs-${system}.json" (
+          builtins.toJSON (defs // { __opam_nix_env = platformEnv system; })
+        )
+      );
   baseScope = on.materializedDefsToScope {
     inherit pkgs;
     sourceMap.${projectName} = cliProject;
