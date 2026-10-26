@@ -95,15 +95,16 @@ let
     );
 
   # CI toolchain versions consumed by build-desktop.yml setup-* steps via
-  # resolve-revision outputs. No Nix file reads these (the Nix side pins nixpkgs
-  # attrs), so they have zero Nix consumers; validated here to keep the workflow
-  # producer/consumer schema honest.
+  # resolve-revision outputs. The Nix side pins nixpkgs attrs for the rest, but
+  # opam-deps.nix reads `ocaml` as the opam compiler version; validated here to
+  # keep the workflow producer/consumer schema honest.
   toolchain = if hasAttr "toolchain" parsed then parsed.toolchain else { };
   toolchainKeys = [
     "node"
     "pnpm"
     "java"
     "clojure"
+    "ocaml"
   ];
   validateToolchain =
     acc: key:

@@ -58,21 +58,22 @@ jobs:
       pnpm_version: ${{ steps.toolchain.outputs.pnpm_version }}
       java_version: ${{ steps.toolchain.outputs.java_version }}
       clojure_version: ${{ steps.toolchain.outputs.clojure_version }}
+      ocaml_version: ${{ steps.toolchain.outputs.ocaml_version }}
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       # CI toolchain versions are owned by the manifest (data/logseq-nightly.json),
-      # not the workflow: the Nix side pins nixpkgs attrs and does not read these,
-      # so this is the single CI-side source. build and metadata consume the
+      # not the workflow; opam-deps.nix reads the same ocaml value, and the Nix
+      # side pins nixpkgs attrs for the rest. build and metadata consume the
       # outputs below via needs.resolve-revision.
       - name: Resolve CI toolchain versions
         id: toolchain
         run: |
           set -euo pipefail
           manifest=data/logseq-nightly.json
-          for key in node pnpm java clojure; do
+          for key in node pnpm java clojure ocaml; do
             value="$(jq -r --arg k "$key" '.toolchain[$k] // ""' "$manifest")"
             if [ -z "$value" ]; then
               echo "manifest .toolchain.${key} is missing or empty" >&2
@@ -263,13 +264,13 @@ jobs:
 
       # ocaml/setup-ocaml cached ~/.opam keyed on the opam files; reproduce that so
       # each leg does not recompile the melange*/dune/transit-js closure from
-      # scratch. flake.lock is in the key because the ocaml-system switch tracks the
-      # nixpkgs ocaml, which a flake.lock bump can move.
+      # scratch. flake.lock is in the key because it pins the Nix-provided opam,
+      # and the compiler version so a bump saves a fresh cache.
       - name: Cache opam state
         uses: actions/cache@v5
         with:
           path: ~/.opam
-          key: ${{ runner.os }}-${{ runner.arch }}-opam-${{ hashFiles('flake.lock', 'logseq-src/cli/*.opam') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-opam-${{ needs.resolve-revision.outputs.ocaml_version }}-${{ hashFiles('flake.lock', 'logseq-src/cli/*.opam') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-opam-
 
@@ -280,18 +281,21 @@ jobs:
       # upstream build-desktop-release.yml dcfdfbf78e
       # (https://github.com/logseq/logseq/commit/dcfdfbf78e).
       - name: Setup OCaml toolchain from Nix
+        env:
+          OCAML_VERSION: ${{ needs.resolve-revision.outputs.ocaml_version }}
         run: |
           set -euo pipefail
           nix profile install --inputs-from "$GITHUB_WORKSPACE" nixpkgs#opam
           printf '%s\n' "$HOME/.nix-profile/bin" "$HOME/.opam/default/bin" >>"$GITHUB_PATH"
           export PATH="$HOME/.nix-profile/bin:$HOME/.opam/default/bin:$PATH"
-          # Reuse the cached opam root when its switch still resolves; rebuild
-          # the switch if a restored cache points at a moved store path, and
-          # bootstrap from scratch on a cold cache.
-          if ! opam exec --switch default -- ocaml -version >/dev/null 2>&1; then
+          # Reuse the cached opam root when its switch still resolves to the
+          # manifest compiler; rebuild the switch if a restored cache points at
+          # a moved store path or a different compiler, and bootstrap from scratch
+          # on a cold cache.
+          if [ "$(opam exec --switch default -- ocaml -vnum 2>/dev/null)" != "$OCAML_VERSION" ]; then
             [ -d "$HOME/.opam/repo" ] || opam init --bare --disable-sandboxing --yes --no-setup
             opam switch remove default --yes 2>/dev/null || true
-            opam switch create default ocaml-base-compiler.5.1.1 --yes
+            opam switch create default "ocaml-base-compiler.${OCAML_VERSION}" --yes
           fi
           opam update --yes
           opam --version

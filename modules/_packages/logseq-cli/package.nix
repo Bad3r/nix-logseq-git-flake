@@ -21,6 +21,7 @@
   logseqNodejs,
   logseqRev,
   makeWrapper,
+  ocamlVersion,
   opamDefsSystems,
   opamNix,
   patchelf,
@@ -79,6 +80,7 @@ let
       cliOpamPinOverrides
       lib
       logseqRev
+      ocamlVersion
       opamDefsSystems
       opamNix
       pkgs

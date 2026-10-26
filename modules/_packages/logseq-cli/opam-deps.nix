@@ -3,6 +3,7 @@
   cliOpamPinOverrides,
   lib,
   logseqRev,
+  ocamlVersion,
   opamDefsSystems,
   opamNix,
   pkgs,
@@ -15,9 +16,9 @@
 # ClojureScript to OCaml compiled via Melange. The melange* libraries and the
 # git pins (cli/logseq-cli.opam pin-depends: humanize, rrbvec, ...) are absent
 # from nixpkgs, so opam-nix builds each dependency from the pinned
-# opam-repository (flake input) as its own derivation. OCaml is pinned to
-# 5.1.1 to match upstream's OCAML_VERSION (.github/workflows/deps-cli.yml /
-# build-desktop-release.yml).
+# opam-repository (flake input) as its own derivation. The manifest's
+# toolchain.ocaml pins OCaml to upstream's OCAML_VERSION
+# (.github/workflows/deps-cli.yml / build-desktop-release.yml).
 #
 # The solve is materialized: resolving through buildOpamProject is
 # import-from-derivation, so every evaluation of logseq-cli (including a
@@ -82,7 +83,6 @@ let
         os-version
         ;
     };
-  ocamlCompilerVersion = "5.1.1";
   opamDefs = pkgs.linkFarm "logseq-cli-opam-defs" (
     map (target: {
       name = "${target}.json";
@@ -95,17 +95,17 @@ let
           projectName
           "${cliProject}"
           {
-            ocaml-base-compiler = ocamlCompilerVersion;
+            ocaml-base-compiler = ocamlVersion;
           };
     }) opamDefsSystems
   );
   defs = lib.importJSON ./opam-defs.json;
-  # The committed solve, not ocamlCompilerVersion, picks the compiler that
+  # The committed solve, not ocamlVersion, picks the compiler that
   # builds, so a bump without a re-solve would otherwise keep the old one.
   solvedCompiler = defs.ocaml-base-compiler.version or null;
   defsFile =
-    lib.throwIf (solvedCompiler != ocamlCompilerVersion)
-      "opam-defs.json was solved with ocaml-base-compiler ${toString solvedCompiler}, not ${ocamlCompilerVersion}; re-solve with scripts/update-nightly.sh Phase 4b, or copy the jq -S output of .#logseq-cli.opamDefs without __opam_nix_env into opam-defs.json."
+    lib.throwIf (solvedCompiler != ocamlVersion)
+      "opam-defs.json was solved with ocaml-base-compiler ${toString solvedCompiler}, not manifest toolchain.ocaml ${ocamlVersion}; re-solve with scripts/update-nightly.sh Phase 4b, or copy the jq -S output of .#logseq-cli.opamDefs without __opam_nix_env into opam-defs.json."
       (
         builtins.toFile "logseq-cli-opam-defs-${system}.json" (
           builtins.toJSON (defs // { __opam_nix_env = platformEnv system; })

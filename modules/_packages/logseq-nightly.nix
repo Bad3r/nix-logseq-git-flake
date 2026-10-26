@@ -35,6 +35,7 @@ let
       cliVersion
       logseqRev
       ;
+    ocamlVersion = manifest.toolchain.ocaml;
     inherit
       cliPatches
       logseqNodejs
