@@ -21,6 +21,7 @@ let
     "logseqRev"
     "logseqVersion"
     "cliSrcHash"
+    "cliOpamDefsRev"
     "cliOpamPinOverrides"
     "cliPnpmDepsHash"
     "cliBundlePnpmDepsHash"
@@ -156,6 +157,7 @@ throwIf (!isAttrs parsed) "Manifest must be a JSON object." (
                         "publishedAt"
                         "logseqRev"
                         "logseqVersion"
+                        "cliOpamDefsRev"
                         "cliVersion"
                       ])
                       [

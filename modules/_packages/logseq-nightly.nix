@@ -1,6 +1,7 @@
 {
   lib,
   manifestPath,
+  opamDefsSystems,
   opamNix,
   pkgs,
   system,
@@ -27,6 +28,7 @@ let
     inherit (manifest)
       cliBundlePnpmDepsHash
       cliCljDepsHash
+      cliOpamDefsRev
       cliOpamPinOverrides
       cliPnpmDepsHash
       cliSrcHash
@@ -36,6 +38,7 @@ let
     inherit
       cliPatches
       logseqNodejs
+      opamDefsSystems
       opamNix
       pkgs
       system

@@ -189,6 +189,7 @@ jq -n \
   --arg logseqVersion "$LOGSEQ_VERSION" \
   --arg cliSrcHash "$CLI_SRC_HASH" \
   --argjson cliOpamPinOverrides "$CLI_OPAM_PIN_OVERRIDES" \
+  --arg cliOpamDefsRev "$LOGSEQ_REV" \
   --arg cliPnpmDepsHash "$PLACEHOLDER" \
   --arg cliBundlePnpmDepsHash "$PLACEHOLDER" \
   --arg cliCljDepsHash "$PLACEHOLDER" \
@@ -207,6 +208,7 @@ jq -n \
     logseqVersion: $logseqVersion,
     cliSrcHash: $cliSrcHash,
     cliOpamPinOverrides: $cliOpamPinOverrides,
+    cliOpamDefsRev: $cliOpamDefsRev,
     cliPnpmDepsHash: $cliPnpmDepsHash,
     cliBundlePnpmDepsHash: $cliBundlePnpmDepsHash,
     cliCljDepsHash: $cliCljDepsHash,
@@ -215,6 +217,29 @@ jq -n \
     patches: $patches
   }' >"$MANIFEST"
 echo "  Wrote $MANIFEST with placeholder cliPnpmDepsHash, cliBundlePnpmDepsHash, cliCljDepsHash"
+echo "::endgroup::"
+
+# ── Phase 4b: Materialize the logseq-cli opam solve ─────────────────
+# opam-deps.nix reads opam-defs.json instead of solving through
+# import-from-derivation. Re-solve against the new logseqRev, pin overrides,
+# and the opam-repository input from the refreshed flake.lock; the manifest
+# above already stamps cliOpamDefsRev with this logseqRev. Each system is
+# solved with its own platform variables, and opam-deps.nix injects only the
+# build env per system, so the solves must agree once that env is dropped.
+# jq -S keeps the output sorted and in the formatter's layout.
+echo "::group::Phase 4b: Materialize the logseq-cli opam solve"
+OPAM_SOLVE="modules/_packages/logseq-cli/opam-defs.json"
+OPAM_DEFS="$(nix build --no-link --print-out-paths ".#logseq-cli.opamDefs")"
+jq -S 'del(.__opam_nix_env)' "$OPAM_DEFS/x86_64-linux.json" >"${OPAM_SOLVE}.tmp"
+for defs in "$OPAM_DEFS"/*.json; do
+  if ! jq -S 'del(.__opam_nix_env)' "$defs" | cmp -s - "${OPAM_SOLVE}.tmp"; then
+    echo "ERROR: the opam solve for $(basename "$defs" .json) differs from x86_64-linux; commit per-system solves instead of $OPAM_SOLVE" >&2
+    rm -f "${OPAM_SOLVE}.tmp"
+    exit 1
+  fi
+done
+mv "${OPAM_SOLVE}.tmp" "$OPAM_SOLVE"
+echo "  $(jq 'del(.__opam_nix_regen) | length' "$OPAM_SOLVE") packages, identical across $(find "$OPAM_DEFS" -name '*.json' | wc -l) systems"
 echo "::endgroup::"
 
 # Helper: build a single FOD with a placeholder hash, parse the real
@@ -287,5 +312,6 @@ echo "  cliPnpmDepsHash:            $PNPM_HASH"
 echo "  cliBundlePnpmDepsHash:      $BUNDLE_PNPM_HASH"
 echo "  cliCljDepsHash:             $CLJ_DEPS_HASH"
 echo "  cliVersion:                 $CLI_VERSION"
+echo "  cliOpamDefsRev:             $LOGSEQ_REV"
 echo "  toolchain:                  $OLD_TOOLCHAIN"
 echo "  patches:                    $PATCHES_JSON"

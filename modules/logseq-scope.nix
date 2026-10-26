@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ config, inputs, ... }:
 {
   perSystem =
     {
@@ -12,6 +12,7 @@
         inherit lib pkgs system;
         manifestPath = ../data/logseq-nightly.json;
         opamNix = inputs.opam-nix;
+        opamDefsSystems = config.systems;
       };
     };
 }

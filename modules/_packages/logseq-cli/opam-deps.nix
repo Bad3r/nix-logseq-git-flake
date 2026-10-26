@@ -1,6 +1,9 @@
 {
+  cliOpamDefsRev,
   cliOpamPinOverrides,
   lib,
+  logseqRev,
+  opamDefsSystems,
   opamNix,
   pkgs,
   src,
@@ -16,10 +19,18 @@
 # 5.1.1 to match upstream's OCAML_VERSION (.github/workflows/deps-cli.yml /
 # build-desktop-release.yml).
 #
-# buildOpamProject reads the committed cli/logseq-cli.opam (do not use
-# buildDuneProject: it bootstraps opam-file generation with a dune older than the
-# `(lang dune 3.23)` cli/dune-project declares, which aborts). It returns a
-# package scope; dune >= 3.23 is pulled in as a resolved dependency. The flake
+# The solve is materialized: resolving through buildOpamProject is
+# import-from-derivation, so every evaluation of logseq-cli (including a
+# consumer's `nix flake check --no-build`) would build opam2json, the solver and
+# one opam2json run per package before the derivation exists. `opamDefs`
+# (passthru `logseq-cli.opamDefs`) runs materializeOpamProject once per flake
+# system and scripts/update-nightly.sh commits the shared result as
+# opam-defs.json; evaluation only reads that JSON.
+#
+# materializeOpamProject reads the committed cli/logseq-cli.opam (do not use the
+# dune-project path: it bootstraps opam-file generation with a dune older than the
+# `(lang dune 3.23)` cli/dune-project declares, which aborts). dune >= 3.23 is
+# pulled in as a resolved dependency. The flake
 # does not build the project's @install target (that omits the Vite bundle step);
 # build.nix instead runs `dune build @bundle` with this closure on PATH/OCAMLPATH.
 # opam-nix derivations carry setup hooks that assemble OCAMLPATH across propagated
@@ -52,9 +63,48 @@ let
         ${pinRewrites}
       '';
   projectName = "logseq-cli";
-  baseScope = on.buildOpamProject { inherit pkgs; } projectName "${cliProject}" {
-    ocaml-base-compiler = "5.1.1";
-  };
+  # opam's platform variables filter `depends:` and `available:` during the solve
+  # and parameterize each package's build. Overriding them lets one Linux runner
+  # solve for every system, using opam-nix's own host-to-variable mapping.
+  # update-nightly.sh fails when the per-system solves differ, so one committed
+  # solve serves every system with only its build env injected here.
+  platformEnv =
+    target:
+    let
+      vars = import "${opamNix}/src/global-variables.nix" (lib.systems.elaborate target);
+    in
+    {
+      inherit (vars)
+        arch
+        os
+        os-distribution
+        os-family
+        os-version
+        ;
+    };
+  opamDefs = pkgs.linkFarm "logseq-cli-opam-defs" (
+    map (target: {
+      name = "${target}.json";
+      path =
+        on.materializeOpamProject
+          {
+            resolveArgs.env = platformEnv target;
+            regenCommand = "scripts/update-nightly.sh";
+          }
+          projectName
+          "${cliProject}"
+          {
+            ocaml-base-compiler = "5.1.1";
+          };
+    }) opamDefsSystems
+  );
+  defsFile = builtins.toFile "logseq-cli-opam-defs-${system}.json" (
+    builtins.toJSON (lib.importJSON ./opam-defs.json // { __opam_nix_env = platformEnv system; })
+  );
+  baseScope = on.materializedDefsToScope {
+    inherit pkgs;
+    sourceMap.${projectName} = cliProject;
+  } defsFile;
   # melc locates its own stdlib relative to its binary: `melc -where` yields
   # $out/lib/melange/{melange,js/melange}. opam-nix installs OCaml libraries
   # under OCAMLFIND_DESTDIR ($out/lib/ocaml/<ver>/site-lib) instead.
@@ -86,8 +136,14 @@ let
     "melange"
   ];
 in
-lib.throwIf (missing != [ ])
-  "opam-nix did not resolve ${lib.concatStringsSep ", " missing} for ${projectName}; check cli/logseq-cli.opam depends:."
-  {
-    ocamlBuildInputs = closure;
-  }
+{
+  inherit opamDefs;
+  ocamlBuildInputs =
+    lib.throwIf (cliOpamDefsRev != logseqRev)
+      "opam-defs.json was solved for logseq ${cliOpamDefsRev}, not manifest logseqRev ${logseqRev}; re-solve with scripts/update-nightly.sh Phase 4b, or copy the jq -S output of .#logseq-cli.opamDefs without __opam_nix_env into opam-defs.json and set cliOpamDefsRev."
+      (
+        lib.throwIf (missing != [ ])
+          "opam-nix did not resolve ${lib.concatStringsSep ", " missing} for ${projectName}; check cli/logseq-cli.opam depends:."
+          closure
+      );
+}

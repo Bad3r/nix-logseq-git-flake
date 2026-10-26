@@ -168,6 +168,9 @@ jobs:
           mkdir -p test-out
           cp data/logseq-nightly.json test-out/logseq-nightly.json
           git --no-pager diff -- data/logseq-nightly.json >test-out/logseq-nightly.json.diff || true
+          # cliOpamDefsRev in the manifest vouches for this solve; ship them together.
+          cp modules/_packages/logseq-cli/opam-defs.json test-out/opam-defs.json
+          git --no-pager diff -- modules/_packages/logseq-cli/opam-defs.json >test-out/opam-defs.json.diff || true
 
       - name: Upload regenerated manifest
         uses: actions/upload-artifact@v6
