@@ -55,5 +55,6 @@
       "file": "logseq-graph-lifecycle-ownership-respect-home.patch",
       "cli": true
     }
-  ]
+  ],
+  "cliOpamDefsRev": "a37eff1d36aa7d0802b0b526f70aab0113191d53"
 }

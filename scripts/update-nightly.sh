@@ -189,6 +189,7 @@ jq -n \
   --arg logseqVersion "$LOGSEQ_VERSION" \
   --arg cliSrcHash "$CLI_SRC_HASH" \
   --argjson cliOpamPinOverrides "$CLI_OPAM_PIN_OVERRIDES" \
+  --arg cliOpamDefsRev "$LOGSEQ_REV" \
   --arg cliPnpmDepsHash "$PLACEHOLDER" \
   --arg cliBundlePnpmDepsHash "$PLACEHOLDER" \
   --arg cliCljDepsHash "$PLACEHOLDER" \
@@ -207,6 +208,7 @@ jq -n \
     logseqVersion: $logseqVersion,
     cliSrcHash: $cliSrcHash,
     cliOpamPinOverrides: $cliOpamPinOverrides,
+    cliOpamDefsRev: $cliOpamDefsRev,
     cliPnpmDepsHash: $cliPnpmDepsHash,
     cliBundlePnpmDepsHash: $cliBundlePnpmDepsHash,
     cliCljDepsHash: $cliCljDepsHash,
@@ -215,6 +217,22 @@ jq -n \
     patches: $patches
   }' >"$MANIFEST"
 echo "  Wrote $MANIFEST with placeholder cliPnpmDepsHash, cliBundlePnpmDepsHash, cliCljDepsHash"
+echo "::endgroup::"
+
+# ── Phase 4b: Materialize the logseq-cli opam solve ─────────────────
+# opam-deps.nix reads opam-defs/<system>.json instead of solving through
+# import-from-derivation. Re-solve against the new logseqRev, pin overrides,
+# and the opam-repository input from the refreshed flake.lock; the manifest
+# above already stamps cliOpamDefsRev with this logseqRev. jq -S keeps the
+# output sorted and in the formatter's layout, so a re-solve diffs per package.
+echo "::group::Phase 4b: Materialize the logseq-cli opam solve"
+OPAM_DEFS_DIR="modules/_packages/logseq-cli/opam-defs"
+OPAM_DEFS="$(nix build --no-link --print-out-paths ".#logseq-cli.opamDefs")"
+rm -f "$OPAM_DEFS_DIR"/*.json
+for defs in "$OPAM_DEFS"/*.json; do
+  jq -S . "$defs" >"$OPAM_DEFS_DIR/$(basename "$defs")"
+  echo "  $(basename "$defs"): $(jq 'del(.__opam_nix_env, .__opam_nix_regen) | length' "$defs") packages"
+done
 echo "::endgroup::"
 
 # Helper: build a single FOD with a placeholder hash, parse the real
@@ -287,5 +305,6 @@ echo "  cliPnpmDepsHash:            $PNPM_HASH"
 echo "  cliBundlePnpmDepsHash:      $BUNDLE_PNPM_HASH"
 echo "  cliCljDepsHash:             $CLJ_DEPS_HASH"
 echo "  cliVersion:                 $CLI_VERSION"
+echo "  cliOpamDefsRev:             $LOGSEQ_REV"
 echo "  toolchain:                  $OLD_TOOLCHAIN"
 echo "  patches:                    $PATCHES_JSON"

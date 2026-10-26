@@ -15,6 +15,7 @@
   logseqRev,
   makeWrapper,
   ocamlBuildInputs,
+  opamDefs,
   patchelf,
   pkg-config,
   pnpm_10,
@@ -318,7 +319,12 @@ stdenv.mkDerivation {
   # Expose the FODs so `scripts/update-nightly.sh` can target them individually
   # (`nix build .#logseq-cli.cliPnpmDeps`, `.cliBundlePnpmDeps`, `.cliCljDeps`).
   passthru = {
-    inherit cliPnpmDeps cliBundlePnpmDeps cliCljDeps;
+    inherit
+      cliPnpmDeps
+      cliBundlePnpmDeps
+      cliCljDeps
+      opamDefs
+      ;
   };
 
   meta = {

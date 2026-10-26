@@ -4,6 +4,7 @@
   clang_20,
   cliBundlePnpmDepsHash,
   cliCljDepsHash,
+  cliOpamDefsRev,
   cliOpamPinOverrides,
   cliPatches,
   cliPnpmDepsHash,
@@ -20,6 +21,7 @@
   logseqNodejs,
   logseqRev,
   makeWrapper,
+  opamDefsSystems,
   opamNix,
   patchelf,
   pkg-config,
@@ -73,8 +75,11 @@ let
   # opam-nix, for the Melange CLI compile.
   opamDeps = import ./opam-deps.nix {
     inherit
+      cliOpamDefsRev
       cliOpamPinOverrides
       lib
+      logseqRev
+      opamDefsSystems
       opamNix
       pkgs
       src
@@ -114,5 +119,5 @@ import ./build.nix {
     xcbuild
     zstd
     ;
-  inherit (opamDeps) ocamlBuildInputs;
+  inherit (opamDeps) ocamlBuildInputs opamDefs;
 }
