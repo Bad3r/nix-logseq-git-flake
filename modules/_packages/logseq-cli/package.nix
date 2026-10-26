@@ -119,5 +119,5 @@ import ./build.nix {
     xcbuild
     zstd
     ;
-  inherit (opamDeps) ocamlBuildInputs opamDefs;
+  inherit (opamDeps) ocamlBuildInputs opamClosure opamDefs;
 }

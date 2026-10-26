@@ -145,9 +145,6 @@ let
     "dune"
     "melange"
   ];
-in
-{
-  inherit opamDefs;
   ocamlBuildInputs =
     lib.throwIf (cliOpamDefsRev != logseqRev)
       "opam-defs.json was solved for logseq ${cliOpamDefsRev}, not manifest logseqRev ${logseqRev}; re-solve with scripts/update-nightly.sh Phase 4b, or copy the jq -S output of .#logseq-cli.opamDefs without __opam_nix_env into opam-defs.json and set cliOpamDefsRev."
@@ -156,4 +153,11 @@ in
           "opam-nix did not resolve ${lib.concatStringsSep ", " missing} for ${projectName}; check cli/logseq-cli.opam depends:."
           closure
       );
+in
+{
+  inherit ocamlBuildInputs opamDefs;
+  # Cachix GC evicts never-downloaded paths first, which includes the small
+  # `opam` file outputs every package references; one missing reference hides
+  # the whole OCaml closure. The nightly pushes and pins this farm's closure.
+  opamClosure = pkgs.linkFarmFromDrvs "logseq-cli-opam-closure" ocamlBuildInputs;
 }
