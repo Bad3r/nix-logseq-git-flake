@@ -262,10 +262,15 @@ jobs:
       # (it skips the rest), and the pin keeps the closure out of the next GC.
       # Builds main's current commit, never the work tree, so a failed
       # validation or commit cannot pin a closure main does not use.
+      # Best-effort: a Cachix outage must not fail the job after the release
+      # and bump landed, which would skip cache-cli-aarch64 and open a
+      # nightly-failure issue; a failure leaves a warning instead.
       - name: Push and pin the logseq-cli opam closure
         if: ${{ !cancelled() }}
+        continue-on-error: true
         run: |
           set -euo pipefail
+          trap 'echo "::warning title=opam closure::Push and pin of the logseq-cli opam closure failed; Cachix may serve an incomplete OCaml closure until the next run."' ERR
           rev="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/main | cut -f1)"
           test -n "$rev"
           closure="$(nix build --accept-flake-config --no-link --print-out-paths \
