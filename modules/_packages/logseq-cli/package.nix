@@ -21,6 +21,7 @@
   logseqNodejs,
   logseqRev,
   makeWrapper,
+  ocamlVersion,
   opamDefsSystems,
   opamNix,
   patchelf,
@@ -79,6 +80,7 @@ let
       cliOpamPinOverrides
       lib
       logseqRev
+      ocamlVersion
       opamDefsSystems
       opamNix
       pkgs
@@ -119,5 +121,5 @@ import ./build.nix {
     xcbuild
     zstd
     ;
-  inherit (opamDeps) ocamlBuildInputs opamDefs;
+  inherit (opamDeps) ocamlBuildInputs opamClosure opamDefs;
 }

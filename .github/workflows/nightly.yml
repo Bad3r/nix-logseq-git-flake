@@ -258,6 +258,27 @@ jobs:
 
           git push "$repo_url" HEAD:main
 
+      # cachix push re-uploads any path of the closure that Cachix GC evicted
+      # (it skips the rest), and the pin keeps the closure out of the next GC.
+      # Builds main's current commit, never the work tree, so a failed
+      # validation or commit cannot pin a closure main does not use.
+      # Best-effort: a Cachix outage must not fail the job after the release
+      # and bump landed, which would skip cache-cli-aarch64 and open a
+      # nightly-failure issue; a failure leaves a warning instead.
+      - name: Push and pin the logseq-cli opam closure
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          trap 'echo "::warning title=opam closure::Push and pin of the logseq-cli opam closure failed; Cachix may serve an incomplete OCaml closure until the next run."' ERR
+          rev="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/main | cut -f1)"
+          test -n "$rev"
+          closure="$(nix build --accept-flake-config --no-link --print-out-paths \
+            "github:${GITHUB_REPOSITORY}/${rev}#logseq-cli.opamClosure")"
+          cachix push nix-logseq-git-flake "$closure"
+          cachix pin nix-logseq-git-flake logseq-cli-opam-closure-x86_64-linux \
+            "$closure" --keep-revisions 3
+
   cache-cli-aarch64:
     # publish-release caches the x86_64 logseq-cli via `nix flake check`, but
     # the aarch64 finals are only ever built by validate.yml, which never runs
@@ -308,6 +329,19 @@ jobs:
           nix build --accept-flake-config --print-build-logs \
             ".#packages.${SYSTEM}.logseq-cli" \
             ".#checks.${SYSTEM}.logseq-cli-help"
+
+      # Ungated by the build step, so a failed smoke test does not skip it.
+      - name: Push and pin the logseq-cli opam closure
+        if: ${{ !cancelled() }}
+        env:
+          SYSTEM: ${{ matrix.system }}
+        run: |
+          set -euo pipefail
+          closure="$(nix build --accept-flake-config --no-link --print-out-paths \
+            ".#packages.${SYSTEM}.logseq-cli.opamClosure")"
+          cachix push nix-logseq-git-flake "$closure"
+          cachix pin nix-logseq-git-flake "logseq-cli-opam-closure-${SYSTEM}" \
+            "$closure" --keep-revisions 3
 
   report-failure:
     if: ${{ always() && github.event_name == 'schedule' && (needs.build.result != 'success' || needs['publish-release'].result != 'success') }}

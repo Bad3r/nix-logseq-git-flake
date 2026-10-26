@@ -145,7 +145,7 @@ if [ "$OLD_TOOLCHAIN" = "null" ] || [ -z "$OLD_TOOLCHAIN" ]; then
   echo "ERROR: $MANIFEST has no .toolchain block to preserve" >&2
   exit 1
 fi
-for key in node pnpm java clojure; do
+for key in node pnpm java clojure ocaml; do
   value="$(jq -r --arg k "$key" '.toolchain[$k] // ""' "$MANIFEST")"
   if [ -z "$value" ]; then
     echo "ERROR: $MANIFEST .toolchain.${key} is missing or empty" >&2

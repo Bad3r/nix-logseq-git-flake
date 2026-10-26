@@ -3,6 +3,7 @@
   cliOpamPinOverrides,
   lib,
   logseqRev,
+  ocamlVersion,
   opamDefsSystems,
   opamNix,
   pkgs,
@@ -15,9 +16,9 @@
 # ClojureScript to OCaml compiled via Melange. The melange* libraries and the
 # git pins (cli/logseq-cli.opam pin-depends: humanize, rrbvec, ...) are absent
 # from nixpkgs, so opam-nix builds each dependency from the pinned
-# opam-repository (flake input) as its own derivation. OCaml is pinned to
-# 5.1.1 to match upstream's OCAML_VERSION (.github/workflows/deps-cli.yml /
-# build-desktop-release.yml).
+# opam-repository (flake input) as its own derivation. The manifest's
+# toolchain.ocaml pins OCaml to upstream's OCAML_VERSION
+# (.github/workflows/deps-cli.yml / build-desktop-release.yml).
 #
 # The solve is materialized: resolving through buildOpamProject is
 # import-from-derivation, so every evaluation of logseq-cli (including a
@@ -94,13 +95,22 @@ let
           projectName
           "${cliProject}"
           {
-            ocaml-base-compiler = "5.1.1";
+            ocaml-base-compiler = ocamlVersion;
           };
     }) opamDefsSystems
   );
-  defsFile = builtins.toFile "logseq-cli-opam-defs-${system}.json" (
-    builtins.toJSON (lib.importJSON ./opam-defs.json // { __opam_nix_env = platformEnv system; })
-  );
+  defs = lib.importJSON ./opam-defs.json;
+  # The committed solve, not ocamlVersion, picks the compiler that
+  # builds, so a bump without a re-solve would otherwise keep the old one.
+  solvedCompiler = defs.ocaml-base-compiler.version or null;
+  defsFile =
+    lib.throwIf (solvedCompiler != ocamlVersion)
+      "opam-defs.json was solved with ocaml-base-compiler ${toString solvedCompiler}, not manifest toolchain.ocaml ${ocamlVersion}; re-solve with scripts/update-nightly.sh Phase 4b, or copy the jq -S output of .#logseq-cli.opamDefs without __opam_nix_env into opam-defs.json."
+      (
+        builtins.toFile "logseq-cli-opam-defs-${system}.json" (
+          builtins.toJSON (defs // { __opam_nix_env = platformEnv system; })
+        )
+      );
   baseScope = on.materializedDefsToScope {
     inherit pkgs;
     sourceMap.${projectName} = cliProject;
@@ -135,9 +145,6 @@ let
     "dune"
     "melange"
   ];
-in
-{
-  inherit opamDefs;
   ocamlBuildInputs =
     lib.throwIf (cliOpamDefsRev != logseqRev)
       "opam-defs.json was solved for logseq ${cliOpamDefsRev}, not manifest logseqRev ${logseqRev}; re-solve with scripts/update-nightly.sh Phase 4b, or copy the jq -S output of .#logseq-cli.opamDefs without __opam_nix_env into opam-defs.json and set cliOpamDefsRev."
@@ -146,4 +153,11 @@ in
           "opam-nix did not resolve ${lib.concatStringsSep ", " missing} for ${projectName}; check cli/logseq-cli.opam depends:."
           closure
       );
+in
+{
+  inherit ocamlBuildInputs opamDefs;
+  # Cachix GC evicts never-downloaded paths first, which includes the small
+  # `opam` file outputs every package references; one missing reference hides
+  # the whole OCaml closure. The nightly pushes and pins this farm's closure.
+  opamClosure = pkgs.linkFarmFromDrvs "logseq-cli-opam-closure" ocamlBuildInputs;
 }

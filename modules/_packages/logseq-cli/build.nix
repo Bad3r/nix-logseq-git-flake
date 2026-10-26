@@ -15,6 +15,7 @@
   logseqRev,
   makeWrapper,
   ocamlBuildInputs,
+  opamClosure,
   opamDefs,
   patchelf,
   pkg-config,
@@ -323,6 +324,7 @@ stdenv.mkDerivation {
       cliPnpmDeps
       cliBundlePnpmDeps
       cliCljDeps
+      opamClosure
       opamDefs
       ;
   };
