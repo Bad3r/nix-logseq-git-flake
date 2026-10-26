@@ -121,7 +121,7 @@ nix fmt
 ```
 
 Note: `logseq-cli` takes its OCaml/Melange closure from the materialized
-opam-nix solve in `modules/_packages/logseq-cli/opam-defs/<system>.json`, so
+opam-nix solve in `modules/_packages/logseq-cli/opam-defs.json`, so
 evaluating it needs no import-from-derivation (IFD).
 `scripts/update-nightly.sh` regenerates those files from
 `.#logseq-cli.opamDefs` and stamps `cliOpamDefsRev`; evaluation fails when the

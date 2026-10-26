@@ -24,8 +24,8 @@
 # consumer's `nix flake check --no-build`) would build opam2json, the solver and
 # one opam2json run per package before the derivation exists. `opamDefs`
 # (passthru `logseq-cli.opamDefs`) runs materializeOpamProject once per flake
-# system and scripts/update-nightly.sh commits the results as
-# opam-defs/<system>.json; evaluation only reads that JSON.
+# system and scripts/update-nightly.sh commits the shared result as
+# opam-defs.json; evaluation only reads that JSON.
 #
 # materializeOpamProject reads the committed cli/logseq-cli.opam (do not use the
 # dune-project path: it bootstraps opam-file generation with a dune older than the
@@ -63,9 +63,11 @@ let
         ${pinRewrites}
       '';
   projectName = "logseq-cli";
-  # opam's platform variables filter `depends:` and `available:` during the solve,
-  # so each system needs its own defs. Overriding them lets one Linux runner solve
-  # for every system, using opam-nix's own host-to-variable mapping.
+  # opam's platform variables filter `depends:` and `available:` during the solve
+  # and parameterize each package's build. Overriding them lets one Linux runner
+  # solve for every system, using opam-nix's own host-to-variable mapping.
+  # update-nightly.sh fails when the per-system solves differ, so one committed
+  # solve serves every system with only its build env injected here.
   platformEnv =
     target:
     let
@@ -96,7 +98,9 @@ let
           };
     }) opamDefsSystems
   );
-  defsFile = ./opam-defs + "/${system}.json";
+  defsFile = builtins.toFile "logseq-cli-opam-defs-${system}.json" (
+    builtins.toJSON (lib.importJSON ./opam-defs.json // { __opam_nix_env = platformEnv system; })
+  );
   baseScope = on.materializedDefsToScope {
     inherit pkgs;
     sourceMap.${projectName} = cliProject;
@@ -136,7 +140,7 @@ in
   inherit opamDefs;
   ocamlBuildInputs =
     lib.throwIf (cliOpamDefsRev != logseqRev)
-      "opam-defs/ was solved for logseq ${cliOpamDefsRev}, not manifest logseqRev ${logseqRev}; run scripts/update-nightly.sh."
+      "opam-defs.json was solved for logseq ${cliOpamDefsRev}, not manifest logseqRev ${logseqRev}; re-solve with scripts/update-nightly.sh Phase 4b, or copy the jq -S output of .#logseq-cli.opamDefs without __opam_nix_env into opam-defs.json and set cliOpamDefsRev."
       (
         lib.throwIf (missing != [ ])
           "opam-nix did not resolve ${lib.concatStringsSep ", " missing} for ${projectName}; check cli/logseq-cli.opam depends:."

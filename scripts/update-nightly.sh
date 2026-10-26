@@ -220,19 +220,26 @@ echo "  Wrote $MANIFEST with placeholder cliPnpmDepsHash, cliBundlePnpmDepsHash,
 echo "::endgroup::"
 
 # ── Phase 4b: Materialize the logseq-cli opam solve ─────────────────
-# opam-deps.nix reads opam-defs/<system>.json instead of solving through
+# opam-deps.nix reads opam-defs.json instead of solving through
 # import-from-derivation. Re-solve against the new logseqRev, pin overrides,
 # and the opam-repository input from the refreshed flake.lock; the manifest
-# above already stamps cliOpamDefsRev with this logseqRev. jq -S keeps the
-# output sorted and in the formatter's layout, so a re-solve diffs per package.
+# above already stamps cliOpamDefsRev with this logseqRev. Each system is
+# solved with its own platform variables, and opam-deps.nix injects only the
+# build env per system, so the solves must agree once that env is dropped.
+# jq -S keeps the output sorted and in the formatter's layout.
 echo "::group::Phase 4b: Materialize the logseq-cli opam solve"
-OPAM_DEFS_DIR="modules/_packages/logseq-cli/opam-defs"
+OPAM_SOLVE="modules/_packages/logseq-cli/opam-defs.json"
 OPAM_DEFS="$(nix build --no-link --print-out-paths ".#logseq-cli.opamDefs")"
-rm -f "$OPAM_DEFS_DIR"/*.json
+jq -S 'del(.__opam_nix_env)' "$OPAM_DEFS/x86_64-linux.json" >"${OPAM_SOLVE}.tmp"
 for defs in "$OPAM_DEFS"/*.json; do
-  jq -S . "$defs" >"$OPAM_DEFS_DIR/$(basename "$defs")"
-  echo "  $(basename "$defs"): $(jq 'del(.__opam_nix_env, .__opam_nix_regen) | length' "$defs") packages"
+  if ! jq -S 'del(.__opam_nix_env)' "$defs" | cmp -s - "${OPAM_SOLVE}.tmp"; then
+    echo "ERROR: the opam solve for $(basename "$defs" .json) differs from x86_64-linux; commit per-system solves instead of $OPAM_SOLVE" >&2
+    rm -f "${OPAM_SOLVE}.tmp"
+    exit 1
+  fi
 done
+mv "${OPAM_SOLVE}.tmp" "$OPAM_SOLVE"
+echo "  $(jq 'del(.__opam_nix_regen) | length' "$OPAM_SOLVE") packages, identical across $(find "$OPAM_DEFS" -name '*.json' | wc -l) systems"
 echo "::endgroup::"
 
 # Helper: build a single FOD with a placeholder hash, parse the real

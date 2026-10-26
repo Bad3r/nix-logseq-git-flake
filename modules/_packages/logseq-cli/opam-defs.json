@@ -1,11 +1,4 @@
 {
-  "__opam_nix_env": {
-    "arch": "arm64",
-    "os": "linux",
-    "os-distribution": "debian",
-    "os-family": "debian",
-    "os-version": "13"
-  },
   "__opam_nix_regen": "scripts/update-nightly.sh",
   "base-bigarray": {
     "description": "\nBigarray library distributed with the OCaml compiler\n",

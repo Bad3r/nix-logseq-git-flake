@@ -36,6 +36,7 @@
       "to": "git+https://github.com/rcmerci/humanize.git#747879af704dff4dd1897bc0f9a53a361071371c"
     }
   ],
+  "cliOpamDefsRev": "a37eff1d36aa7d0802b0b526f70aab0113191d53",
   "cliPnpmDepsHash": "sha256-xdEEk5N/G0wGHBYvFLe8N2EL66DYUpVpCSHkvvbsIuE=",
   "cliBundlePnpmDepsHash": "sha256-EWSyhc/6oJGMqz1vcfspJiOuQSzqTRS3Oyy/Fpg7Jrk=",
   "cliCljDepsHash": "sha256-2h4nICQ5r8sVx4xLbXK45ik65xh/tXYeQPGvVU5V0ZQ=",
@@ -55,6 +56,5 @@
       "file": "logseq-graph-lifecycle-ownership-respect-home.patch",
       "cli": true
     }
-  ],
-  "cliOpamDefsRev": "a37eff1d36aa7d0802b0b526f70aab0113191d53"
+  ]
 }
