@@ -103,6 +103,48 @@ let
       "theme-plugin: ${label}: -alpha steps do not composite to their solid steps: ${toString failing}"
       true;
 
+  accentSteps = map (step: "--lx-accent-${lib.fixedWidthString 2 "0" (toString step)}") (
+    lib.range 1 12
+  );
+
+  # A dark accent scale brightens from step 1 to step 12.
+  accentScaleOrdered =
+    label: css:
+    let
+      vars = declarations css;
+      brightness = map (step: lib.foldl' builtins.add 0 (hexChannels vars.${step})) accentSteps;
+    in
+    lib.throwIfNot (
+      lib.sort lib.lessThan brightness == brightness
+    ) "theme-plugin: ${label}: accent scale ${toString accentSteps} is not ordered by brightness" true;
+
+  # With only `accent` set to pure red, every colour derived from it keeps a
+  # red hue instead of falling back to the shipped blues.
+  accentHueFollows =
+    css:
+    let
+      vars = declarations css;
+      derivedFromAccent = lib.take 11 accentSteps ++ [
+        "--ls-block-highlight-color"
+        "--ls-selection-background-color"
+        "--ls-link-text-color"
+        "--ls-link-text-hover-color"
+      ];
+      redDominant =
+        var:
+        let
+          rgb = hexChannels vars.${var};
+        in
+        lib.elemAt rgb 0 > lib.elemAt rgb 1 && lib.elemAt rgb 0 > lib.elemAt rgb 2;
+      failing = lib.filter (var: !redDominant var) derivedFromAccent;
+    in
+    lib.throwIf (
+      failing != [ ]
+    ) "theme-plugin: colors.accent = #ff0000 alone left non-red accent tones: ${toString failing}" true;
+
+  checkedCss = theme.render { inherit (cfg) colors extraCss; };
+  defaultCss = renderColors { };
+
   # Per-file links are what make the plugin folder a real directory.
   expectedLinks = [
     "${pluginDir}/package.json"
@@ -119,8 +161,11 @@ let
     else
       "${logseqTree}/share/logseq/resources/app.asar";
 in
-assert alphaStepsComposite "checked palette" (theme.render { inherit (cfg) colors extraCss; });
-assert alphaStepsComposite "default palette" (renderColors { });
+assert alphaStepsComposite "checked palette" checkedCss;
+assert accentScaleOrdered "checked palette" checkedCss;
+assert accentHueFollows checkedCss;
+assert alphaStepsComposite "default palette" defaultCss;
+assert accentScaleOrdered "default palette" defaultCss;
 assert alphaStepsComposite "sidebar darker than the background" (renderColors {
   background = "#1e1e1e";
   sidebar = "#141414";

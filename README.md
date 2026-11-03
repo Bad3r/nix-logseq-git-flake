@@ -107,7 +107,11 @@ in
 ```
 
 Each unset colour keeps its default, a VS Code Dark 2026 palette with GitHub
-Dark syntax colours. The option descriptions in
+Dark syntax colours. The exceptions are the accent tones `highlight`,
+`selection`, `accentStrong`, `link`, and `linkHover`: unset, they blend from
+`accent` toward `background` or `bright`, so setting `accent` alone recolours
+the whole accent scale. The shipped `accent` over the shipped `background`
+keeps hand-tuned tones instead. The option descriptions in
 `modules/_home-manager/theme-plugin.nix` list every key; `extraCss` appends
 rules after the generated ones.
 

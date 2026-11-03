@@ -24,6 +24,16 @@ let
       }
     ) descriptions;
 
+  toneOptions = lib.mapAttrs (
+    _: description:
+    mkOption {
+      type = types.nullOr hexColor;
+      default = null;
+      defaultText = lib.literalMD "derived from `accent`, `background`, and `bright`";
+      inherit description;
+    }
+  );
+
   packageJson = {
     inherit (cfg) name description;
     version = "0.0.1";
@@ -92,7 +102,10 @@ in
         Semantic palette as `#rrggbb` strings. The twelve neutral steps
         `background` through `text` form Logseq's gray scale in order, from
         the app background to high-contrast text. The defaults are VS Code
-        Dark 2026 greys over GitHub Dark syntax colours.
+        Dark 2026 greys over GitHub Dark syntax colours. The accent tones
+        `highlight`, `selection`, `accentStrong`, `link`, and `linkHover`
+        default to null: the shipped `accent` over the shipped `background`
+        keeps tuned tones, and any other pair blends them from `accent`.
       '';
       default = { };
       type = types.submodule {
@@ -114,14 +127,16 @@ in
             bright = "Highest-contrast text: selected text, marks, accent step 12.";
             onAccent = "Text on accent-filled buttons.";
             accent = "Accent: focus rings, primary buttons, active items.";
-            accentStrong = "Stronger accent fill (accent step 7).";
-            link = "Links, page references, tags.";
-            linkHover = "Hovered links and references.";
-            selection = "Text selection background.";
-            highlight = "Highlighted block background (accent step 3).";
             danger = "Destructive actions.";
             mark = "Highlighted text background, applied at 40% opacity.";
             cloze = "Cloze text.";
+          }
+          // toneOptions {
+            highlight = "Highlighted block background (accent step 3).";
+            selection = "Text selection background (accent step 5).";
+            accentStrong = "Stronger accent fill (accent step 7).";
+            link = "Links, page references, tags (accent steps 10-11).";
+            linkHover = "Hovered links and references.";
           }
           // {
             syntax = mkOption {

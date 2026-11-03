@@ -138,10 +138,82 @@ let
 
   indexed = values: lib.imap1 (index: value: { inherit index value; }) values;
 
+  # VS Code Dark 2026 UI greys over GitHub Dark syntax colours. The accent
+  # tones are left to `withTones`.
+  defaultColors = {
+    background = "#121314";
+    sidebar = "#191a1b";
+    popup = "#202122";
+    border = "#2a2b2c";
+    activeItem = "#313233";
+    raised = "#414243";
+    strongBorder = "#454545";
+    placeholder = "#555555";
+    subtle = "#616161";
+    dim = "#858889";
+    muted = "#8c8c8c";
+    text = "#bbbebf";
+    title = "#c9d1d9";
+    bright = "#f0f6fc";
+    onAccent = "#ffffff";
+    accent = "#3994bc";
+    danger = "#da3633";
+    mark = "#cd9731";
+    cloze = "#ffa657";
+    syntax = {
+      keyword = "#ff7b72";
+      constant = "#79c0ff";
+      function = "#d2a8ff";
+      variable = "#c9d1d9";
+      parameter = "#ffa657";
+      type = "#ffa657";
+      string = "#a5d6ff";
+      regexp = "#7ee787";
+      comment = "#9198a1";
+      tag = "#7ee787";
+      heading = "#1f6feb";
+      invalid = "#ffa198";
+    };
+  };
+
+  # Accent tones tuned for the shipped accent over the shipped background.
+  shippedTones = {
+    highlight = "#1a3540";
+    selection = "#245c73";
+    accentStrong = "#297aa0";
+    link = "#48a0c7";
+    linkHover = "#79c0ff";
+  };
+
+  # Fills each unset (null) accent tone. The shipped accent over the shipped
+  # background keeps its tuned tones; any other pair blends the palette's own
+  # accent toward the background or `bright`, so the accent scale, links, and
+  # selection share one hue.
+  withTones =
+    colors:
+    let
+      shipped = colors.accent == defaultColors.accent && colors.background == defaultColors.background;
+      fallback =
+        if shipped then
+          shippedTones
+        else
+          {
+            highlight = mix colors.accent colors.background 0.25;
+            selection = mix colors.accent colors.background 0.55;
+            accentStrong = mix colors.accent colors.background 0.8;
+            link = mix colors.bright colors.accent 0.15;
+            linkHover = mix colors.bright colors.accent 0.4;
+          };
+    in
+    colors
+    // lib.mapAttrs (
+      name: tone: if colors.${name} or null == null then tone else colors.${name}
+    ) fallback;
+
   render =
     { colors, extraCss }:
     let
-      c = colors;
+      c = withTones colors;
       s = colors.syntax;
 
       gray = [
@@ -373,47 +445,5 @@ let
     );
 in
 {
-  inherit render;
-
-  # VS Code Dark 2026 UI greys over GitHub Dark syntax colours.
-  defaultColors = {
-    background = "#121314";
-    sidebar = "#191a1b";
-    popup = "#202122";
-    border = "#2a2b2c";
-    activeItem = "#313233";
-    raised = "#414243";
-    strongBorder = "#454545";
-    placeholder = "#555555";
-    subtle = "#616161";
-    dim = "#858889";
-    muted = "#8c8c8c";
-    text = "#bbbebf";
-    title = "#c9d1d9";
-    bright = "#f0f6fc";
-    onAccent = "#ffffff";
-    accent = "#3994bc";
-    accentStrong = "#297aa0";
-    link = "#48a0c7";
-    linkHover = "#79c0ff";
-    selection = "#245c73";
-    highlight = "#1a3540";
-    danger = "#da3633";
-    mark = "#cd9731";
-    cloze = "#ffa657";
-    syntax = {
-      keyword = "#ff7b72";
-      constant = "#79c0ff";
-      function = "#d2a8ff";
-      variable = "#c9d1d9";
-      parameter = "#ffa657";
-      type = "#ffa657";
-      string = "#a5d6ff";
-      regexp = "#7ee787";
-      comment = "#9198a1";
-      tag = "#7ee787";
-      heading = "#1f6feb";
-      invalid = "#ffa198";
-    };
-  };
+  inherit defaultColors render;
 }
