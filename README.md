@@ -21,6 +21,9 @@ Supported systems:
 | `default`    | both         | Symlink join of desktop and CLI packages              |
 | overlay      | n/a          | Exposes the same packages under `pkgs.logseq-nightly` |
 
+The flake also exports `homeManagerModules.default`, which installs a
+generated theme plugin (see [Theme Plugin](#theme-plugin)).
+
 ## Quick Use
 
 ```bash
@@ -70,6 +73,58 @@ environment.systemPackages = [
   pkgs.logseq-nightly.logseq-cli
 ];
 ```
+
+## Theme Plugin
+
+`homeManagerModules.default` adds `programs.logseq.themePlugin`, which renders
+a dark theme from a semantic palette and installs it as a theme-only plugin in
+`~/.logseq/plugins/<name>/` (`package.json` plus `theme.css`, no code).
+
+```nix
+{ config, inputs, ... }:
+let
+  c = config.lib.stylix.colors.withHashtag;
+in
+{
+  imports = [ inputs.logseq-nightly.homeManagerModules.default ];
+
+  programs.logseq.themePlugin = {
+    enable = true;
+    name = "stylix";
+    title = "Stylix";
+    colors = {
+      background = c.base00;
+      sidebar = c.base01;
+      border = c.base02;
+      subtle = c.base03;
+      muted = c.base04;
+      text = c.base05;
+      accent = c.base0D;
+      syntax.keyword = c.base08;
+    };
+  };
+}
+```
+
+Each unset colour keeps its default, a VS Code Dark 2026 palette with GitHub
+Dark syntax colours. The option descriptions in
+`modules/_home-manager/theme-plugin.nix` list every key; `extraCss` appends
+rules after the generated ones.
+
+The theme sets Logseq's CSS variables (gray and accent scales on `html` and
+`body`, the shadcn HSL triplets, and the classic `--ls-*` palette) rather than
+styling components, so it holds across accent colours and most app updates.
+Only CodeMirror token colours use selectors. The
+`checks.<system>.logseq-theme-plugin` check fails when the pinned app's
+stylesheet no longer knows a variable the theme sets.
+
+Logseq lists only real directories under `~/.logseq/plugins`, so the module
+links each file separately and Home Manager creates the plugin folder itself.
+
+After the first activation, restart Logseq and pick the theme once in
+Settings > Themes. Logseq records the choice in `~/.logseq/preferences.json`,
+which this module leaves alone; renaming `name` changes the plugin id and
+requires picking the theme again. The theme applies in dark mode only.
 
 ## CLI
 
