@@ -132,21 +132,25 @@ styling components, so it holds across accent colours and most app updates.
 Under the default `logseq` accent the app pins the shadcn tokens of menus,
 popovers, selects, the calendar, and outline buttons to fixed teal; the
 theme redeclares them there with the values the app uses for every other
-accent. Selectors otherwise style only the root background and CodeMirror
-code blocks (surface, gutters, line numbers, cursor, selection, active line,
-and token colours). The `checks.<system>.logseq-theme-plugin` check fails
-when the pinned app no longer reads a variable the theme sets in dark mode,
-pins one to a fixed colour on the root or under an accent in a rule the
+accent. Selectors otherwise style only the root background, text selection
+under the `none` accent (which otherwise paints it from the primary colour),
+and CodeMirror code blocks (surface, gutters, line numbers, cursor,
+selection, active line, and token colours).
+
+The `checks.<system>.logseq-theme-plugin` check fails when the pinned app no
+longer reads a variable the theme sets in dark mode, pins one to a fixed
+colour on the root or under an accent in a rule the theme does not
+out-rank, paints a property the theme paints in an accent-scoped rule the
 theme does not out-rank, or its stylesheet no longer knows a class or root
-attribute the theme selects on.
-A read counts only where the theme's value can reach the screen: not in
-light-mode rules, not as the fallback of another variable the theme sets,
-since the theme always defines the primary, and not in an app declaration
-that a theme declaration of the same property out-ranks. A read inside
-another variable counts only once that variable reaches a painted property
-or a script itself. The numbered steps of a scale pass together once one of
-them is live. The check proves that the app's CSS or JS consumes each
-value, not that the element consuming it is ever rendered.
+attribute the theme selects on. A read counts only where the theme's value
+can reach the screen: not in light-mode rules, not as the fallback of
+another variable the theme sets, since the theme always defines the
+primary, and not in an app declaration that a theme declaration of the same
+property out-ranks. A read inside another variable counts only once that
+variable reaches a painted property or a script itself. The numbered steps
+of a scale pass together once one of them is live. The check proves that
+the app's CSS or JS consumes each value, not that the element consuming it
+is ever rendered.
 
 Logseq lists only real directories under `~/.logseq/plugins`, so the module
 links each file separately and Home Manager creates the plugin folder itself.

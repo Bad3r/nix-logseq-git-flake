@@ -1,8 +1,9 @@
 # Renders a dark Logseq theme stylesheet from a semantic palette. Besides the
 # app's CSS variables (on the root, and on the components shui.css re-tints
-# under the logseq accent) it styles only the root background and CodeMirror
-# code blocks (surface, gutters, line numbers, cursor, selection, active line,
-# tokens), so it survives component restyles;
+# under the logseq accent) it styles only the root background, text selection
+# under the none accent, and CodeMirror code blocks (surface, gutters, line
+# numbers, cursor, selection, active line, tokens), so it survives component
+# restyles;
 # checks.<system>.logseq-theme-plugin fails when the pinned app stops reading
 # one of the variables, pins one to a fixed colour the sheet does not
 # out-rank, or stops using a class or attribute a selector names.
@@ -461,6 +462,10 @@ let
         ""
         "/* shui.css paints the page #161616, or #002b36 under the logseq accent. */"
         "html[data-theme=dark][data-color] { background-color: ${c.background}; }"
+        ""
+        "/* The none accent paints text selection from --primary (colors.css); every"
+        "   other accent uses the selection variable. */"
+        "html[data-theme=dark][data-color=none] ::selection { background-color: var(--ls-selection-background-color); }"
         ""
         "/* Component tokens shui.css re-tints under the logseq accent. */"
       ]

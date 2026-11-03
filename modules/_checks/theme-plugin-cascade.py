@@ -5,7 +5,9 @@ usage: theme-plugin-cascade.py THEME_CSS STYLE_CSS [JS ...]
 Fails when the app redeclares a variable theme.css sets, on the root or in
 an accent-scoped rule, to a value that does not start from a theme variable,
 and theme.css does not out-rank it: that element and its subtree would keep
-the app's colour.
+the app's colour. Also fails when an accent-scoped app rule paints a
+property on an element theme.css paints that property on, and theme.css
+does not out-rank it.
 
 Also fails when theme.css sets a custom property whose value never reaches
 a painted property in dark mode. A var() read in STYLE_CSS counts unless
@@ -36,6 +38,7 @@ LIGHT = re.compile(r"\[data-theme=\"?light\"?\]|\.white-theme|\.light-theme")
 # What holds on the root and body whenever a dark theme is loaded.
 ROOT_CONTEXT = {"html", "[data-theme=dark]", "[data-theme]", "[data-color]"}
 BODY_CONTEXT = {"body", ".dark-theme"}
+ACCENT = re.compile(r"^\[data-color=")
 SIMPLE = re.compile(
     r"::[\w-]+(?:\([^)]*\))?"
     r"|:[\w-]+(?:\((?:[^()]|\([^()]*\))*\))?"
@@ -166,12 +169,33 @@ def subject_facts(selector):
     return facts
 
 
+def prop_key(prop):
+    return "background-color" if prop == "background" else prop
+
+
+def root_facts(selector):
+    """Simple selectors on the root compound, when the selector starts there."""
+    facts = set(simples(compounds(selector)[0]))
+    return facts if facts & {"html", ":root"} else set()
+
+
+def accent_scoped(selector):
+    return any(ACCENT.match(fact) for fact in root_facts(selector))
+
+
 def anchored(selector):
-    """Whether a theme selector's ancestors always hold in dark mode."""
+    """Accent attributes a theme selector's root needs beyond dark mode.
+
+    None when its ancestors are not just the root: the rule then reaches
+    elements this model cannot place.
+    """
     parts = compounds(selector)
     if len(parts) > 2 or re.search(r"[>+~]", selector):
-        return False
-    return len(parts) == 1 or set(simples(parts[0])) <= ROOT_CONTEXT
+        return None
+    if len(parts) == 1:
+        return set()
+    extra = set(simples(parts[0])) - ROOT_CONTEXT
+    return extra if all(ACCENT.match(fact) for fact in extra) else None
 
 
 class Theme:
@@ -181,20 +205,29 @@ class Theme:
         self.rules = {}
         for declaration in self.declarations:
             for selector in declaration.selectors:
-                if anchored(selector):
-                    self.rules.setdefault(declaration.prop, []).append(selector)
+                required = anchored(selector)
+                if required is not None:
+                    key = prop_key(declaration.prop)
+                    self.rules.setdefault(key, []).append((selector, required))
+
+    def targets(self, prop, selector):
+        """Theme selectors for `prop` that match what `selector` matches."""
+        facts = subject_facts(selector)
+        pseudo = {fact for fact in facts if fact.startswith("::")}
+        for theme_selector, required in self.rules.get(prop_key(prop), []):
+            subject = set(simples(compounds(theme_selector)[-1]))
+            if {
+                s for s in subject if s.startswith("::")
+            } == pseudo and subject <= facts:
+                yield theme_selector, required
 
     def outranks(self, declaration, selector):
         """Whether theme.css wins `declaration` on what `selector` matches."""
         if declaration.important:
             return False
-        facts = subject_facts(selector)
-        pseudo = {fact for fact in facts if fact.startswith("::")}
-        for theme_selector in self.rules.get(declaration.prop, []):
-            subject = set(simples(compounds(theme_selector)[-1]))
-            if {s for s in subject if s.startswith("::")} != pseudo:
-                continue
-            if subject <= facts and (
+        root = root_facts(selector)
+        for theme_selector, required in self.targets(declaration.prop, selector):
+            if required <= root and (
                 declaration.layered
                 or specificity(theme_selector) >= specificity(selector)
             ):
@@ -281,6 +314,20 @@ def unbeaten_redeclarations(app, theme):
                 yield f"{selector} {{ {declaration.prop}: {declaration.value} }}"
 
 
+def unbeaten_overrides(app, theme):
+    """Accent-scoped app rules that win a property theme.css paints itself."""
+    for declaration in app:
+        if declaration.prop.startswith("--"):
+            continue
+        for selector in dark_selectors(declaration):
+            if not accent_scoped(selector):
+                continue
+            if not any(theme.targets(declaration.prop, selector)):
+                continue
+            if not theme.outranks(declaration, selector):
+                yield f"{selector} {{ {declaration.prop}: {declaration.value} }}"
+
+
 def scale_key(name):
     return re.sub(r"-[0-9]{2}(?=-|$)", "-NN", name)
 
@@ -295,7 +342,9 @@ def main():
     if not app:
         sys.exit("style.css: no declarations parsed")
 
-    unbeaten = sorted(set(unbeaten_redeclarations(app, theme)))
+    unbeaten = sorted(
+        set(unbeaten_redeclarations(app, theme)) | set(unbeaten_overrides(app, theme))
+    )
     if unbeaten:
         sys.exit(
             "theme.css: no rule out-ranks these app redeclarations:\n  "
