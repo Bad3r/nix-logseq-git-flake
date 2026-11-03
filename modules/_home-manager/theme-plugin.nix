@@ -104,9 +104,9 @@ in
         the app background to high-contrast text, so a palette that replaces
         them sets all twelve. The defaults are VS Code Dark 2026 greys over
         GitHub Dark syntax colours. The accent tones `highlight`,
-        `selection`, `accentStrong`, `link`, and `linkHover` default to
-        null: the shipped `accent` over the shipped `background` keeps tuned
-        tones, and any other pair blends them from `accent`.
+        `selection`, `link`, and `linkHover` default to null: the shipped
+        `accent` over the shipped `background` keeps tuned tones, and any
+        other pair blends them from `accent`.
       '';
       default = { };
       type = types.submodule {
@@ -134,7 +134,6 @@ in
           // toneOptions {
             highlight = "Highlighted and selected blocks and table cells (accent step 3).";
             selection = "Text selection background, in code too, and hovered page property keys (accent step 5).";
-            accentStrong = "Accent steps 6-7: input focus shadows and highlighted list matches.";
             link = "Links, page references, tags (accent steps 10-11).";
             linkHover = "Hovered block references and property links, link underlines on hover.";
           }

@@ -190,7 +190,8 @@ let
   # Fills each unset (null) accent tone. The shipped accent over the shipped
   # background keeps its tuned tones; any other pair blends the palette's own
   # accent toward the background or `bright`, so the accent scale, links, and
-  # selection share one hue.
+  # selection share one hue. `accentStrong` (accent step 7) has no option:
+  # nothing the pinned app renders paints accent steps 6-7.
   withTones =
     colors:
     let
