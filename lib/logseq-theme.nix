@@ -1,0 +1,415 @@
+# Renders a dark Logseq theme stylesheet from a semantic palette. Outside
+# CodeMirror token colours it sets only the app's CSS variables, so it survives
+# component restyles;
+# checks.<system>.logseq-theme-plugin fails when the pinned app's style.css
+# stops knowing one of them.
+{ lib }:
+let
+  inherit (builtins)
+    concatStringsSep
+    elemAt
+    floor
+    genList
+    substring
+    ;
+
+  hexDigits = "0123456789abcdef";
+
+  parseHex =
+    color:
+    let
+      digits = lib.removePrefix "#" color;
+    in
+    lib.throwIfNot (builtins.match "[0-9a-fA-F]{6}" digits != null)
+      "logseq-theme: expected #rrggbb, got '${color}'"
+      (genList (i: lib.fromHexString (substring (i * 2) 2 digits)) 3);
+
+  clampByte =
+    value:
+    if value < 0 then
+      0
+    else if value > 255 then
+      255
+    else
+      value;
+
+  roundHalfUp = value: floor (value + 0.5);
+
+  byteHex =
+    value:
+    let
+      byte = clampByte value;
+    in
+    substring (byte / 16) 1 hexDigits + substring (lib.mod byte 16) 1 hexDigits;
+
+  toHex = channels: "#" + concatStringsSep "" (map byteHex channels);
+
+  # Fixed-point decimal rendering for a non-negative float.
+  fixed =
+    decimals: value:
+    let
+      scale = lib.foldl' (acc: _: acc * 10) 1 (genList (x: x) decimals);
+      scaled = roundHalfUp (value * scale);
+      fraction = toString (lib.mod scaled scale);
+      padded = lib.fixedWidthString decimals "0" fraction;
+    in
+    "${toString (scaled / scale)}.${padded}";
+
+  # `amount` of colour `top` over colour `bottom`.
+  mix =
+    top: bottom: amount:
+    let
+      a = parseHex top;
+      b = parseHex bottom;
+    in
+    toHex (genList (i: roundHalfUp (elemAt b i + (elemAt a i - elemAt b i) * amount)) 3);
+
+  # Space-separated `H S% L%` triplet, the shape shadcn-style `hsl(var(--x))`
+  # references expect.
+  hslTriplet =
+    color:
+    let
+      channels = map (c: c / 255.0) (parseHex color);
+      r = elemAt channels 0;
+      g = elemAt channels 1;
+      b = elemAt channels 2;
+      maxc = lib.max r (lib.max g b);
+      minc = lib.min r (lib.min g b);
+      sum = maxc + minc;
+      delta = maxc - minc;
+      lightness = sum / 2;
+      saturation =
+        if delta == 0 then
+          0.0
+        else if lightness <= 0.5 then
+          delta / sum
+        else
+          delta / (2.0 - sum);
+      rc = (maxc - r) / delta;
+      gc = (maxc - g) / delta;
+      bc = (maxc - b) / delta;
+      sextant =
+        if delta == 0 then
+          0.0
+        else if r == maxc then
+          bc - gc
+        else if g == maxc then
+          2.0 + rc - bc
+        else
+          4.0 + gc - rc;
+      turn = sextant / 6.0;
+      hue = turn - floor turn;
+    in
+    "${fixed 1 (hue * 360)} ${fixed 1 (saturation * 100)}% ${fixed 1 (lightness * 100)}%";
+
+  rgbString =
+    color: alpha:
+    let
+      channels = parseHex color;
+    in
+    "rgb(${concatStringsSep " " (map toString channels)} / ${alpha})";
+
+  # Translucent `overlay` that composites to `target` over `bg`, so `-alpha`
+  # scale steps match their solid steps.
+  alphaOver =
+    target: overlay: bg:
+    let
+      t = parseHex target;
+      o = parseHex overlay;
+      b = parseHex bg;
+      ratios = lib.concatMap (
+        i:
+        lib.optional (elemAt o i != elemAt b i) (
+          (elemAt t i - elemAt b i) * 1.0 / (elemAt o i - elemAt b i)
+        )
+      ) (genList (i: i) 3);
+      mean = if ratios == [ ] then 0.0 else lib.foldl' (acc: x: acc + x) 0.0 ratios / lib.length ratios;
+      alpha = lib.max 0.0 (lib.min 1.0 mean);
+    in
+    rgbString overlay (fixed 3 alpha);
+
+  declare = name: value: "  ${name}: ${value};";
+
+  pad2 = index: lib.fixedWidthString 2 "0" (toString index);
+
+  indexed = values: lib.imap1 (index: value: { inherit index value; }) values;
+
+  render =
+    { colors, extraCss }:
+    let
+      c = colors;
+      s = colors.syntax;
+
+      gray = [
+        c.background
+        c.sidebar
+        c.popup
+        c.border
+        c.activeItem
+        c.raised
+        c.strongBorder
+        c.placeholder
+        c.subtle
+        c.dim
+        c.muted
+        c.text
+      ];
+
+      # Steps without a palette entry blend toward the background.
+      accent = [
+        (mix c.accent c.background 0.06)
+        (mix c.accent c.background 0.10)
+        c.highlight
+        (mix c.selection c.highlight 0.5)
+        c.selection
+        (mix c.accentStrong c.selection 0.5)
+        c.accentStrong
+        c.accent
+        c.accent
+        c.link
+        c.link
+        c.bright
+      ];
+
+      grayLines =
+        prefix: withHsl:
+        lib.concatMap (
+          { index, value }:
+          let
+            step = "${prefix}-${pad2 index}";
+          in
+          [ (declare step value) ]
+          ++ lib.optional withHsl (declare "${step}-hsl" (hslTriplet value))
+          ++ [ (declare "${step}-alpha" (alphaOver value "#ffffff" c.background)) ]
+        ) (indexed gray);
+
+      accentLines = lib.concatMap (
+        { index, value }:
+        let
+          step = "--lx-accent-${pad2 index}";
+        in
+        [
+          (declare step value)
+          (declare "${step}-alpha" (if index <= 9 then alphaOver value c.accent c.background else value))
+        ]
+      ) (indexed accent);
+
+      hslLines = lib.mapAttrsToList (name: value: declare "--${name}" (hslTriplet value)) {
+        inherit (c) accent background border;
+        foreground = c.text;
+        card = c.background;
+        card-foreground = c.text;
+        popover = c.popup;
+        popover-foreground = c.text;
+        primary = c.accent;
+        primary-foreground = c.onAccent;
+        secondary = c.activeItem;
+        secondary-foreground = c.text;
+        muted = c.popup;
+        muted-foreground = c.muted;
+        accent-foreground = c.onAccent;
+        destructive = c.danger;
+        destructive-foreground = c.onAccent;
+        input = c.border;
+        ring = c.accent;
+      };
+
+      lsLines = lib.mapAttrsToList (name: declare "--${name}") {
+        ls-primary-background-color = c.background;
+        ls-secondary-background-color = c.sidebar;
+        ls-tertiary-background-color = c.popup;
+        ls-quaternary-background-color = c.border;
+        ls-table-tr-even-background-color = c.sidebar;
+        ls-block-properties-background-color = c.sidebar;
+        ls-page-properties-background-color = c.sidebar;
+        ls-a-chosen-bg = c.activeItem;
+        ls-menu-hover-color = c.activeItem;
+        lx-popover-bg = c.popup;
+        ls-border-color = c.border;
+        ls-secondary-border-color = c.border;
+        ls-tertiary-border-color = c.border;
+        ls-guideline-color = c.border;
+        ls-primary-text-color = c.text;
+        ls-secondary-text-color = c.muted;
+        ls-title-text-color = c.title;
+        ls-left-sidebar-text-color = c.text;
+        ls-header-button-background = c.text;
+        ls-icon-color = c.muted;
+        ls-search-icon-color = c.muted;
+        ls-search-icon-hover-color = c.text;
+        ls-active-primary-color = c.accent;
+        ls-active-secondary-color = c.link;
+        ls-link-text-color = c.link;
+        ls-link-text-hover-color = c.linkHover;
+        ls-link-ref-text-color = c.link;
+        ls-link-ref-text-hover-color = c.linkHover;
+        ls-block-ref-link-text-color = c.link;
+        ls-tag-text-color = c.link;
+        ls-tag-text-hover-color = c.linkHover;
+        ls-block-bullet-color = c.subtle;
+        ls-block-bullet-active-color = c.text;
+        ls-block-bullet-border-color = c.border;
+        ls-block-highlight-color = c.highlight;
+        ls-block-left-color = c.accent;
+        ls-selection-background-color = c.selection;
+        ls-selection-text-color = c.bright;
+        ls-focus-ring-color = c.accent;
+        ls-page-checkbox-color = c.subtle;
+        ls-page-checkbox-border-color = c.subtle;
+        ls-page-blockquote-color = c.text;
+        ls-page-blockquote-bg-color = c.sidebar;
+        ls-page-blockquote-border-color = c.subtle;
+        ls-page-mark-color = c.bright;
+        ls-page-mark-bg-color = rgbString c.mark "0.4";
+        ls-page-inline-code-color = c.title;
+        ls-page-inline-code-bg-color = c.border;
+        ls-cloze-text-color = c.cloze;
+        ls-slide-background-color = c.background;
+        ls-pie-bg-color = c.border;
+        ls-pie-fg-color = c.accent;
+        ls-wb-stroke-color-default = c.subtle;
+        ls-wb-background-color-default = c.sidebar;
+        ls-wb-text-color-default = c.text;
+        ls-scrollbar-foreground-color = rgbString c.subtle "0.4";
+        ls-scrollbar-thumb-hover-color = rgbString c.subtle "0.7";
+        ls-scrollbar-background-color = "transparent";
+        ls-button-background-hsl = hslTriplet c.accent;
+        color-level-1 = c.sidebar;
+        color-level-2 = c.popup;
+        color-level-3 = c.border;
+        color-level-4 = c.activeItem;
+        color-level-5 = c.raised;
+        color-level-6 = c.strongBorder;
+      };
+
+      cm = "html[data-theme=dark] .CodeMirror";
+
+      codeRules = [
+        " { background-color: ${c.sidebar}; color: ${c.text}; text-shadow: none; }"
+        " .CodeMirror-gutters { background-color: ${c.sidebar}; border-right: 0; }"
+        " .CodeMirror-linenumber { color: ${c.dim}; }"
+        " .CodeMirror-cursor { border-left-color: ${c.text}; }"
+        " div.CodeMirror-selected { background: ${c.selection}; }"
+        " ::selection { background: ${c.selection}; }"
+        " .CodeMirror-activeline-background { background: ${c.popup}; }"
+        " .cm-keyword { color: ${s.keyword}; }"
+        " .cm-operator { color: ${s.keyword}; }"
+        " .cm-atom { color: ${s.constant}; }"
+        " .cm-number { color: ${s.constant}; }"
+        " .cm-property { color: ${s.constant}; }"
+        " .cm-attribute { color: ${s.constant}; }"
+        " .cm-qualifier { color: ${s.constant}; }"
+        " .cm-def { color: ${s.function}; }"
+        " .cm-variable { color: ${s.variable}; }"
+        " .cm-variable-2 { color: ${s.parameter}; }"
+        " .cm-variable-3, ${cm} .cm-type { color: ${s.type}; }"
+        " .cm-builtin { color: ${s.type}; }"
+        " .cm-string { color: ${s.string}; }"
+        " .cm-string-2 { color: ${s.regexp}; }"
+        " .cm-comment { color: ${s.comment}; font-style: italic; }"
+        " .cm-meta { color: ${c.muted}; }"
+        " .cm-tag { color: ${s.tag}; }"
+        " .cm-bracket { color: ${c.text}; }"
+        " .cm-header { color: ${s.heading}; font-weight: 600; }"
+        " .cm-quote { color: ${c.muted}; }"
+        " .cm-link { color: ${s.string}; }"
+        " .cm-hr { border-top-color: ${c.border}; }"
+        " .cm-error, ${cm} .cm-invalidchar { color: ${s.invalid}; }"
+        " .CodeMirror-matchingbracket { color: ${c.bright} !important; outline: 1px solid ${c.subtle}; }"
+        " .CodeMirror-nonmatchingbracket { color: ${s.invalid} !important; }"
+      ];
+    in
+    lib.concatLines (
+      [
+        "/* Generated by nix-logseq-git-flake (homeManagerModules.default). */"
+        ""
+        # Unlayered and loaded after the app sheet. The variables go on html,
+        # body, and .dark-theme because every accent except `logseq` and
+        # `none` redeclares the scales on body (colors.css).
+        "html[data-theme=dark][data-color],"
+        "html[data-theme=dark][data-color] body,"
+        "html[data-theme=dark][data-color] .dark-theme {"
+        "  /* Radix neutral scale (radix.css) */"
+      ]
+      ++ grayLines "--rx-gray" true
+      ++ [
+        ""
+        "  /* Logseq neutral scale (colors.css) */"
+      ]
+      ++ grayLines "--lx-gray" false
+      ++ [
+        ""
+        "  /* Logseq accent scale (colors.css) */"
+      ]
+      ++ accentLines
+      ++ [
+        ""
+        "  /* shadcn-style HSL triplets (shui.css, colors.css) */"
+      ]
+      ++ hslLines
+      ++ [
+        ""
+        "  /* Classic --ls-* palette (vars-classic.css, colors.css) */"
+      ]
+      ++ lsLines
+      ++ [
+        "}"
+        ""
+        "/* shui.css paints the page #161616, or #002b36 under the logseq accent. */"
+        "html[data-theme=dark][data-color] { background-color: ${c.background}; }"
+        ""
+        "/* Code blocks: CodeMirror 5 theme 'solarized dark' without an accent,"
+        "   'lsradix dark' with one (extensions/code.cljs). */"
+      ]
+      ++ map (rule: cm + rule) codeRules
+      ++ lib.optionals (extraCss != "") [
+        ""
+        extraCss
+      ]
+    );
+in
+{
+  inherit render;
+
+  # VS Code Dark 2026 UI greys over GitHub Dark syntax colours.
+  defaultColors = {
+    background = "#121314";
+    sidebar = "#191a1b";
+    popup = "#202122";
+    border = "#2a2b2c";
+    activeItem = "#313233";
+    raised = "#414243";
+    strongBorder = "#454545";
+    placeholder = "#555555";
+    subtle = "#616161";
+    dim = "#858889";
+    muted = "#8c8c8c";
+    text = "#bbbebf";
+    title = "#c9d1d9";
+    bright = "#f0f6fc";
+    onAccent = "#ffffff";
+    accent = "#3994bc";
+    accentStrong = "#297aa0";
+    link = "#48a0c7";
+    linkHover = "#79c0ff";
+    selection = "#245c73";
+    highlight = "#1a3540";
+    danger = "#da3633";
+    mark = "#cd9731";
+    cloze = "#ffa657";
+    syntax = {
+      keyword = "#ff7b72";
+      constant = "#79c0ff";
+      function = "#d2a8ff";
+      variable = "#c9d1d9";
+      parameter = "#ffa657";
+      type = "#ffa657";
+      string = "#a5d6ff";
+      regexp = "#7ee787";
+      comment = "#9198a1";
+      tag = "#7ee787";
+      heading = "#1f6feb";
+      invalid = "#ffa198";
+    };
+  };
+}
