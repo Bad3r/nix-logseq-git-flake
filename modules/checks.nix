@@ -30,6 +30,11 @@
             ;
         };
 
+        logseq-theme-plugin = import ./_checks/theme-plugin.nix {
+          inherit lib pkgs;
+          inherit (logseqNightly) logseqTree;
+        };
+
         logseq =
           pkgs.runCommand "logseq-check"
             {
