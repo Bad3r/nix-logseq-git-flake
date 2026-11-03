@@ -113,10 +113,10 @@ in
         options =
           colorOptions theme.defaultColors {
             background = "Gray step 1: page background and cards.";
-            sidebar = "Gray step 2: right sidebar, code blocks, quote backgrounds.";
-            popup = "Gray step 3: popovers and menus, block and page properties, the active code line.";
-            border = "Gray step 4: borders, input outlines, block guide lines, focused menu items.";
-            activeItem = "Gray step 5: hovered and highlighted menu items, secondary buttons, scrollbar thumbs.";
+            sidebar = "Gray step 2: left and right sidebar backgrounds, code blocks, quotes, alternate table rows.";
+            popup = "Gray step 3: popovers and menus, block and page properties, right-sidebar items, table headers, the active code line.";
+            border = "Gray step 4: borders, input outlines, block guide lines, focused menu items, active and hovered left-sidebar items.";
+            activeItem = "Gray step 5: hovered and highlighted menu items, secondary buttons, selected table rows, scrollbar thumbs.";
             raised = "Gray step 6: inline code background and keyboard-shortcut keys.";
             strongBorder = "Gray step 7: keyboard-key borders and, outside the logseq accent, classic form-input borders.";
             bullet = "Gray step 8: block bullets and the shortcut toolbar text.";
@@ -132,7 +132,7 @@ in
             cloze = "Cloze text.";
           }
           // toneOptions {
-            highlight = "Highlighted and selected blocks and table cells (accent step 3).";
+            highlight = "Highlighted and selected blocks and table cells (accent step 3); blended with `selection` into step 4, hovered page references.";
             selection = "Text selection background, in code too, and hovered page property keys (accent step 5).";
             link = "Links, page references, tags (accent steps 10-11).";
             linkHover = "Hovered block references and property links, link underlines on hover.";
