@@ -1,9 +1,11 @@
 # Renders a dark Logseq theme stylesheet from a semantic palette. Besides the
-# app's CSS variables it styles only the root background and CodeMirror code
-# blocks (surface, gutters, line numbers, cursor, selection, active line,
+# app's CSS variables (on the root, and on the components shui.css re-tints
+# under the logseq accent) it styles only the root background and CodeMirror
+# code blocks (surface, gutters, line numbers, cursor, selection, active line,
 # tokens), so it survives component restyles;
 # checks.<system>.logseq-theme-plugin fails when the pinned app stops reading
-# one of the variables or stops using a class or attribute a selector names.
+# one of the variables, pins one to a fixed colour the sheet does not
+# out-rank, or stops using a class or attribute a selector names.
 { lib }:
 let
   inherit (builtins)
@@ -336,6 +338,52 @@ let
       # .cm-s-dark outranks the app's theme rules, which reach three classes
       # (`.dark .cm-s-lsradix.cm-s-dark`, `.cm-s-lsradix.cm-s-dark.CodeMirror
       # ::selection`).
+      # Under the logseq accent shui.css pins these components' shadcn tokens
+      # to fixed teal, which beats the root values by inheritance. The values
+      # mirror the app's own rules for every other accent; components without
+      # one inherit the root value there.
+      componentTokens = [
+        {
+          selectors = [
+            ".ui__dropdown-menu-content"
+            ".ui__dropdown-menu-sub-content"
+            ".ui__context-menu-content"
+            ".ui__context-menu-sub-content"
+            ".ui__popover-content"
+            ".ui__select-content"
+          ];
+          tokens = {
+            accent = "var(--rx-gray-04-hsl)";
+            muted = "var(--rx-gray-05-hsl)";
+            secondary-foreground = hslTriplet c.text;
+          };
+        }
+        {
+          selectors = [ ".ui__calendar" ];
+          tokens.accent = "var(--rx-gray-04-hsl)";
+        }
+        {
+          selectors = [ ".ui__button.as-outline" ];
+          tokens.accent = "var(--rx-gray-02-hsl)";
+        }
+        {
+          selectors = [ ".rc-datepicker" ];
+          tokens.accent = hslTriplet c.accent;
+        }
+      ];
+
+      componentLines = lib.concatMap (
+        { selectors, tokens }:
+        [
+          (
+            concatStringsSep ",\n" (map (selector: "html[data-theme=dark][data-color] ${selector}") selectors)
+            + " {"
+          )
+        ]
+        ++ lib.mapAttrsToList (name: declare "--${name}") tokens
+        ++ [ "}" ]
+      ) componentTokens;
+
       cm = "html[data-theme=dark] .CodeMirror.cm-s-dark";
 
       codeRules = [
@@ -411,6 +459,11 @@ let
         ""
         "/* shui.css paints the page #161616, or #002b36 under the logseq accent. */"
         "html[data-theme=dark][data-color] { background-color: ${c.background}; }"
+        ""
+        "/* Component tokens shui.css re-tints under the logseq accent. */"
+      ]
+      ++ componentLines
+      ++ [
         ""
         "/* Code blocks: CodeMirror 5 theme 'solarized dark' without an accent,"
         "   'lsradix dark' with one (extensions/code.cljs). */"

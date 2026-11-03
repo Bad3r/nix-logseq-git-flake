@@ -1,9 +1,11 @@
 # Evaluates the Home Manager theme-plugin module against a stub `home.file`,
 # builds the plugin it links, and checks it against the pinned app: the app
-# must still read every custom property theme.css sets in dark mode
-# (theme-plugin-cascade.py), and every class and root attribute its selectors
-# use must still appear in its compiled style.css, so an upstream rename
-# fails here instead of silently unstyling part of the UI.
+# must still read every custom property theme.css sets in dark mode, and
+# theme.css must out-rank every rule that pins one of them to a fixed colour
+# on the root or under an accent (theme-plugin-cascade.py); every class and
+# root attribute its selectors use must still appear in the compiled
+# style.css. An upstream change then fails here instead of silently
+# unstyling part of the UI.
 {
   lib,
   logseqTree,

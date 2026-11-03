@@ -2,7 +2,12 @@
 
 usage: theme-plugin-cascade.py THEME_CSS STYLE_CSS [JS ...]
 
-Fails when theme.css sets a custom property the app never reads live. A var()
+Fails when the app redeclares a variable theme.css sets, on the root or in
+an accent-scoped rule, to a value that does not start from a theme variable,
+and theme.css does not out-rank it: that element and its subtree would keep
+the app's colour.
+
+Also fails when theme.css sets a custom property the app never reads live. A var()
 read in STYLE_CSS counts unless every selector of its rule targets light mode
 (where a dark theme is not loaded), it sits in the fallback of var(--x, ...)
 for an --x the theme sets, or its declaration loses to a theme.css
@@ -222,6 +227,30 @@ def live_reads(declaration, theme):
     return reads
 
 
+def unbeaten_redeclarations(app, theme):
+    """App rules that pin a theme variable to a value the palette cannot reach.
+
+    A redeclaration below the root beats the theme's root value by
+    inheritance, so each one whose value does not start from a theme variable
+    needs a theme rule that out-ranks it. That covers root and body rules and
+    rules scoped to an accent ([data-color=...]); a component rule that
+    applies under every accent is a fixed colour the app keeps whatever the
+    accent (.primary-green), and the theme keeps it too.
+    """
+    for declaration in app:
+        if declaration.prop not in theme.custom:
+            continue
+        first = VAR.search(declaration.value)
+        if first and first.group(1) in theme.custom:
+            continue
+        for selector in dark_selectors(declaration):
+            root = subject_facts(selector) & (ROOT_CONTEXT | BODY_CONTEXT)
+            if not root and "[data-color=" not in selector:
+                continue
+            if not theme.outranks(declaration, selector):
+                yield f"{selector} {{ {declaration.prop}: {declaration.value} }}"
+
+
 def scale_key(name):
     return re.sub(r"-[0-9]{2}(?=-|$)", "-NN", name)
 
@@ -235,6 +264,13 @@ def main():
         app = parse(handle.read())
     if not app:
         sys.exit("style.css: no declarations parsed")
+
+    unbeaten = sorted(set(unbeaten_redeclarations(app, theme)))
+    if unbeaten:
+        sys.exit(
+            "theme.css: no rule out-ranks these app redeclarations:\n  "
+            + "\n  ".join(unbeaten)
+        )
 
     live = set()
     for declaration in app:
