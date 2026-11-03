@@ -307,7 +307,6 @@ let
         ls-search-icon-color = c.muted;
         ls-search-icon-hover-color = c.text;
         ls-active-primary-color = c.accent;
-        ls-active-secondary-color = c.link;
         ls-link-text-color = c.link;
         ls-link-text-hover-color = c.linkHover;
         ls-link-ref-text-color = c.link;

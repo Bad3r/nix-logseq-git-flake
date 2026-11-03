@@ -1,7 +1,7 @@
 # Evaluates the Home Manager theme-plugin module against a stub `home.file`,
 # builds the plugin it links, and checks it against the pinned app: the app
 # must still read every custom property theme.css sets in dark mode
-# (theme-plugin-reads.py), and every class and root attribute its selectors
+# (theme-plugin-cascade.py), and every class and root attribute its selectors
 # use must still appear in its compiled style.css, so an upstream rename
 # fails here instead of silently unstyling part of the UI.
 {
@@ -249,7 +249,7 @@ pkgs.runCommand "logseq-theme-plugin-check"
     while read -r file; do
       (cd js && asar extract-file "${asarPath}" "''${file#/}")
     done < js-files
-    python3 -I ${./theme-plugin-reads.py} "$theme_css" style.css js/* || exit 1
+    python3 -I ${./theme-plugin-cascade.py} "$theme_css" style.css js/* || exit 1
 
     # Selectors fail as silently as variables: every class the sheet targets
     # (CodeMirror 5 markup, .dark-theme) must still appear in the app's
