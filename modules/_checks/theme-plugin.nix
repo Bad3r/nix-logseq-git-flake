@@ -1,7 +1,8 @@
 # Evaluates the Home Manager theme-plugin module against a stub `home.file`,
 # builds the plugin it links, and checks it against the pinned app: every
 # custom property theme.css sets must still be declared or read by the app's
-# compiled style.css, so an upstream variable rename fails here instead of
+# compiled style.css, and every class and root attribute its selectors use
+# must still appear there, so an upstream rename fails here instead of
 # silently unstyling part of the UI.
 {
   lib,
@@ -191,6 +192,7 @@ pkgs.runCommand "logseq-theme-plugin-check"
     nativeBuildInputs = [
       pkgs.asar
       pkgs.gnugrep
+      pkgs.gnused
       pkgs.jq
     ];
   }
@@ -245,6 +247,25 @@ pkgs.runCommand "logseq-theme-plugin-check"
       grep -qF -- "$var:" style.css || grep -qE -- "var\\($var[,)]" style.css \
         || fail "$var is unknown to the pinned app's css/style.css"
     done < declared
+
+    # Selectors fail as silently as variables: every class the sheet targets
+    # (CodeMirror 5 markup, .dark-theme) must still appear in the app's
+    # stylesheet, and every attribute it selects on must still style the root.
+    sed -z 's|/\*[^*]*\*\+\([^/*][^*]*\*\+\)*/||g; s/{[^}]*}//g' "$theme_css" > selectors
+    grep -oE '\.[A-Za-z_-][A-Za-z0-9_-]*' selectors | sort -u > classes
+    test -s classes || fail "selects no classes"
+    while read -r class; do
+      grep -qE -- "\\$class([^A-Za-z0-9_-]|\$)" style.css \
+        || fail "selector $class is unknown to the pinned app's css/style.css"
+    done < classes
+    grep -oE '\[[A-Za-z_-]+(=[^]]*)?\]' selectors | sort -u > attributes
+    test -s attributes || fail "selects no attributes"
+    while read -r attribute; do
+      case "$attribute" in
+        *=*) grep -qF -- "html$attribute" style.css ;;
+        *) grep -qE -- "html\\''${attribute%]}[]=]" style.css ;;
+      esac || fail "the pinned app's css/style.css no longer styles html$attribute"
+    done < attributes
 
     touch "$out"
   ''

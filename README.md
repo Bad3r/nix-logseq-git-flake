@@ -131,7 +131,8 @@ The theme sets Logseq's CSS variables (gray and accent scales on `html` and
 styling components, so it holds across accent colours and most app updates.
 Only CodeMirror token colours use selectors. The
 `checks.<system>.logseq-theme-plugin` check fails when the pinned app's
-stylesheet no longer knows a variable the theme sets.
+stylesheet no longer knows a variable, class, or root attribute the theme
+uses.
 
 Logseq lists only real directories under `~/.logseq/plugins`, so the module
 links each file separately and Home Manager creates the plugin folder itself.
