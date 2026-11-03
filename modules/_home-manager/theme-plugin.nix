@@ -112,31 +112,31 @@ in
       type = types.submodule {
         options =
           colorOptions theme.defaultColors {
-            background = "Gray step 1: page and editor background.";
-            sidebar = "Gray step 2: sidebars and code blocks.";
-            popup = "Gray step 3: popovers, menus, property blocks, active code line.";
-            border = "Gray step 4: borders and guide lines.";
-            activeItem = "Gray step 5: chosen and hovered menu items, scrollbar thumbs.";
-            raised = "Gray step 6: raised surfaces and inline code background.";
-            strongBorder = "Gray step 7: menu and strong borders.";
-            placeholder = "Gray step 8: placeholder text.";
-            subtle = "Gray step 9: bullets, checkboxes, quote borders.";
-            dim = "Gray step 10: line numbers and low-emphasis text.";
-            muted = "Gray step 11: secondary text and icons.";
-            text = "Gray step 12: primary text.";
-            bright = "Highest-contrast text: selected text, marks, accent step 12.";
-            onAccent = "Text on accent-filled buttons.";
-            accent = "Accent: focus rings, primary buttons, active items.";
-            danger = "Destructive actions.";
-            mark = "Highlighted text background, applied at 40% opacity.";
+            background = "Gray step 1: page background and cards.";
+            sidebar = "Gray step 2: right sidebar, code blocks, quote backgrounds.";
+            popup = "Gray step 3: popovers and menus, block and page properties, the active code line.";
+            border = "Gray step 4: borders, input outlines, block guide lines, focused menu items.";
+            activeItem = "Gray step 5: hovered and highlighted menu items, secondary buttons, scrollbar thumbs.";
+            raised = "Gray step 6: inline code background and keyboard-shortcut keys.";
+            strongBorder = "Gray step 7: input and keyboard-key borders.";
+            placeholder = "Gray step 8: block bullets.";
+            subtle = "Gray step 9: checkboxes and radio buttons, quote borders, matching-bracket outlines in code.";
+            dim = "Gray step 10: code line numbers and the hovered block guide line.";
+            muted = "Gray step 11: secondary text, icons, input placeholders.";
+            text = "Gray step 12: body text, including selected text.";
+            bright = "Accent step 12: marked text, hovered plain links, matching brackets in code.";
+            onAccent = "Text on primary, accent, and destructive fills.";
+            accent = "Primary buttons and fills, focus rings, accent steps 8-9.";
+            danger = "Destructive buttons and text.";
+            mark = "Background of marked text, applied at 40% opacity.";
             cloze = "Cloze text.";
           }
           // toneOptions {
-            highlight = "Highlighted block background (accent step 3).";
-            selection = "Text selection background (accent step 5).";
-            accentStrong = "Stronger accent fill (accent step 7).";
+            highlight = "Highlighted and selected blocks and table cells (accent step 3).";
+            selection = "Text selection background, in code too, and hovered page property keys (accent step 5).";
+            accentStrong = "Accent steps 6-7: input focus shadows and highlighted list matches.";
             link = "Links, page references, tags (accent steps 10-11).";
-            linkHover = "Hovered links and references.";
+            linkHover = "Hovered block references and property links, link underlines on hover.";
           }
           // {
             syntax = mkOption {
