@@ -333,7 +333,10 @@ let
         color-level-6 = c.strongBorder;
       };
 
-      cm = "html[data-theme=dark] .CodeMirror";
+      # .cm-s-dark outranks the app's theme rules, which reach three classes
+      # (`.dark .cm-s-lsradix.cm-s-dark`, `.cm-s-lsradix.cm-s-dark.CodeMirror
+      # ::selection`).
+      cm = "html[data-theme=dark] .CodeMirror.cm-s-dark";
 
       codeRules = [
         " { background-color: ${c.sidebar}; color: ${c.text}; text-shadow: none; }"
