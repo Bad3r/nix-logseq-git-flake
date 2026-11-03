@@ -23,26 +23,85 @@ let
     };
   };
 
-  evaluated = lib.evalModules {
-    modules = [
-      ../_home-manager/theme-plugin.nix
-      homeFileStub
-      {
-        _module.args.pkgs = pkgs;
-        programs.logseq.themePlugin = {
-          enable = true;
-          inherit name;
-          title = "Check Theme";
-          colors.accent = "#ff0000";
-          colors.syntax.keyword = "#00ff00";
-          extraCss = "/* extra-css-marker */";
-        };
-      }
-    ];
+  evalTheme =
+    settings:
+    lib.evalModules {
+      modules = [
+        ../_home-manager/theme-plugin.nix
+        homeFileStub
+        {
+          _module.args.pkgs = pkgs;
+          programs.logseq.themePlugin = settings;
+        }
+      ];
+    };
+
+  evaluated = evalTheme {
+    enable = true;
+    inherit name;
+    title = "Check Theme";
+    colors.accent = "#ff0000";
+    colors.syntax.keyword = "#00ff00";
+    extraCss = "/* extra-css-marker */";
   };
 
   cfg = evaluated.config.programs.logseq.themePlugin;
   homeFiles = evaluated.config.home.file;
+
+  theme = import ../../lib/logseq-theme.nix { inherit lib; };
+  renderColors =
+    colors:
+    theme.render {
+      colors = (evalTheme { inherit colors; }).config.programs.logseq.themePlugin.colors;
+      extraCss = "";
+    };
+
+  declarations =
+    css:
+    lib.listToAttrs (
+      map (match: lib.nameValuePair (lib.elemAt match 0) (lib.elemAt match 1)) (
+        lib.filter (match: match != null) (
+          map (builtins.match "  (--[a-z0-9-]+): (.*);") (lib.splitString "\n" css)
+        )
+      )
+    );
+
+  hexChannels =
+    hex:
+    map (i: lib.fromHexString (builtins.substring (1 + 2 * i) 2 hex)) [
+      0
+      1
+      2
+    ];
+
+  # Every `-alpha` step, composited over the background the way the browser
+  # does, must land on its solid step.
+  alphaStepsComposite =
+    label: css:
+    let
+      vars = declarations css;
+      background = hexChannels vars."--lx-gray-01";
+      composites =
+        stepName:
+        let
+          parsed = builtins.match "rgb\\(([0-9]+) ([0-9]+) ([0-9]+) / ([01]\\.[0-9]{3})\\)" vars.${stepName};
+          overlay = map lib.toInt (lib.take 3 parsed);
+          alpha = builtins.fromJSON (lib.elemAt parsed 3);
+          composite = lib.zipListsWith (
+            bg: over: builtins.floor (bg + (over - bg) * alpha + 0.5)
+          ) background overlay;
+        in
+        parsed != null
+        && alpha <= 1.0
+        && lib.all (channel: channel <= 255) overlay
+        && composite == hexChannels vars.${lib.removeSuffix "-alpha" stepName};
+      failing = lib.filter (stepName: !composites stepName) (
+        lib.filter (lib.hasSuffix "-alpha") (lib.attrNames vars)
+      );
+    in
+    lib.throwIf (failing != [ ])
+      "theme-plugin: ${label}: -alpha steps do not composite to their solid steps: ${toString failing}"
+      true;
 
   # Per-file links are what make the plugin folder a real directory.
   expectedLinks = [
@@ -60,6 +119,28 @@ let
     else
       "${logseqTree}/share/logseq/resources/app.asar";
 in
+assert alphaStepsComposite "checked palette" (theme.render { inherit (cfg) colors extraCss; });
+assert alphaStepsComposite "default palette" (renderColors { });
+assert alphaStepsComposite "sidebar darker than the background" (renderColors {
+  background = "#1e1e1e";
+  sidebar = "#141414";
+});
+assert alphaStepsComposite "light tinted palette on white" (renderColors {
+  background = "#ffffff";
+  sidebar = "#fdf6e3";
+  popup = "#eee8d5";
+  border = "#e4ddc8";
+  activeItem = "#d9d2bd";
+  raised = "#cfc7b1";
+  strongBorder = "#bdb5a0";
+  placeholder = "#93a1a1";
+  subtle = "#839496";
+  dim = "#657b83";
+  muted = "#586e75";
+  text = "#073642";
+  bright = "#002b36";
+  accent = "#268bd2";
+});
 pkgs.runCommand "logseq-theme-plugin-check"
   {
     nativeBuildInputs = [
@@ -97,7 +178,10 @@ pkgs.runCommand "logseq-theme-plugin-check"
 
     required=(--background --foreground --ls-primary-background-color --ls-primary-text-color)
     for step in 01 02 03 04 05 06 07 08 09 10 11 12; do
-      required+=("--lx-gray-$step" "--lx-accent-$step" "--rx-gray-$step" "--rx-gray-$step-hsl")
+      for scale in lx-gray lx-accent rx-gray; do
+        required+=("--$scale-$step" "--$scale-$step-alpha")
+      done
+      required+=("--rx-gray-$step-hsl")
     done
     for var in "''${required[@]}"; do
       grep -qE "^  $var: [^;]+;$" "$theme_css" || fail "missing $var"

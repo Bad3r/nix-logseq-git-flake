@@ -109,24 +109,28 @@ let
     in
     "rgb(${concatStringsSep " " (map toString channels)} / ${alpha})";
 
-  # Translucent `overlay` that composites to `target` over `bg`, so `-alpha`
-  # scale steps match their solid steps.
+  # Translucent overlay that composites back to `target` over `bg`, so
+  # `-alpha` scale steps match their solid steps in either direction. The
+  # alpha is the smallest per-mille value that keeps the overlay in gamut;
+  # rounding it up and solving the overlay for that alpha keeps the composite
+  # within half a byte of `target`.
   alphaOver =
-    target: overlay: bg:
+    target: bg:
     let
       t = parseHex target;
-      o = parseHex overlay;
       b = parseHex bg;
-      ratios = lib.concatMap (
-        i:
-        lib.optional (elemAt o i != elemAt b i) (
-          (elemAt t i - elemAt b i) * 1.0 / (elemAt o i - elemAt b i)
-        )
-      ) (genList (i: i) 3);
-      mean = if ratios == [ ] then 0.0 else lib.foldl' (acc: x: acc + x) 0.0 ratios / lib.length ratios;
-      alpha = lib.max 0.0 (lib.min 1.0 mean);
+      channels = genList (i: i) 3;
+      delta = i: elemAt t i - elemAt b i;
+      distance = i: if delta i < 0 then -(delta i) else delta i;
+      headroom = i: if delta i > 0 then 255 - elemAt b i else elemAt b i;
+      perMille = i: if delta i == 0 then 0 else (1000 * distance i + headroom i - 1) / headroom i;
+      alphaMille = lib.foldl' lib.max 0 (map perMille channels);
+      overlay = map (i: roundHalfUp (elemAt b i + delta i * 1000.0 / alphaMille)) channels;
     in
-    rgbString overlay (fixed 3 alpha);
+    if alphaMille == 0 then
+      rgbString bg "0.000"
+    else
+      rgbString (toHex overlay) (fixed 3 (alphaMille / 1000.0));
 
   declare = name: value: "  ${name}: ${value};";
 
@@ -180,7 +184,7 @@ let
           in
           [ (declare step value) ]
           ++ lib.optional withHsl (declare "${step}-hsl" (hslTriplet value))
-          ++ [ (declare "${step}-alpha" (alphaOver value "#ffffff" c.background)) ]
+          ++ [ (declare "${step}-alpha" (alphaOver value c.background)) ]
         ) (indexed gray);
 
       accentLines = lib.concatMap (
@@ -190,7 +194,7 @@ let
         in
         [
           (declare step value)
-          (declare "${step}-alpha" (if index <= 9 then alphaOver value c.accent c.background else value))
+          (declare "${step}-alpha" (alphaOver value c.background))
         ]
       ) (indexed accent);
 
