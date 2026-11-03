@@ -1,8 +1,9 @@
-# Renders a dark Logseq theme stylesheet from a semantic palette. Outside
-# CodeMirror token colours it sets only the app's CSS variables, so it survives
-# component restyles;
-# checks.<system>.logseq-theme-plugin fails when the pinned app's style.css
-# stops knowing one of them.
+# Renders a dark Logseq theme stylesheet from a semantic palette. Besides the
+# app's CSS variables it styles only the root background and CodeMirror code
+# blocks (surface, gutters, line numbers, cursor, selection, active line,
+# tokens), so it survives component restyles;
+# checks.<system>.logseq-theme-plugin fails when the pinned app stops reading
+# one of the variables or stops using a class or attribute a selector names.
 { lib }:
 let
   inherit (builtins)

@@ -129,10 +129,12 @@ rules after the generated ones.
 The theme sets Logseq's CSS variables (gray and accent scales on `html` and
 `body`, the shadcn HSL triplets, and the classic `--ls-*` palette) rather than
 styling components, so it holds across accent colours and most app updates.
-Only CodeMirror token colours use selectors. The
-`checks.<system>.logseq-theme-plugin` check fails when the pinned app no
-longer reads a variable the theme sets in dark mode, or its stylesheet no
-longer knows a class or root attribute the theme selects on. A read counts
+Selectors style only the root background and CodeMirror code blocks
+(surface, gutters, line numbers, cursor, selection, active line, and token
+colours). The `checks.<system>.logseq-theme-plugin` check fails when the
+pinned app no longer reads a variable the theme sets in dark mode, or its
+stylesheet no longer knows a class or root attribute the theme selects on.
+A read counts
 only where the theme's value can reach the screen: not in light-mode rules,
 and not as the fallback of another variable the theme sets, since the theme
 always defines the primary. The numbered steps of a scale pass together once
