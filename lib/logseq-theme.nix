@@ -4,9 +4,10 @@
 # under the none accent, and CodeMirror code blocks (surface, gutters, line
 # numbers, cursor, selection, active line, tokens), so it survives component
 # restyles;
-# checks.<system>.logseq-theme-plugin fails when the pinned app stops reading
-# one of the variables, pins one to a fixed colour the sheet does not
-# out-rank, or stops using a class or attribute a selector names.
+# checks.<system>.logseq-theme-plugin fails when the pinned app stops
+# consuming a variable (or every step of a scale), pins one to a fixed colour
+# or paints one of its properties in a rule the sheet does not out-rank, or
+# stops using a class or attribute a selector names.
 { lib }:
 let
   inherit (builtins)
