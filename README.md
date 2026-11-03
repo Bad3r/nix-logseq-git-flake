@@ -95,8 +95,14 @@ in
     colors = {
       background = c.base00;
       sidebar = c.base01;
+      popup = c.base01;
       border = c.base02;
+      activeItem = c.base02;
+      raised = c.base02;
+      strongBorder = c.base03;
+      placeholder = c.base03;
       subtle = c.base03;
+      dim = c.base04;
       muted = c.base04;
       text = c.base05;
       accent = c.base0D;
@@ -111,7 +117,12 @@ Dark syntax colours. The exceptions are the accent tones `highlight`,
 `selection`, `accentStrong`, `link`, and `linkHover`: unset, they blend from
 `accent` toward `background` or `bright`, so setting `accent` alone recolours
 the whole accent scale. The shipped `accent` over the shipped `background`
-keeps hand-tuned tones instead. The option descriptions in
+keeps hand-tuned tones instead.
+
+The twelve neutral keys, `background` through `text`, form one scale ordered
+from the page background to body text, so a palette that replaces them sets
+all twelve: unset steps keep the VS Code greys and break the ordering. The
+option descriptions in
 `modules/_home-manager/theme-plugin.nix` list every key; `extraCss` appends
 rules after the generated ones.
 

@@ -101,11 +101,12 @@ in
       description = ''
         Semantic palette as `#rrggbb` strings. The twelve neutral steps
         `background` through `text` form Logseq's gray scale in order, from
-        the app background to high-contrast text. The defaults are VS Code
-        Dark 2026 greys over GitHub Dark syntax colours. The accent tones
-        `highlight`, `selection`, `accentStrong`, `link`, and `linkHover`
-        default to null: the shipped `accent` over the shipped `background`
-        keeps tuned tones, and any other pair blends them from `accent`.
+        the app background to high-contrast text, so a palette that replaces
+        them sets all twelve. The defaults are VS Code Dark 2026 greys over
+        GitHub Dark syntax colours. The accent tones `highlight`,
+        `selection`, `accentStrong`, `link`, and `linkHover` default to
+        null: the shipped `accent` over the shipped `background` keeps tuned
+        tones, and any other pair blends them from `accent`.
       '';
       default = { };
       type = types.submodule {
