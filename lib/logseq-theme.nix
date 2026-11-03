@@ -314,17 +314,12 @@ let
         ls-primary-text-color = c.text;
         ls-secondary-text-color = c.muted;
         ls-icon-color = c.muted;
-        ls-search-icon-color = c.muted;
-        ls-search-icon-hover-color = c.text;
         ls-active-primary-color = c.accent;
         ls-link-text-color = c.link;
         ls-link-text-hover-color = c.linkHover;
         ls-link-ref-text-color = c.link;
-        ls-block-ref-link-text-color = c.link;
-        ls-block-bullet-color = c.subtle;
         ls-block-highlight-color = c.highlight;
         ls-selection-background-color = c.selection;
-        ls-selection-text-color = c.bright;
         ls-page-checkbox-color = c.subtle;
         ls-page-blockquote-color = c.text;
         ls-page-blockquote-bg-color = c.sidebar;
@@ -334,7 +329,6 @@ let
         ls-cloze-text-color = c.cloze;
         ls-pie-bg-color = c.border;
         ls-pie-fg-color = c.accent;
-        color-level-1 = c.sidebar;
         color-level-2 = c.popup;
         color-level-3 = c.border;
         color-level-4 = c.activeItem;
