@@ -151,7 +151,7 @@ let
     activeItem = "#313233";
     raised = "#414243";
     strongBorder = "#454545";
-    placeholder = "#555555";
+    bullet = "#555555";
     subtle = "#616161";
     dim = "#858889";
     muted = "#8c8c8c";
@@ -227,7 +227,7 @@ let
         c.activeItem
         c.raised
         c.strongBorder
-        c.placeholder
+        c.bullet
         c.subtle
         c.dim
         c.muted

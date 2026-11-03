@@ -119,7 +119,7 @@ in
             activeItem = "Gray step 5: hovered and highlighted menu items, secondary buttons, scrollbar thumbs.";
             raised = "Gray step 6: inline code background and keyboard-shortcut keys.";
             strongBorder = "Gray step 7: input and keyboard-key borders.";
-            placeholder = "Gray step 8: block bullets.";
+            bullet = "Gray step 8: block bullets and the shortcut toolbar text.";
             subtle = "Gray step 9: checkboxes and radio buttons, quote borders, matching-bracket outlines in code.";
             dim = "Gray step 10: code line numbers and the hovered block guide line.";
             muted = "Gray step 11: secondary text, icons, input placeholders.";

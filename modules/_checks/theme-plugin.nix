@@ -182,7 +182,7 @@ assert alphaStepsComposite "light tinted palette on white" (renderColors {
   activeItem = "#d9d2bd";
   raised = "#cfc7b1";
   strongBorder = "#bdb5a0";
-  placeholder = "#93a1a1";
+  bullet = "#93a1a1";
   subtle = "#839496";
   dim = "#657b83";
   muted = "#586e75";

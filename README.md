@@ -100,7 +100,7 @@ in
       activeItem = c.base02;
       raised = c.base02;
       strongBorder = c.base03;
-      placeholder = c.base03;
+      bullet = c.base03;
       subtle = c.base03;
       dim = c.base04;
       muted = c.base04;
