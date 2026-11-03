@@ -1,6 +1,7 @@
 # Evaluates the Home Manager theme-plugin module against a stub `home.file`,
-# builds the plugin it links, and checks it against the pinned app: the app
-# must still read every custom property theme.css sets in dark mode, and
+# builds the plugin it links, and checks it against the pinned app: some app
+# rule or script must still consume every custom property theme.css sets in
+# dark mode (whether its element renders is out of reach), and
 # theme.css must out-rank every rule that pins one of them to a fixed colour
 # on the root or under an accent (theme-plugin-cascade.py); every class and
 # root attribute its selectors use must still appear in the compiled
@@ -228,10 +229,10 @@ pkgs.runCommand "logseq-theme-plugin-check"
 
     required=(--background --foreground --ls-primary-background-color --ls-primary-text-color)
     for step in 01 02 03 04 05 06 07 08 09 10 11 12; do
-      for scale in lx-gray lx-accent rx-gray; do
+      for scale in lx-gray lx-accent; do
         required+=("--$scale-$step" "--$scale-$step-alpha")
       done
-      required+=("--rx-gray-$step-hsl")
+      required+=("--rx-gray-$step" "--rx-gray-$step-hsl")
     done
     for var in "''${required[@]}"; do
       grep -qE "^  $var: [^;]+;$" "$theme_css" || fail "missing $var"

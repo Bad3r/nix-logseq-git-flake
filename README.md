@@ -142,8 +142,11 @@ attribute the theme selects on.
 A read counts only where the theme's value can reach the screen: not in
 light-mode rules, not as the fallback of another variable the theme sets,
 since the theme always defines the primary, and not in an app declaration
-that a theme declaration of the same property out-ranks. The numbered steps
-of a scale pass together once the app reads one of them.
+that a theme declaration of the same property out-ranks. A read inside
+another variable counts only once that variable reaches a painted property
+or a script itself. The numbered steps of a scale pass together once one of
+them is live. The check proves that the app's CSS or JS consumes each
+value, not that the element consuming it is ever rendered.
 
 Logseq lists only real directories under `~/.logseq/plugins`, so the module
 links each file separately and Home Manager creates the plugin folder itself.

@@ -249,16 +249,24 @@ let
         c.bright
       ];
 
+      # Each step plus the one variant form the app reads for that scale.
       grayLines =
-        prefix: withHsl:
+        prefix: variant:
+        let
+          forms = {
+            hsl = hslTriplet;
+            alpha = value: alphaOver value c.background;
+          };
+        in
         lib.concatMap (
           { index, value }:
           let
             step = "${prefix}-${pad2 index}";
           in
-          [ (declare step value) ]
-          ++ lib.optional withHsl (declare "${step}-hsl" (hslTriplet value))
-          ++ [ (declare "${step}-alpha" (alphaOver value c.background)) ]
+          [
+            (declare step value)
+            (declare "${step}-${variant}" (forms.${variant} value))
+          ]
         ) (indexed gray);
 
       accentLines = lib.concatMap (
@@ -326,7 +334,6 @@ let
         ls-cloze-text-color = c.cloze;
         ls-pie-bg-color = c.border;
         ls-pie-fg-color = c.accent;
-        ls-button-background-hsl = hslTriplet c.accent;
         color-level-1 = c.sidebar;
         color-level-2 = c.popup;
         color-level-3 = c.border;
@@ -433,12 +440,12 @@ let
         "html[data-theme=dark][data-color] .dark-theme {"
         "  /* Radix neutral scale (radix.css) */"
       ]
-      ++ grayLines "--rx-gray" true
+      ++ grayLines "--rx-gray" "hsl"
       ++ [
         ""
         "  /* Logseq neutral scale (colors.css) */"
       ]
-      ++ grayLines "--lx-gray" false
+      ++ grayLines "--lx-gray" "alpha"
       ++ [
         ""
         "  /* Logseq accent scale (colors.css) */"

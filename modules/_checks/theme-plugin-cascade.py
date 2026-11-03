@@ -7,14 +7,19 @@ an accent-scoped rule, to a value that does not start from a theme variable,
 and theme.css does not out-rank it: that element and its subtree would keep
 the app's colour.
 
-Also fails when theme.css sets a custom property the app never reads live. A var()
-read in STYLE_CSS counts unless every selector of its rule targets light mode
-(where a dark theme is not loaded), it sits in the fallback of var(--x, ...)
-for an --x the theme sets, or its declaration loses to a theme.css
-declaration of the same property on the same element. Any var() in the JS
-bundles counts. The numbered steps of a scale (--rx-gray-01-hsl ...
---rx-gray-12-hsl) pass together once one step is read, so a restyle that
-moves a component to another step stays themed.
+Also fails when theme.css sets a custom property whose value never reaches
+a painted property in dark mode. A var() read in STYLE_CSS counts unless
+every selector of its rule targets light mode (where a dark theme is not
+loaded), it sits in the fallback of var(--x, ...) for an --x the theme sets,
+or its declaration loses to a theme.css declaration of the same property on
+the same element. A read inside a custom property declaration counts only
+once that property is itself live, resolved to a fixpoint; reads in ordinary
+properties and any var() in the JS bundles are live. The numbered steps of a
+scale (--rx-gray-01-hsl ... --rx-gray-12-hsl) pass together once one step is
+live, so a restyle that moves a component to another step stays themed.
+
+This proves that some app rule or script consumes the value, not that the
+element it selects is ever rendered.
 
 The cascade model is deliberately narrow: a theme rule out-ranks an app rule
 only when its ancestors are the dark-mode root (always true while the theme is
@@ -171,10 +176,10 @@ def anchored(selector):
 
 class Theme:
     def __init__(self, css):
-        declarations = parse(css)
-        self.custom = {d.prop for d in declarations if d.prop.startswith("--")}
+        self.declarations = parse(css)
+        self.custom = {d.prop for d in self.declarations if d.prop.startswith("--")}
         self.rules = {}
-        for declaration in declarations:
+        for declaration in self.declarations:
             for selector in declaration.selectors:
                 if anchored(selector):
                     self.rules.setdefault(declaration.prop, []).append(selector)
@@ -201,18 +206,19 @@ def dark_selectors(declaration):
     return [s for s in declaration.selectors if not LIGHT.search(s)]
 
 
-def live_reads(declaration, theme):
-    """Variables a declaration reads while it can still apply in dark mode."""
-    selectors = dark_selectors(declaration)
-    if all(theme.outranks(declaration, s) for s in selectors):
-        return set()
-    reads, frames, i = set(), [], 0
-    value = declaration.value
+def applies(declaration, theme):
+    """Whether a declaration can still win somewhere in dark mode."""
+    return any(not theme.outranks(declaration, s) for s in dark_selectors(declaration))
+
+
+def reads(value, theme):
+    """Variables a value reads, minus fallbacks of a variable the theme sets."""
+    found, frames, i = set(), [], 0
     while i < len(value):
         match = VAR.match(value, i)
         if match:
             if not any(past and outer in theme.custom for outer, past in frames):
-                reads.add(match.group(1))
+                found.add(match.group(1))
             frames.append([match.group(1), False])
             i = match.end()
             continue
@@ -224,7 +230,31 @@ def live_reads(declaration, theme):
         elif ch == "," and frames and frames[-1][0]:
             frames[-1][1] = True
         i += 1
-    return reads
+    return found
+
+
+def live_variables(app, theme, js_reads):
+    """Variables whose value reaches a painted property.
+
+    Reads in ordinary properties and in the JS bundles are live. A read in a
+    custom property declaration is live only once that property is, so an
+    alias nothing reads keeps its inputs dead.
+    """
+    painted, chains = set(js_reads), {}
+    declarations = [d for d in app if applies(d, theme)] + theme.declarations
+    for declaration in declarations:
+        found = reads(declaration.value, theme)
+        if declaration.prop.startswith("--"):
+            chains.setdefault(declaration.prop, set()).update(found)
+        else:
+            painted |= found
+    live, pending = set(), list(painted)
+    while pending:
+        name = pending.pop()
+        if name not in live:
+            live.add(name)
+            pending.extend(chains.get(name, ()))
+    return live
 
 
 def unbeaten_redeclarations(app, theme):
@@ -272,12 +302,11 @@ def main():
             + "\n  ".join(unbeaten)
         )
 
-    live = set()
-    for declaration in app:
-        live |= live_reads(declaration, theme)
+    js_reads = set()
     for path in sys.argv[3:]:
         with open(path, errors="replace") as handle:
-            live.update(VAR.findall(handle.read()))
+            js_reads.update(VAR.findall(handle.read()))
+    live = live_variables(app, theme, js_reads)
     live_scales = {scale_key(name) for name in live}
     unread = sorted(n for n in theme.custom if scale_key(n) not in live_scales)
     if unread:
