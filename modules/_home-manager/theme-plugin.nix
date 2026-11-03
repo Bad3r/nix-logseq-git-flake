@@ -81,14 +81,14 @@ in
       description = ''
         Directory under `~/.logseq/plugins` and the plugin id. Logseq stores
         the selected theme by this id, so renaming it requires selecting the
-        theme again in Settings > Themes.
+        theme again in the theme picker (`t i`).
       '';
     };
 
     title = mkOption {
       type = types.str;
       default = "Nix Theme";
-      description = "Theme name shown in Settings > Themes.";
+      description = "Theme name shown in the theme picker.";
     };
 
     description = mkOption {

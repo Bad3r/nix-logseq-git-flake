@@ -151,10 +151,13 @@ value, not that the element consuming it is ever rendered.
 Logseq lists only real directories under `~/.logseq/plugins`, so the module
 links each file separately and Home Manager creates the plugin folder itself.
 
-After the first activation, restart Logseq and pick the theme once in
-Settings > Themes. Logseq records the choice in `~/.logseq/preferences.json`,
-which this module leaves alone; renaming `name` changes the plugin id and
-requires picking the theme again. The theme applies in dark mode only.
+After the first activation, restart Logseq, switch it to dark mode, and pick
+the theme once in the theme picker: press `t i`, choose Themes in the
+plugins toolbar menu, or use the Themes group of the command palette. The
+picker lists only themes for the current mode, and the theme applies in dark
+mode only. Logseq records the choice in `~/.logseq/preferences.json`, which
+this module leaves alone; renaming `name` changes the plugin id and requires
+picking the theme again.
 
 ## CLI
 
