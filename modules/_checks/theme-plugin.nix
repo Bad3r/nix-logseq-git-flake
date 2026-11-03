@@ -1,9 +1,9 @@
 # Evaluates the Home Manager theme-plugin module against a stub `home.file`,
-# builds the plugin it links, and checks it against the pinned app: every
-# custom property theme.css sets must still be declared or read by the app's
-# compiled style.css, and every class and root attribute its selectors use
-# must still appear there, so an upstream rename fails here instead of
-# silently unstyling part of the UI.
+# builds the plugin it links, and checks it against the pinned app: the app
+# must still read every custom property theme.css sets in dark mode
+# (theme-plugin-reads.py), and every class and root attribute its selectors
+# use must still appear in its compiled style.css, so an upstream rename
+# fails here instead of silently unstyling part of the UI.
 {
   lib,
   logseqTree,
@@ -194,6 +194,7 @@ pkgs.runCommand "logseq-theme-plugin-check"
       pkgs.gnugrep
       pkgs.gnused
       pkgs.jq
+      pkgs.python3
     ];
   }
   ''
@@ -241,12 +242,14 @@ pkgs.runCommand "logseq-theme-plugin-check"
 
     asar extract-file "${asarPath}" css/style.css
     test -s style.css || fail "app.asar has no css/style.css"
-    grep -oE '^  --[a-z0-9-]+' "$theme_css" | tr -d ' ' | sort -u > declared
-    test -s declared || fail "declares no custom properties"
-    while read -r var; do
-      grep -qF -- "$var:" style.css || grep -qE -- "var\\($var[,)]" style.css \
-        || fail "$var is unknown to the pinned app's css/style.css"
-    done < declared
+    # The app's own bundles; cljs code builds some var() reads as strings.
+    mkdir js
+    asar list "${asarPath}" | grep -E '^/js/[^/]+\.m?js$' > js-files
+    test -s js-files || fail "app.asar lists no js/ bundles"
+    while read -r file; do
+      (cd js && asar extract-file "${asarPath}" "''${file#/}")
+    done < js-files
+    python3 -I ${./theme-plugin-reads.py} "$theme_css" style.css js/* || exit 1
 
     # Selectors fail as silently as variables: every class the sheet targets
     # (CodeMirror 5 markup, .dark-theme) must still appear in the app's

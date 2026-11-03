@@ -113,18 +113,17 @@ in
         options =
           colorOptions theme.defaultColors {
             background = "Gray step 1: page and editor background.";
-            sidebar = "Gray step 2: sidebars, code blocks, property blocks.";
-            popup = "Gray step 3: popovers, menus, active code line.";
-            border = "Gray step 4: borders, guide lines, inline code background.";
-            activeItem = "Gray step 5: chosen and hovered menu items.";
-            raised = "Gray step 6: raised surfaces.";
+            sidebar = "Gray step 2: sidebars and code blocks.";
+            popup = "Gray step 3: popovers, menus, property blocks, active code line.";
+            border = "Gray step 4: borders and guide lines.";
+            activeItem = "Gray step 5: chosen and hovered menu items, scrollbar thumbs.";
+            raised = "Gray step 6: raised surfaces and inline code background.";
             strongBorder = "Gray step 7: menu and strong borders.";
             placeholder = "Gray step 8: placeholder text.";
-            subtle = "Gray step 9: bullets, checkboxes, quote borders, scrollbars.";
+            subtle = "Gray step 9: bullets, checkboxes, quote borders.";
             dim = "Gray step 10: line numbers and low-emphasis text.";
             muted = "Gray step 11: secondary text and icons.";
             text = "Gray step 12: primary text.";
-            title = "Page titles and inline code text.";
             bright = "Highest-contrast text: selected text, marks, accent step 12.";
             onAccent = "Text on accent-filled buttons.";
             accent = "Accent: focus rings, primary buttons, active items.";

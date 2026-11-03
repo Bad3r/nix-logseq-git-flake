@@ -130,9 +130,13 @@ The theme sets Logseq's CSS variables (gray and accent scales on `html` and
 `body`, the shadcn HSL triplets, and the classic `--ls-*` palette) rather than
 styling components, so it holds across accent colours and most app updates.
 Only CodeMirror token colours use selectors. The
-`checks.<system>.logseq-theme-plugin` check fails when the pinned app's
-stylesheet no longer knows a variable, class, or root attribute the theme
-uses.
+`checks.<system>.logseq-theme-plugin` check fails when the pinned app no
+longer reads a variable the theme sets in dark mode, or its stylesheet no
+longer knows a class or root attribute the theme selects on. A read counts
+only where the theme's value can reach the screen: not in light-mode rules,
+and not as the fallback of another variable the theme sets, since the theme
+always defines the primary. The numbered steps of a scale pass together once
+the app reads one of them.
 
 Logseq lists only real directories under `~/.logseq/plugins`, so the module
 links each file separately and Home Manager creates the plugin folder itself.
