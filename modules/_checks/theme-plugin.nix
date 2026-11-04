@@ -6,10 +6,10 @@
 # out of reach); every variable theme.css reads must still be read by some
 # dark-mode app rule or script; theme.css must out-rank every rule that pins
 # a variable it sets to a fixed colour on the root or under an accent, and
-# every accent-scoped rule that paints a property it paints; and every class
-# and root attribute its selectors use must still appear in the compiled
-# style.css. An upstream change then fails here instead of silently
-# unstyling part of the UI.
+# every accent-scoped rule (data-color on the root element) that paints a
+# property it paints or a fixed colour; and every class and root attribute
+# its selectors use must still appear in the compiled style.css. An upstream
+# change then fails here instead of silently unstyling part of the UI.
 {
   lib,
   logseqTree,

@@ -6,8 +6,12 @@ Fails when the app redeclares a variable theme.css sets, on the root or in
 an accent-scoped rule, to a value that does not start from a theme variable,
 and theme.css does not out-rank it: that element and its subtree would keep
 the app's colour. Also fails when an accent-scoped app rule paints a
-property on an element theme.css paints that property on, and theme.css
-does not out-rank it.
+property on an element theme.css paints that property on, or paints a colour
+property with a literal colour no theme variable feeds, and theme.css does
+not out-rank it. A rule is accent-scoped when it needs [data-color=...] on
+the root element, where theme.cljs sets it: on a first compound that names
+html or :root, or carries only attributes and pseudo-classes. [data-color]
+on any other element (PDF highlights) is not an accent.
 
 Also fails when theme.css sets a custom property whose value never reaches
 a painted property in dark mode. A var() read in STYLE_CSS counts unless
@@ -58,6 +62,7 @@ LIGHT = {"[data-theme=light]", ".white-theme", ".light-theme"}
 ROOT_CONTEXT = {"html", "[data-theme=dark]", "[data-theme]", "[data-color]"}
 BODY_CONTEXT = {"body", ".dark-theme"}
 ACCENT = re.compile(r"^\[data-color=")
+SINGLE_COLON = re.compile(r"^:[^:]")
 SIMPLE = re.compile(
     r"::[\w-]+(?:\([^)]*\))?"
     r"|:[\w-]+(?:\((?:[^()]|\([^()]*\))*\))?"
@@ -246,12 +251,22 @@ def prop_key(prop):
 
 
 def root_facts(selector):
-    """Simple selectors on the root compound, when the selector starts there."""
+    """Simple selectors on the root compound, when the selector can start there.
+
+    The first compound can match the root element when it names html or
+    :root, or carries nothing that excludes it: only attributes and
+    pseudo-classes, as in a bare `[data-color=logseq] .x`. A compound with a
+    class, id, other element name, or pseudo-element is never the root.
+    """
     facts = compound_facts(compounds(selector)[0])
-    return facts if facts & {"html", ":root"} else set()
+    bare = all(f == "*" or f.startswith("[") or SINGLE_COLON.match(f) for f in facts)
+    return facts if facts & {"html", ":root"} or (facts and bare) else set()
 
 
 def accent_scoped(selector):
+    """Whether the selector needs an accent on the root element, where
+    theme.cljs sets data-color; [data-color] on any other element (PDF
+    highlights) is not an accent."""
     return any(ACCENT.match(fact) for fact in root_facts(selector))
 
 
@@ -402,15 +417,36 @@ def unbeaten_redeclarations(app, theme):
                 yield f"{selector} {{ {declaration.prop}: {declaration.value} }}"
 
 
+COLOUR_PROPERTY = re.compile(
+    r"^(color|background(-color)?|border(-(top|right|bottom|left))?(-color)?"
+    r"|outline(-color)?|box-shadow|fill|stroke|caret-color"
+    r"|text-decoration(-color)?|accent-color|scrollbar-color)$"
+)
+COLOUR_LITERAL = re.compile(
+    r"#[0-9a-f]{3,8}\b|\b(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(", re.IGNORECASE
+)
+
+
+def fixed_colour(declaration, theme):
+    """A colour property set to a literal colour no theme variable feeds."""
+    return (
+        COLOUR_PROPERTY.match(declaration.prop) is not None
+        and COLOUR_LITERAL.search(declaration.value) is not None
+        and not reads(declaration.value, theme) & theme.custom
+    )
+
+
 def unbeaten_overrides(app, theme):
-    """Accent-scoped app rules that win a property theme.css paints itself."""
+    """Accent-scoped app rules that paint over the palette: a property
+    theme.css paints itself, or a fixed colour no theme variable feeds."""
     for declaration in app:
         if declaration.prop.startswith("--"):
             continue
         for selector in dark_selectors(declaration):
             if not accent_scoped(selector):
                 continue
-            if not any(theme.targets(declaration.prop, selector)):
+            claimed = any(theme.targets(declaration.prop, selector))
+            if not claimed and not fixed_colour(declaration, theme):
                 continue
             if not theme.outranks(declaration, selector):
                 yield f"{selector} {{ {declaration.prop}: {declaration.value} }}"

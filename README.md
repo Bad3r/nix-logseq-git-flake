@@ -140,17 +140,21 @@ selection, active line, and token colours).
 The `checks.<system>.logseq-theme-plugin` check fails when the pinned app no
 longer reads a variable the theme sets in dark mode, pins one to a fixed
 colour on the root or under an accent in a rule the theme does not out-rank,
-paints a property the theme paints in an accent-scoped rule the theme does not
-out-rank, no longer reads in dark mode a variable the theme's own rules read,
-or its stylesheet no longer knows a class or root attribute the theme selects
-on. A read counts only where the theme's value can reach the screen: not in
-light-mode rules, not as the fallback of another variable the theme sets,
-since the theme always defines the primary, and not in an app declaration that
-a theme declaration of the same property out-ranks. A read inside another
-variable counts only once that variable reaches a painted property or a script
-itself. The numbered steps of a scale pass together once one of them is live.
-The check proves that the app's CSS or JS consumes each value, not that the
-element consuming it is ever rendered.
+paints, in an accent-scoped rule the theme does not out-rank, a property the
+theme paints or a fixed colour no theme variable feeds, no longer reads in
+dark mode a variable the theme's own rules read, or its stylesheet no longer
+knows a class or root attribute the theme selects on. A rule is accent-scoped
+when it needs `data-color` on the root element, where Logseq sets the accent:
+on a leading compound that names `html` or `:root` or carries only attributes
+and pseudo-classes. `data-color` on other elements, such as PDF highlights, is
+not an accent. A read counts only where the theme's value can reach the
+screen: not in light-mode rules, not as the fallback of another variable the
+theme sets, since the theme always defines the primary, and not in an app
+declaration that a theme declaration of the same property out-ranks. A read
+inside another variable counts only once that variable reaches a painted
+property or a script itself. The numbered steps of a scale pass together once
+one of them is live. The check proves that the app's CSS or JS consumes each
+value, not that the element consuming it is ever rendered.
 
 Logseq lists only real directories under `~/.logseq/plugins`, so the module
 links each file separately and Home Manager creates the plugin folder itself.
