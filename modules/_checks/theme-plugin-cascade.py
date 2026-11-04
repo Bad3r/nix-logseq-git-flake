@@ -235,11 +235,23 @@ def compound_facts(compound):
     return facts
 
 
+def can_be_root(facts):
+    """Whether a leading compound with these facts can match the root element:
+    it names html or :root, or carries nothing that excludes it (only
+    attributes and pseudo-classes, as in a bare `[data-color=logseq]`). A
+    class, id, other element name, or pseudo-element rules it out."""
+    if facts & {"html", ":root"}:
+        return True
+    bare = all(f == "*" or f.startswith("[") or SINGLE_COLON.match(f) for f in facts)
+    return bool(facts) and bare
+
+
 def subject_facts(selector):
     """Simple selectors that hold on the element an app selector matches."""
-    facts = compound_facts(compounds(selector)[-1])
+    parts = compounds(selector)
+    facts = compound_facts(parts[-1])
     facts |= {re.sub(r"=.*\]$", "]", fact) for fact in facts if fact.startswith("[")}
-    if "html" in facts or ":root" in facts:
+    if len(parts) == 1 and can_be_root(facts):
         facts |= ROOT_CONTEXT
     if facts & BODY_CONTEXT:
         facts |= BODY_CONTEXT
@@ -251,16 +263,9 @@ def prop_key(prop):
 
 
 def root_facts(selector):
-    """Simple selectors on the root compound, when the selector can start there.
-
-    The first compound can match the root element when it names html or
-    :root, or carries nothing that excludes it: only attributes and
-    pseudo-classes, as in a bare `[data-color=logseq] .x`. A compound with a
-    class, id, other element name, or pseudo-element is never the root.
-    """
+    """Simple selectors on the leading compound, when it can be the root."""
     facts = compound_facts(compounds(selector)[0])
-    bare = all(f == "*" or f.startswith("[") or SINGLE_COLON.match(f) for f in facts)
-    return facts if facts & {"html", ":root"} or (facts and bare) else set()
+    return facts if can_be_root(facts) else set()
 
 
 def accent_scoped(selector):
