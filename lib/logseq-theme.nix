@@ -403,6 +403,7 @@ let
       cm = "html[data-theme=dark] .CodeMirror.cm-s-dark";
       root = "html[data-theme=dark][data-color]";
       logseq = "html[data-theme=dark][data-color=logseq]";
+      card = "${root} .cp__right-sidebar .sidebar-item";
 
       codeRules = [
         " { background-color: ${c.sidebar}; color: ${c.text}; text-shadow: none; }"
@@ -503,6 +504,31 @@ let
         "${root} [data-cmdk-item][data-kb-highlighted],"
         "${root} [data-cmdk-item][data-hoverable]:hover { background-color: var(--lx-gray-06); }"
         "${root} :not(pre) > code { color: var(--lx-gray-12); }"
+        ""
+        "/* The right sidebar sits on gray step 3 with its cards on step 2, the"
+        "   reverse of the app's mapping. */"
+        "${root} .cp__right-sidebar-inner,"
+        "${root} .cp__right-sidebar-topbar,"
+        "${root} .cp__right-sidebar-settings-btn { background-color: var(--lx-gray-03); }"
+        "${root} .cp__right-sidebar .sidebar-item,"
+        "${root} .cp__right-sidebar .sidebar-item .sidebar-item-header,"
+        "${root} .sidebar-item .cp__shortcut-page-x { background-color: var(--lx-gray-02); }"
+        "${root} .cp__right-sidebar .sidebar-item.item-type-block .sidebar-item-header {"
+        "  background: linear-gradient(0deg, var(--lx-gray-03), var(--lx-gray-02));"
+        "}"
+        "${root} .cp__right-sidebar .sidebar-item.collapsed.item-type-block .sidebar-item-header {"
+        "  background: var(--lx-gray-02);"
+        "}"
+        "/* Content that sits on step 2 elsewhere moves up a step on those cards. */"
+        "${card} .CodeMirror.cm-s-dark,"
+        "${card} .CodeMirror.cm-s-dark .CodeMirror-gutters,"
+        "${card} .extensions__code-lang,"
+        "${card} blockquote,"
+        "${card} .block-content-or-editor-wrap[data-node-type=quote],"
+        "${card} :is(.classic-table, .query-table) tr:nth-child(2n) { background-color: var(--lx-gray-03); }"
+        "${card} .CodeMirror.cm-s-dark .CodeMirror-activeline-background,"
+        "${card} :is(.classic-table, .query-table) th,"
+        "${card} :is(.classic-table, .query-table) tr:hover { background: var(--lx-gray-04); }"
         ""
         "/* Code blocks: CodeMirror 5 theme 'solarized dark' without an accent,"
         "   'lsradix dark' with one (extensions/code.cljs). */"

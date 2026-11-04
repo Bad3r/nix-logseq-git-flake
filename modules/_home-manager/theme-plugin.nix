@@ -113,9 +113,9 @@ in
         options =
           colorOptions theme.defaultColors {
             background = "Gray step 1: page background and cards.";
-            sidebar = "Gray step 2: left and right sidebar backgrounds, code blocks, quotes, alternate table rows.";
-            popup = "Gray step 3: popovers and menus, block and page properties, right-sidebar items, table headers, the active code line.";
-            border = "Gray step 4: borders, input outlines, block guide lines, focused menu items, active and hovered left-sidebar items.";
+            sidebar = "Gray step 2: left sidebar background, right-sidebar cards, code blocks, quotes, alternate table rows.";
+            popup = "Gray step 3: popovers and menus, right-sidebar background and the code blocks, quotes, and alternate table rows on its cards, block and page properties, table headers, the active code line.";
+            border = "Gray step 4: borders, input outlines, block guide lines, focused menu items, active and hovered left-sidebar items, and on right-sidebar cards the active code line and table headers.";
             activeItem = "Gray step 5: hovered and highlighted menu items, secondary buttons, selected table rows, scrollbar thumbs.";
             raised = "Gray step 6: inline code background, command palette and theme picker highlights, keyboard-shortcut keys.";
             strongBorder = "Gray step 7: keyboard-key and classic form-input borders.";
