@@ -3,11 +3,13 @@
 # (theme-plugin-cascade.py): in dark mode some app rule or script must still
 # consume each custom property theme.css sets, or for a numbered scale step
 # at least one step of its scale (whether the consuming element renders is
-# out of reach); theme.css must out-rank every rule that pins one of them to
-# a fixed colour on the root or under an accent, and every accent-scoped
-# rule that paints a property it paints; and every class and root attribute
-# its selectors use must still appear in the compiled style.css. An upstream
-# change then fails here instead of silently unstyling part of the UI.
+# out of reach); every variable theme.css reads must still be read by some
+# dark-mode app rule or script; theme.css must out-rank every rule that pins
+# a variable it sets to a fixed colour on the root or under an accent, and
+# every accent-scoped rule that paints a property it paints; and every class
+# and root attribute its selectors use must still appear in the compiled
+# style.css. An upstream change then fails here instead of silently
+# unstyling part of the UI.
 {
   lib,
   logseqTree,
