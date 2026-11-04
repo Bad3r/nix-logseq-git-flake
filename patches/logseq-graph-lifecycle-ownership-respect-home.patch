@@ -5,7 +5,7 @@ directory from os.userInfo().homedir. Node documents that field as coming from
 the operating system password file, unlike os.homedir(), which consults the HOME
 environment variable first and only falls back to the password entry. Every
 other home lookup in the tree uses os.homedir(), including index.cjs in this
-same deps/graph-lifecycle package (line 52, tilde expansion for the root dir),
+same deps/graph-lifecycle package (tilde expansion for the root dir),
 logseq.cli.root-dir/default-root-dir, and frontend.worker.platform.node, so
 ownership.cjs is the sole place where an exported HOME is ignored.
 
@@ -36,12 +36,10 @@ or the CLI build is the drift signal.
 diff --git a/deps/graph-lifecycle/ownership.cjs b/deps/graph-lifecycle/ownership.cjs
 --- a/deps/graph-lifecycle/ownership.cjs
 +++ b/deps/graph-lifecycle/ownership.cjs
-@@ -6,7 +6,7 @@
- const crypto = require('node:crypto');
-
+@@ -8,5 +8,5 @@
+ 
  function runtimeRoot() {
 -  const home = os.userInfo().homedir;
 +  const home = os.homedir();
    switch (process.platform) {
      case 'darwin': return path.join(home, 'Library', 'Application Support', 'Logseq', 'runtime-locks');
-     case 'win32': return path.join(home, 'AppData', 'Local', 'Logseq', 'runtime-locks');
