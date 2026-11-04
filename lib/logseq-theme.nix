@@ -323,7 +323,7 @@ let
         ls-secondary-background-color = c.sidebar;
         ls-tertiary-background-color = c.popup;
         ls-quaternary-background-color = c.border;
-        ls-page-properties-background-color = c.sidebar;
+        ls-page-properties-background-color = c.popup;
         ls-a-chosen-bg = c.activeItem;
         lx-popover-bg = c.popup;
         ls-border-color = c.border;
