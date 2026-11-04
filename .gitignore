@@ -4,3 +4,5 @@
 /.act
 /.pre-commit-config.yaml
 **/.vscode/
+__pycache__/
+*.pyc

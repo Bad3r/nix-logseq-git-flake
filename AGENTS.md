@@ -13,8 +13,8 @@ This file provides guidance to coding agents when working with this repository.
 ## Repo Map
 
 - `flake.nix` is the small flake-parts/import-tree entrypoint.
-- `modules/` contains auto-imported flake-parts modules for packages, checks, formatter, dev shells, hooks, overlays, and supported systems.
-- `modules/_packages/`, `_checks/`, and `_hooks/` are helper trees ignored by import-tree because their paths include `/_`.
+- `modules/` contains auto-imported flake-parts modules for packages, checks, formatter, dev shells, hooks, overlays, the Home Manager module export, and supported systems.
+- `modules/_packages/`, `_checks/`, `_hooks/`, and `_home-manager/` are helper trees ignored by import-tree because their paths include `/_`.
 - `modules/_packages/logseq-nightly.nix` assembles the private package set exposed to flake modules as `logseqNightly`.
 - `modules/_packages/desktop/assembly.nix` wires the desktop payload, upstream source, and OS-specific desktop derivation. Linux uses the FHS wrapper path; Darwin uses the `.app` bundle package path.
 - `modules/_packages/desktop/package.nix` is the actual desktop derivation.
@@ -23,6 +23,7 @@ This file provides guidance to coding agents when working with this repository.
 - `lib/` contains generic helpers shared by flake modules, including manifest validation and runtime library lists.
 - `lib/loadManifest.nix` enforces required keys and `sha256-` SRI hashes.
 - `lib/runtime-libs.nix` feeds the Linux desktop FHS wrapper; `overlays/default.nix` stays intentionally small.
+- `modules/_home-manager/theme-plugin.nix` is `homeManagerModules.default` (`programs.logseq.themePlugin`): it renders `lib/logseq-theme.nix` from a semantic palette into a theme-only plugin and links each file into `~/.logseq/plugins/<name>/`, since Logseq lists only real directories there (`get-ls-default-plugins` in `src/electron/electron/utils.cljs`). `checks.<system>.logseq-theme-plugin` builds it through a stub `home.file` and fails when, in dark mode, the pinned app no longer consumes a variable the theme sets, or for a numbered scale step any step of its scale (`modules/_checks/theme-plugin-cascade.py` scans `css/style.css` and the `js/` bundles, skipping reads in light-mode rules, behind a fallback the theme already wins, or in an app declaration a theme declaration of the same property out-ranks, counting a read inside a custom property only once that property is live itself, and counting `theme.css`'s custom properties as chain links but never its painted reads, while every variable `theme.css` reads must still be read by some dark-mode app rule or script; this proves CSS/JS reachability, not that the selector renders; regression cases live in `modules/_checks/theme-plugin-cascade-test.py`, which the check runs), when the app pins a theme variable to a fixed value on the root or in an accent-scoped rule that `theme.css` does not out-rank, or paints in such a rule a property `theme.css` paints or a fixed colour (hex, named, or colour-function, or the fallback of a variable nothing declares) (accent-scoped means `[data-color=...]` on the root element: a leading compound naming `html`/`:root`, or needing a root attribute (`data-theme`, `data-color`, `data-font`, `data-font-global`) with no class, id, other element name, or pseudo-element; `data-color` on other elements, such as PDF highlights, is not an accent) (add the component to `componentTokens` in `lib/logseq-theme.nix`, mirroring the app's rule for the other accents), or when its `css/style.css` no longer uses a class or attribute its selectors target (attributes on `html`, such as `html[data-color]`, as root selectors; CodeMirror 5 classes); after a nightly bump that fails it, rename or drop the variable or selector in `lib/logseq-theme.nix`.
 - `modules/_packages/logseq-cli/` builds the upstream CLI from the Logseq monorepo. Since `logseq/logseq#dbd220c95d` the CLI front-end is OCaml compiled via Melange and bundled with Vite (`cli/`, `dune build @bundle`); its OCaml/Melange closure is resolved by opam-nix (`opam-deps.nix`) on the manifest's `toolchain.ocaml` (5.1.1, upstream's `OCAML_VERSION`). The db-worker-node it spawns at runtime is still a shadow-cljs `:node-script` release. Build inputs: root offline pnpm deps (`pnpm-deps.nix`), the separate `cli/` pnpm workspace for Vite + transit-js (`cli-pnpm-deps.nix`), and the offline Clojure dependency tree for the db-worker (Maven jars plus tools.gitlibs git checkouts, `clj-deps.nix`).
 - `scripts/update-nightly.sh` regenerates manifest fields and the CLI source, root-pnpm, cli-bundle-pnpm, and Clojure-deps hashes.
 - `scripts/render-nightly-release-notes.sh` renders release notes from the cloned upstream Logseq repo.
@@ -160,6 +161,7 @@ nix develop -c pre-commit run --all-files
 ```bash
 nix build .#checks.x86_64-linux.logseq-runtime-assets
 nix build .#checks.x86_64-linux.logseq-desktop-revision
+nix build .#checks.x86_64-linux.logseq-theme-plugin
 nix build .#checks.x86_64-linux.logseq
 nix build .#checks.x86_64-linux.logseq-cli
 nix build .#checks.x86_64-linux.logseq-cli-help
