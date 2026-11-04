@@ -289,7 +289,7 @@ pkgs.runCommand "logseq-theme-plugin-check"
     grep -oE '\[[A-Za-z_-]+' selectors | sort -u > attribute-names \
       || fail "selects no attributes"
     while read -r attribute; do
-      grep -qF -- "$attribute" style.css \
+      grep -qE -- "\\$attribute"'[]=~|^$*]' style.css \
         || fail "attribute ''${attribute#[} is unknown to the pinned app's css/style.css"
     done < attribute-names
 
