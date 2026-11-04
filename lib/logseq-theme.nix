@@ -215,11 +215,18 @@ let
       name: tone: if colors.${name} or null == null then tone else colors.${name}
     ) fallback;
 
+  # One spelling per colour: hex digits are case-insensitive, so lowercase
+  # them before the shipped-palette test and before they reach the sheet.
+  canonical = lib.mapAttrsRecursive (
+    _: value: if lib.isString value then lib.toLower value else value
+  );
+
   render =
     { colors, extraCss }:
     let
-      c = withTones colors;
-      s = colors.syntax;
+      palette = canonical colors;
+      c = withTones palette;
+      s = palette.syntax;
 
       gray = [
         c.background

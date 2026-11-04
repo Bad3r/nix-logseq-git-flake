@@ -173,6 +173,9 @@ assert accentScaleOrdered "checked palette" checkedCss;
 assert accentHueFollows checkedCss;
 assert alphaStepsComposite "default palette" defaultCss;
 assert accentScaleOrdered "default palette" defaultCss;
+assert lib.assertMsg (
+  renderColors (lib.mapAttrsRecursive (_: lib.toUpper) theme.defaultColors) == defaultCss
+) "theme-plugin: the default palette spelled in uppercase renders differently";
 assert alphaStepsComposite "sidebar darker than the background" (renderColors {
   background = "#1e1e1e";
   sidebar = "#141414";
