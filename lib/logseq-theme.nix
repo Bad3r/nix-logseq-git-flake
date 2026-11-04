@@ -4,8 +4,11 @@
 # under the none accent, the few component states the logseq accent paints
 # near-invisibly (theme picker rows, ghost button hover, form input borders,
 # faded command palette groups), command palette row highlights, inline code
-# text, and CodeMirror code blocks (surface, gutters, line numbers, cursor,
-# selection, active line, tokens), so it survives component restyles;
+# text, the right sidebar (frame, topbar, and settings buttons on step 3;
+# cards, card headers, and shortcut panes on step 2; code blocks, quotes, and
+# tables on those cards a step up), and CodeMirror code blocks (surface,
+# gutters, line numbers, cursor, selection, active line, bracket matching,
+# tokens), so it survives component restyles;
 # checks.<system>.logseq-theme-plugin fails when the pinned app stops
 # consuming a variable (or every step of a scale), pins one to a fixed colour
 # or paints one of its properties in a rule the sheet does not out-rank, or

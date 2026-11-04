@@ -138,8 +138,11 @@ with the app's rules for the other accents. Selectors otherwise style only
 the root background, text selection under the `none` accent (which otherwise
 paints it from the primary colour), command palette row highlights (gray
 step 6, since step 3 sits one step above the panel), inline code text (step
-12 on the step 6 chip), and CodeMirror code blocks (surface, gutters, line
-numbers, cursor, selection, active line, and token colours).
+12 on the step 6 chip), the right sidebar (frame, topbar, and settings buttons
+on gray step 3; its cards, card headers, and shortcut panes on step 2; and the
+code blocks, quotes, and tables on those cards a step up), and CodeMirror code
+blocks (surface, gutters, line numbers, cursor, selection, active line,
+bracket matching, and token colours).
 
 The `checks.<system>.logseq-theme-plugin` check fails when the pinned app no
 longer reads a variable the theme sets in dark mode, pins one to a fixed
