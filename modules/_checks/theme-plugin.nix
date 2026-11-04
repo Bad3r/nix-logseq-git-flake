@@ -7,9 +7,10 @@
 # dark-mode app rule or script; theme.css must out-rank every rule that pins
 # a variable it sets to a fixed colour on the root or under an accent, and
 # every accent-scoped rule (data-color on the root element) that paints a
-# property it paints or a fixed colour; and every class and root attribute
-# its selectors use must still appear in the compiled style.css. An upstream
-# change then fails here instead of silently unstyling part of the UI.
+# property it paints or a fixed colour; and every class and attribute its
+# selectors use must still appear in the compiled style.css, attributes on
+# html as root selectors. An upstream change then fails here instead of
+# silently unstyling part of the UI.
 {
   lib,
   logseqTree,
@@ -277,14 +278,19 @@ pkgs.runCommand "logseq-theme-plugin-check"
       grep -qE -- "\\$class([^A-Za-z0-9_-]|\$)" style.css \
         || fail "selector $class is unknown to the pinned app's css/style.css"
     done < classes
-    grep -oE '\[[A-Za-z_-]+(=[^]]*)?\]' selectors | sort -u > attributes
-    test -s attributes || fail "selects no attributes"
+    grep -oE 'html(\[[^]]*\])+' selectors | grep -oE '\[[^]]*\]' | sort -u > attributes
+    test -s attributes || fail "selects no root attributes"
     while read -r attribute; do
       case "$attribute" in
         *=*) grep -qF -- "html$attribute" style.css ;;
         *) grep -qE -- "html\\''${attribute%]}[]=]" style.css ;;
       esac || fail "the pinned app's css/style.css no longer styles html$attribute"
     done < attributes
+    grep -oE '\[[A-Za-z_-]+' selectors | sort -u > attribute-names
+    while read -r attribute; do
+      grep -qF -- "$attribute" style.css \
+        || fail "attribute ''${attribute#[} is unknown to the pinned app's css/style.css"
+    done < attribute-names
 
     touch "$out"
   ''
