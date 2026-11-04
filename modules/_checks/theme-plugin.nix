@@ -258,7 +258,9 @@ pkgs.runCommand "logseq-theme-plugin-check"
     while read -r file; do
       (cd js && asar extract-file "${asarPath}" "''${file#/}")
     done < js-files
-    python3 -I ${./theme-plugin-cascade.py} "$theme_css" style.css js/* || exit 1
+    python3 -I -B ${./theme-plugin-cascade.py} "$theme_css" style.css js/* || exit 1
+    python3 -I -B ${./theme-plugin-cascade-test.py} ${./theme-plugin-cascade.py} \
+      "$theme_css" style.css js/* || exit 1
 
     # Selectors fail as silently as variables: every class the sheet targets
     # (CodeMirror 5 markup, .dark-theme) must still appear in the app's

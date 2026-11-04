@@ -7,8 +7,8 @@ an accent-scoped rule, to a value that does not start from a theme variable,
 and theme.css does not out-rank it: that element and its subtree would keep
 the app's colour. Also fails when an accent-scoped app rule paints a
 property on an element theme.css paints that property on, or paints a colour
-property with a literal colour no theme variable feeds, and theme.css does
-not out-rank it. A rule is accent-scoped when it needs [data-color=...] on
+property with a fixed colour (fixed_colour_value: one no declared variable
+feeds), and theme.css does not out-rank it. A rule is accent-scoped when it needs [data-color=...] on
 the root element, where theme.cljs sets it: on a first compound that names
 html or :root, or that needs a root attribute (data-theme, data-color,
 data-font, data-font-global) and no class, id, other element name, or
@@ -435,12 +435,6 @@ COLOUR_PROPERTY = re.compile(
     r"|outline(-color)?|box-shadow|fill|stroke|caret-color"
     r"|text-decoration(-color)?|accent-color|scrollbar-color)$"
 )
-HEX_COLOUR = re.compile(r"#[0-9a-f]{3,8}\b", re.IGNORECASE)
-COLOUR_FUNCTION = re.compile(
-    r"(?<![\w-])(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\(", re.IGNORECASE
-)
-OPAQUE_CALL = re.compile(r"(?<![\w-])(var|url)\(", re.IGNORECASE)
-VARIABLE = "\x00"
 # The CSS named colours, which minifiers emit for short values (`gray`).
 # transparent, currentcolor, and the CSS-wide keywords carry no colour.
 NAMED_COLOURS = frozenset(
@@ -595,7 +589,23 @@ NAMED_COLOURS = frozenset(
         "yellowgreen",
     ]
 )
-IDENTIFIER = re.compile(r"(?<![\w-])[a-z]+(?![\w-])", re.IGNORECASE)
+COLOUR_FUNCTIONS = {
+    "rgb",
+    "rgba",
+    "hsl",
+    "hsla",
+    "hwb",
+    "lab",
+    "lch",
+    "oklab",
+    "oklch",
+    "color",
+}
+TOKEN = re.compile(
+    r"""\s+|(?P<string>"[^"]*"|'[^']*')|(?P<hex>\#[0-9a-f]+)"""
+    r"|(?P<call>-?[a-z_][\w-]*)\(|(?P<ident>-?[a-z_][\w-]*)|(?P<other>[^\s(),/]+|[,/])",
+    re.IGNORECASE,
+)
 
 
 def call_end(value, start):
@@ -607,51 +617,80 @@ def call_end(value, start):
     return start
 
 
-def outside_variables(value):
-    """The value with strings and url() dropped and every var() call, its
-    fallback included, replaced by a marker: a fallback never paints while
-    the variable is defined."""
-    out, i = [], 0
+def tokens(value):
+    """Top-level tokens of a CSS value: (kind, text) with calls as
+    ("call", name, arguments)."""
+    i = 0
     while i < len(value):
-        if value[i] in "\"'":
-            end = value.find(value[i], i + 1)
-            i = len(value) if end < 0 else end + 1
-            out.append(" ")
+        match = TOKEN.match(value, i)
+        if not match:
+            i += 1
             continue
-        match = OPAQUE_CALL.match(value, i)
-        if match:
-            i = call_end(value, match.end())
-            out.append(f" {VARIABLE} " if match.group(1).lower() == "var" else " ")
+        kind = match.lastgroup
+        if kind == "call":
+            end = call_end(value, match.end())
+            yield "call", match.group("call").lower(), value[match.end() : end - 1]
+            i = end
             continue
-        out.append(value[i])
-        i += 1
-    return "".join(out)
+        if kind:
+            yield kind, match.group(kind), None
+        i = match.end()
 
 
-def colour_literal(value):
-    """Whether a value spells out a colour outside var(): a hex colour, a
-    named colour, or a colour function none of whose arguments is a var()."""
-    bare = outside_variables(value)
-    if HEX_COLOUR.search(bare):
-        return True
-    for match in COLOUR_FUNCTION.finditer(bare):
-        if VARIABLE not in bare[match.end() : call_end(bare, match.end())]:
+def fixed_colour_value(value, declared):
+    """Whether a value paints a colour no variable feeds.
+
+    A hex or named colour paints one; currentcolor, transparent, CSS-wide
+    keywords, and system colours do not. var(--x) paints whatever --x holds,
+    so it is not fixed when anything declares --x, and paints its fallback
+    when nothing does. A colour function is fixed when its colour channels
+    are literal (a var() only in the alpha keeps it fixed), color-mix() when
+    any colour it mixes is, and any other function when any argument is.
+    """
+    for kind, text, args in tokens(value):
+        if kind == "hex" and len(text) - 1 in (3, 4, 6, 8):
             return True
-    return any(word.lower() in NAMED_COLOURS for word in IDENTIFIER.findall(bare))
+        if kind == "ident" and text.lower() in NAMED_COLOURS:
+            return True
+        if kind != "call" or text == "url":
+            continue
+        if text == "var":
+            name, _, fallback = args.partition(",")
+            if name.strip() not in declared and fixed_colour_value(fallback, declared):
+                return True
+        elif text in COLOUR_FUNCTIONS:
+            if not VAR.search(colour_channels(text, args)):
+                return True
+        elif text == "color-mix":
+            colours = split_top(args, ",")[1:]
+            if any(fixed_colour_value(colour, declared) for colour in colours):
+                return True
+        elif fixed_colour_value(args, declared):
+            return True
+    return False
 
 
-def fixed_colour(declaration, theme):
-    """A colour property set to a literal colour no theme variable feeds."""
-    return (
-        COLOUR_PROPERTY.match(declaration.prop) is not None
-        and colour_literal(declaration.value)
-        and not reads(declaration.value, theme) & theme.custom
+def colour_channels(function, args):
+    """The colour channels of a colour function, without its alpha."""
+    if function == "color":
+        args = args.strip().partition(" ")[2]
+    parts = split_top(args, ",")
+    if len(parts) > 1:
+        return ",".join(parts[:3])
+    return split_top(args, "/")[0] if args.strip() else ""
+
+
+def fixed_colour(declaration, declared):
+    """A colour property set to a colour no variable feeds."""
+    return COLOUR_PROPERTY.match(declaration.prop) is not None and fixed_colour_value(
+        declaration.value, declared
     )
 
 
 def unbeaten_overrides(app, theme):
     """Accent-scoped app rules that paint over the palette: a property
-    theme.css paints itself, or a fixed colour no theme variable feeds."""
+    theme.css paints itself, or a fixed colour no variable feeds."""
+    declared = theme.custom | {d.prop for d in app if d.prop.startswith("--")}
     for declaration in app:
         if declaration.prop.startswith("--"):
             continue
@@ -659,7 +698,7 @@ def unbeaten_overrides(app, theme):
             if not accent_scoped(selector):
                 continue
             claimed = any(theme.targets(declaration.prop, selector))
-            if not claimed and not fixed_colour(declaration, theme):
+            if not claimed and not fixed_colour(declaration, declared):
                 continue
             if not theme.outranks(declaration, selector):
                 yield f"{selector} {{ {declaration.prop}: {declaration.value} }}"
@@ -669,29 +708,23 @@ def scale_key(name):
     return re.sub(r"-[0-9]{2}(?=-|$)", "-NN", name)
 
 
-def main():
-    with open(sys.argv[1]) as handle:
-        theme = Theme(handle.read())
+def problem(theme_css, style_css, js_reads):
+    """The first way theme.css fails the pinned app, or None."""
+    theme = Theme(theme_css)
     if not theme.custom:
-        sys.exit("theme.css: declares no custom properties")
-    with open(sys.argv[2]) as handle:
-        app = parse(handle.read())
+        return "theme.css: declares no custom properties"
+    app = parse(style_css)
     if not app:
-        sys.exit("style.css: no declarations parsed")
+        return "style.css: no declarations parsed"
 
     unbeaten = sorted(
         set(unbeaten_redeclarations(app, theme)) | set(unbeaten_overrides(app, theme))
     )
     if unbeaten:
-        sys.exit(
-            "theme.css: no rule out-ranks these app redeclarations:\n  "
-            + "\n  ".join(unbeaten)
+        return "theme.css: no rule out-ranks these app redeclarations:\n  " + (
+            "\n  ".join(unbeaten)
         )
 
-    js_reads = set()
-    for path in sys.argv[3:]:
-        with open(path, errors="replace") as handle:
-            js_reads.update(VAR.findall(handle.read()))
     # The component tokens mirror app rules the theme out-ranks; each variable
     # they read must still be one the app reads in a dark-mode rule (out-ranked
     # or not), or the mirror is stale.
@@ -703,18 +736,37 @@ def main():
         theme_reads |= reads(declaration.value, theme)
     stale = sorted(theme_reads - app_reads)
     if stale:
-        sys.exit(
-            "theme.css: reads variables no dark-mode app rule reads: " + " ".join(stale)
+        return "theme.css: reads variables no dark-mode app rule reads: " + " ".join(
+            stale
         )
 
     live = live_variables(app, theme, js_reads)
     live_scales = {scale_key(name) for name in live}
     unread = sorted(n for n in theme.custom if scale_key(n) not in live_scales)
     if unread:
-        sys.exit(
-            "theme.css: the pinned app never reads these in dark mode: "
-            + " ".join(unread)
+        return "theme.css: the pinned app never reads these in dark mode: " + (
+            " ".join(unread)
         )
+    return None
 
 
-main()
+def js_variable_reads(paths):
+    found = set()
+    for path in paths:
+        with open(path, errors="replace") as handle:
+            found.update(VAR.findall(handle.read()))
+    return found
+
+
+def main():
+    with open(sys.argv[1]) as handle:
+        theme_css = handle.read()
+    with open(sys.argv[2]) as handle:
+        style_css = handle.read()
+    failure = problem(theme_css, style_css, js_variable_reads(sys.argv[3:]))
+    if failure:
+        sys.exit(failure)
+
+
+if __name__ == "__main__":
+    main()
