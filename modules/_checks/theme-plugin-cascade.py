@@ -10,8 +10,11 @@ property on an element theme.css paints that property on, or paints a colour
 property with a literal colour no theme variable feeds, and theme.css does
 not out-rank it. A rule is accent-scoped when it needs [data-color=...] on
 the root element, where theme.cljs sets it: on a first compound that names
-html or :root, or carries only attributes and pseudo-classes. [data-color]
-on any other element (PDF highlights) is not an accent.
+html or :root, or that needs a root attribute (data-theme, data-color,
+data-font, data-font-global) and no class, id, other element name, or
+pseudo-element. [data-color] on any other element (PDF highlights) is not
+an accent, and an attribute-only compound without a root attribute
+([data-highlight]) matches ordinary elements.
 
 Also fails when theme.css sets a custom property whose value never reaches
 a painted property in dark mode. A var() read in STYLE_CSS counts unless
@@ -62,7 +65,8 @@ LIGHT = {"[data-theme=light]", ".white-theme", ".light-theme"}
 ROOT_CONTEXT = {"html", "[data-theme=dark]", "[data-theme]", "[data-color]"}
 BODY_CONTEXT = {"body", ".dark-theme"}
 ACCENT = re.compile(r"^\[data-color=")
-SINGLE_COLON = re.compile(r"^:[^:]")
+ATTRIBUTE_NAME = re.compile(r"^\[([\w-]+)")
+ROOT_ATTRIBUTES = {"data-theme", "data-color", "data-font", "data-font-global"}
 SIMPLE = re.compile(
     r"::[\w-]+(?:\([^)]*\))?"
     r"|:[\w-]+(?:\((?:[^()]|\([^()]*\))*\))?"
@@ -236,14 +240,18 @@ def compound_facts(compound):
 
 
 def can_be_root(facts):
-    """Whether a leading compound with these facts can match the root element:
-    it names html or :root, or carries nothing that excludes it (only
-    attributes and pseudo-classes, as in a bare `[data-color=logseq]`). A
-    class, id, other element name, or pseudo-element rules it out."""
+    """Whether a compound with these facts is aimed at the root element: it
+    names html or :root, or it needs an attribute theme.cljs sets on the root
+    (data-theme, data-color, data-font, data-font-global) and nothing that
+    rules the root out (a class, id, other element name, or pseudo-element). Without a root attribute, an attribute-only compound
+    such as [data-highlight] matches ordinary elements."""
     if facts & {"html", ":root"}:
         return True
-    bare = all(f == "*" or f.startswith("[") or SINGLE_COLON.match(f) for f in facts)
-    return bool(facts) and bare
+    names = {m.group(1) for m in map(ATTRIBUTE_NAME.match, facts) if m}
+    excluded = any(
+        f != "*" and (not f.startswith(("[", ":")) or f.startswith("::")) for f in facts
+    )
+    return bool(names & ROOT_ATTRIBUTES) and not excluded
 
 
 def subject_facts(selector):
