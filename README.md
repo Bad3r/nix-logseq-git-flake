@@ -84,6 +84,10 @@ through `text`) form one ordered scale, so replace them together. The options
 in `modules/_home-manager/theme-plugin.nix` list every key, and `extraCss`
 appends custom rules.
 
+The layout follows VS Code: the top bar, both sidebars, and dialogs sit on
+`sidebar` around `background` content with `border` edges, menus on `popup`,
+and list hover and selection are translucent `bright` overlays.
+
 ```nix
 { inputs, ... }:
 {

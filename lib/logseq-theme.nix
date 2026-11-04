@@ -3,12 +3,14 @@
 # under the logseq accent) it styles only the root background, text selection
 # under the none accent, the few component states the logseq accent paints
 # near-invisibly (theme picker rows, ghost button hover, form input borders,
-# faded command palette groups), command palette row highlights, inline code
-# text, the right sidebar (frame, topbar, and settings buttons on step 3;
-# cards, card headers, and shortcut panes on step 2; code blocks, quotes, and
-# tables on those cards a step up), and CodeMirror code blocks (surface,
-# gutters, line numbers, cursor, selection, active line, bracket matching,
-# tokens), so it survives component restyles;
+# faded command palette groups), inline code text, a VS Code Dark 2026 layout
+# (the top bar, both sidebars, and dialogs on step 2 around step 1 content with
+# step 4 edges; right-sidebar cards as outlined content panes; translucent
+# hover and active overlays on sidebar and settings lists; menus with the
+# widget border, shadow, and accent-outlined highlight; the keyboard-selected
+# command palette row in the focus fill; scrollbar thumbs), and CodeMirror
+# code blocks (surface, gutters, line numbers, cursor, selection, active line,
+# bracket matching, tokens), so it survives component restyles;
 # checks.<system>.logseq-theme-plugin fails when the pinned app stops
 # consuming a variable (or every step of a scale), pins one to a fixed colour
 # or paints one of its properties in a rule the sheet does not out-rank, or
@@ -197,8 +199,8 @@ let
   # Fills each unset (null) accent tone. The shipped accent, background, and
   # bright keep their tuned tones; any other combination blends the palette's
   # own accent toward the background or `bright`, so the accent scale, links, and
-  # selection share one hue. `accentStrong` (accent step 7) has no option:
-  # nothing the pinned app renders paints accent steps 6-7.
+  # selection share one hue. `accentStrong` (accent step 7) has no option; it
+  # fills primary buttons and the keyboard-selected command palette row.
   withTones =
     colors:
     let
@@ -305,7 +307,7 @@ let
         card-foreground = c.text;
         popover = c.popup;
         popover-foreground = c.text;
-        primary = c.accent;
+        primary = c.accentStrong;
         primary-foreground = c.onAccent;
         secondary = c.activeItem;
         secondary-foreground = c.text;
@@ -407,6 +409,10 @@ let
       root = "html[data-theme=dark][data-color]";
       logseq = "html[data-theme=dark][data-color=logseq]";
       card = "${root} .cp__right-sidebar .sidebar-item";
+      hoverOverlay = rgbString c.bright "0.08";
+      activeOverlay = rgbString c.bright "0.13";
+      menuSelection = rgbString c.accent "0.15";
+      widgetShadow = "rgb(0 0 0 / 0.36) 0 0 8px 2px";
 
       codeRules = [
         " { background-color: ${c.sidebar}; color: ${c.text}; text-shadow: none; }"
@@ -501,37 +507,76 @@ let
         "${logseq} .cp__cmdk .border-gray-06,"
         "${logseq} .cp__cmdk .border-gray-07 { opacity: 1; }"
         ""
-        "/* Command palette rows highlight with gray step 3, one step above the"
-        "   panel; inline code sets step 11 text on its step 6 chip. Both are"
-        "   too close in this palette. */"
-        "${root} [data-cmdk-item][data-kb-highlighted],"
-        "${root} [data-cmdk-item][data-hoverable]:hover { background-color: var(--lx-gray-06); }"
+        "/* Inline code sets step 11 text on its step 6 chip, too close in this"
+        "   palette. */"
         "${root} :not(pre) > code { color: var(--lx-gray-12); }"
         ""
-        "/* The right sidebar sits on gray step 3 with its cards on step 2, the"
-        "   reverse of the app's mapping. */"
+        "/* VS Code-style layout: the top bar and both sidebars sit on gray step 2"
+        "   around step 1 content, with step 4 edges between them. */"
+        "${root} .cp__header { background-color: var(--lx-gray-02); box-shadow: 0 1px 0 var(--lx-gray-04); }"
+        "${root} .left-sidebar-inner.as-container { border-right-color: var(--lx-gray-04); }"
+        "${root} .cp__right-sidebar-inner { box-shadow: inset 1px 0 0 var(--lx-gray-04); }"
         "${root} .cp__right-sidebar-inner,"
         "${root} .cp__right-sidebar-topbar,"
-        "${root} .cp__right-sidebar-settings-btn { background-color: var(--lx-gray-03); }"
-        "${root} .cp__right-sidebar .sidebar-item,"
-        "${root} .cp__right-sidebar .sidebar-item .sidebar-item-header,"
-        "${root} .sidebar-item .cp__shortcut-page-x { background-color: var(--lx-gray-02); }"
-        "${root} .cp__right-sidebar .sidebar-item.item-type-block .sidebar-item-header {"
-        "  background: linear-gradient(0deg, var(--lx-gray-03), var(--lx-gray-02));"
+        "${root} .cp__right-sidebar-settings-btn { background-color: var(--lx-gray-02); }"
+        "/* Right-sidebar cards are content panes, so what they hold keeps the"
+        "   main page's surfaces. */"
+        "${card} { background-color: var(--lx-gray-01); box-shadow: 0 0 0 1px var(--lx-gray-04); }"
+        "${card} .sidebar-item-header,"
+        "${card}.item-type-block .sidebar-item-header,"
+        "${card}.collapsed.item-type-block .sidebar-item-header,"
+        "${root} .sidebar-item .cp__shortcut-page-x { background: var(--lx-gray-01); }"
+        ""
+        "/* Lists: translucent `bright` overlays, 8% on hover and 13% with `bright`"
+        "   text on the active item. */"
+        "${root} .left-sidebar-inner a.item:hover,"
+        "${root} .left-sidebar-inner .sidebar-content-group-inner > .hd:not(.non-collapsable):hover,"
+        "${root} .left-sidebar-inner .sidebar-content-group-inner > .bd ul li > a:first-of-type:hover,"
+        "${root} .cp__settings-inner .settings-menu-item:hover,"
+        "${root} [data-cmdk-item][data-hoverable]:not([data-kb-highlighted]):hover { background-color: ${hoverOverlay}; }"
+        "${root} .left-sidebar-inner a.item.active,"
+        "${root} .left-sidebar-inner .sidebar-content-group-inner > .bd ul li > a:first-of-type[data-popup-active],"
+        "${root} .cp__settings-inner aside > ul > li.active {"
+        "  background-color: ${activeOverlay};"
+        "  color: ${c.bright};"
         "}"
-        "${root} .cp__right-sidebar .sidebar-item.collapsed.item-type-block .sidebar-item-header {"
-        "  background: var(--lx-gray-02);"
+        "${root} .cp__settings-inner aside > ul > li.active .settings-menu-link { color: ${c.bright}; }"
+        ""
+        "/* Menus on the widget background with a border and shadow; the"
+        "   highlighted item, and the editor autocomplete's chosen row, is tinted"
+        "   and outlined in the accent. */"
+        "${root} :is(.ui__dropdown-menu-content, .ui__context-menu-content, .ui__popover-content, .ui__select-content),"
+        "${root} :is(.menu-links-wrapper, .dropdown-wrapper) {"
+        "  border-color: var(--lx-gray-04);"
+        "  border-radius: 6px;"
+        "  box-shadow: ${widgetShadow};"
         "}"
-        "/* Content that sits on step 2 elsewhere moves up a step on those cards. */"
-        "${card} .CodeMirror.cm-s-dark,"
-        "${card} .CodeMirror.cm-s-dark .CodeMirror-gutters,"
-        "${card} .extensions__code-lang,"
-        "${card} blockquote,"
-        "${card} .block-content-or-editor-wrap[data-node-type=quote],"
-        "${card} :is(.classic-table, .query-table) tr:nth-child(2n) { background-color: var(--lx-gray-03); }"
-        "${card} .CodeMirror.cm-s-dark .CodeMirror-activeline-background,"
-        "${card} :is(.classic-table, .query-table) th,"
-        "${card} :is(.classic-table, .query-table) tr:hover { background: var(--lx-gray-04); }"
+        "${root} :is(.ui__dropdown-menu-content, .ui__context-menu-content, .ui__select-content) [data-highlighted],"
+        "${root} :is(.menu-links-wrapper, .dropdown-wrapper) .menu-link:hover,"
+        "${root} #ui__ac-inner .menu-link.chosen {"
+        "  background-color: ${menuSelection};"
+        "  border-radius: 4px;"
+        "  color: ${c.text};"
+        "  outline: 1px solid ${c.accent};"
+        "  outline-offset: -1px;"
+        "}"
+        ""
+        "/* Dialogs on gray step 2 over a dimmed page; the keyboard-selected"
+        "   command palette row in the focus fill, like a VS Code quick input"
+        "   row. */"
+        "${root} .ui__dialog-overlay { background-color: rgb(0 0 0 / 0.4); }"
+        "${root} .ui__dialog-content {"
+        "  background-color: var(--lx-gray-02);"
+        "  border-color: var(--lx-gray-04);"
+        "  border-radius: 6px;"
+        "  box-shadow: ${widgetShadow};"
+        "}"
+        "${root} [data-cmdk-item][data-kb-highlighted] { background-color: ${c.accentStrong}; color: ${c.onAccent}; }"
+        "${root} [data-cmdk-item][data-kb-highlighted] * { background-color: transparent; color: ${c.onAccent}; }"
+        ""
+        "/* Scrollbar thumbs on gray step 9 over a transparent track. */"
+        "${root},"
+        "${root} #main-content-container { scrollbar-color: var(--lx-gray-09) transparent; }"
         ""
         "/* Code blocks: CodeMirror 5 theme 'solarized dark' without an accent,"
         "   'lsradix dark' with one (extensions/code.cljs). */"
