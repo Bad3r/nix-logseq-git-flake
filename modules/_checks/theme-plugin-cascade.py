@@ -37,8 +37,17 @@ in a cascade layer.
 import re
 import sys
 
-VAR = re.compile(r"var\(\s*(--[A-Za-z0-9_-]+)")
-LIGHT = re.compile(r"\[data-theme=\"?light\"?\]|\.white-theme|\.light-theme")
+# CSS keywords, at-rules, pseudo-classes, element and attribute names are
+# ASCII case-insensitive; custom property names, classes, and attribute
+# values are not.
+VAR = re.compile(r"var\(\s*(--[A-Za-z0-9_-]+)", re.IGNORECASE)
+IMPORTANT = re.compile(r"!\s*important\s*$", re.IGNORECASE)
+ATTRIBUTE = re.compile(
+    r"\[\s*([\w-]+)\s*(?:([~|^$*]?=)\s*"
+    r"(?:\"([^\"]*)\"|'([^']*)'|([^\]\s]+))\s*([is])?\s*)?\]",
+    re.IGNORECASE,
+)
+LIGHT = {"[data-theme=light]", ".white-theme", ".light-theme"}
 # What holds on the root and body whenever a dark theme is loaded.
 ROOT_CONTEXT = {"html", "[data-theme=dark]", "[data-theme]", "[data-color]"}
 BODY_CONTEXT = {"body", ".dark-theme"}
@@ -56,7 +65,7 @@ class Declaration:
         self.layered = layered
         self.prop = prop
         self.value = value
-        self.important = value.rstrip().endswith("!important")
+        self.important = IMPORTANT.search(value) is not None
 
 
 def split_top(text, separators):
@@ -88,10 +97,12 @@ def parse(css):
         if not chunk or not rules or ":" not in chunk:
             return
         prop, value = chunk.split(":", 1)
-        layered = any(at and prelude.startswith("@layer") for prelude, at in blocks)
+        layered = any(
+            at and prelude.lower().startswith("@layer") for prelude, at in blocks
+        )
         selectors = split_top(rules[-1], ",")
         declarations.append(
-            Declaration(selectors, layered, prop.strip(), value.strip())
+            Declaration(selectors, layered, property_name(prop), value.strip())
         )
 
     while i < n:
@@ -133,8 +144,35 @@ def compounds(selector):
     return [part for part in split_top(spaced, " ") if part not in (">", "+", "~")]
 
 
+def property_name(prop):
+    prop = prop.strip()
+    return prop if prop.startswith("--") else prop.lower()
+
+
+def canonical(simple):
+    """One spelling per simple selector, so comparisons ignore case and quotes
+    where CSS does."""
+    if simple.startswith("["):
+        match = ATTRIBUTE.fullmatch(simple)
+        if not match:
+            return simple
+        name, operator, *quoted, flag = match.groups()
+        if not operator:
+            return f"[{name.lower()}]"
+        value = next(v for v in quoted if v is not None)
+        if flag and flag.lower() == "i":
+            value = value.lower()
+        return f"[{name.lower()}{operator}{value}]"
+    if simple.startswith(":"):
+        name, paren, args = simple.partition("(")
+        return name.lower() + paren + args
+    if simple[0].isalpha():
+        return simple.lower()
+    return simple
+
+
 def simples(compound):
-    return SIMPLE.findall(compound)
+    return [canonical(simple) for simple in SIMPLE.findall(compound)]
 
 
 def specificity(selector):
@@ -239,8 +277,13 @@ class Theme:
         return False
 
 
+def light_only(selector):
+    """Whether a selector needs light mode on some compound."""
+    return any(set(simples(part)) & LIGHT for part in compounds(selector))
+
+
 def dark_selectors(declaration):
-    return [s for s in declaration.selectors if not LIGHT.search(s)]
+    return [s for s in declaration.selectors if not light_only(s)]
 
 
 def applies(declaration, theme):
