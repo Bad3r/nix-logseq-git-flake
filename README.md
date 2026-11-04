@@ -77,106 +77,29 @@ environment.systemPackages = [
 ## Theme Plugin
 
 `homeManagerModules.default` adds `programs.logseq.themePlugin`, which renders
-a dark theme from a semantic palette and installs it as a theme-only plugin in
-`~/.logseq/plugins/<name>/` (`package.json` plus `theme.css`, no code).
+a dark theme from a semantic palette into a theme-only plugin under
+`~/.logseq/plugins/<name>/`. Unset colours keep a VS Code Dark palette, and
+the accent tones derive from `accent`; the twelve neutral keys (`background`
+through `text`) form one ordered scale, so replace them together. The options
+in `modules/_home-manager/theme-plugin.nix` list every key, and `extraCss`
+appends custom rules.
 
 ```nix
-{ config, inputs, ... }:
-let
-  c = config.lib.stylix.colors.withHashtag;
-in
+{ inputs, ... }:
 {
   imports = [ inputs.logseq-nightly.homeManagerModules.default ];
-
   programs.logseq.themePlugin = {
     enable = true;
-    name = "stylix";
-    title = "Stylix";
-    colors = {
-      background = c.base00;
-      sidebar = c.base01;
-      popup = c.base01;
-      border = c.base02;
-      activeItem = c.base02;
-      raised = c.base02;
-      strongBorder = c.base03;
-      bullet = c.base03;
-      subtle = c.base03;
-      dim = c.base04;
-      muted = c.base04;
-      text = c.base05;
-      accent = c.base0D;
-      syntax.keyword = c.base08;
-    };
+    name = "my-theme";
+    colors.accent = "#4fc1ff";
   };
 }
 ```
 
-Each unset colour keeps its default, a VS Code Dark 2026 palette with GitHub
-Dark syntax colours. The exceptions are the accent tones `highlight`,
-`selection`, `link`, and `linkHover`: unset, they blend from `accent` toward
-`background` or `bright`, so setting `accent` alone recolours the whole
-accent scale. The shipped `accent`, `background`, and `bright` together keep
-hand-tuned tones instead.
-
-The twelve neutral keys, `background` through `text`, form one scale ordered
-from the page background to body text, so a palette that replaces them sets
-all twelve: unset steps keep the VS Code greys and break the ordering. The
-option descriptions in
-`modules/_home-manager/theme-plugin.nix` list every key; `extraCss` appends
-rules after the generated ones.
-
-The theme sets Logseq's CSS variables (gray and accent scales on `html` and
-`body`, the shadcn HSL triplets, and the classic `--ls-*` palette) rather than
-styling components, so it holds across accent colours and most app updates.
-Under the default `logseq` accent the app pins the shadcn tokens of menus,
-popovers, selects, the calendar, and outline buttons to fixed teal; the
-theme redeclares them there with the values the app uses for every other
-accent, and replaces the logseq accent's near-invisible theme picker rows,
-ghost button hover, form input borders, and faded command palette groups
-with the app's rules for the other accents. Selectors otherwise style only
-the root background, text selection under the `none` accent (which otherwise
-paints it from the primary colour), command palette row highlights (gray
-step 6, since step 3 sits one step above the panel), inline code text (step
-12 on the step 6 chip), the right sidebar (frame, topbar, and settings buttons
-on gray step 3; its cards, card headers, and shortcut panes on step 2; and the
-code blocks, quotes, and tables on those cards a step up), and CodeMirror code
-blocks (surface, gutters, line numbers, cursor, selection, active line,
-bracket matching, and token colours).
-
-The `checks.<system>.logseq-theme-plugin` check fails when the pinned app no
-longer reads a variable the theme sets in dark mode, pins one to a fixed
-colour on the root or under an accent in a rule the theme does not out-rank,
-paints, in an accent-scoped rule the theme does not out-rank, a property the
-theme paints or a fixed colour (a hex, named, or colour-function colour, or
-the fallback of a variable nothing declares), no longer reads in dark mode a
-variable the theme's own rules read, or its stylesheet no longer knows a class
-or attribute the theme selects on (attributes on `html` must still style the
-root). A rule is accent-scoped when it needs `data-color` on the root element,
-where Logseq sets the accent: on a leading compound that names `html` or
-`:root`, or that needs an attribute Logseq sets on the root (`data-theme`,
-`data-color`, `data-font`, `data-font-global`) and no class, id, other element
-name, or pseudo-element. `data-color` on other elements, such as PDF
-highlights, is not an accent. A read counts only where the theme's value can
-reach the screen: not in light-mode rules, not as the fallback of another
-variable the theme sets, since the theme always defines the primary, and not
-in an app declaration that a theme declaration of the same property out-ranks.
-A read inside another variable counts only once that variable reaches a
-painted property or a script itself. The numbered steps of a scale pass
-together once one of them is live. The check proves that the app's CSS or JS
-consumes each value, not that the element consuming it is ever rendered.
-`modules/_checks/theme-plugin-cascade-test.py`, which the check also runs,
-holds regression cases for these rules.
-
-Logseq lists only real directories under `~/.logseq/plugins`, so the module
-links each file separately and Home Manager creates the plugin folder itself.
-
-After the first activation, restart Logseq, switch it to dark mode, and pick
-the theme once in the theme picker: press `t i`, or use the Themes group of
-the command palette. The picker lists only themes for the current mode, and
-the theme applies in dark mode only. Logseq records the choice in
-`~/.logseq/preferences.json`, which this module leaves alone; renaming `name`
-changes the plugin id and requires picking the theme again.
+After activation, restart Logseq, switch to dark mode, and pick the theme once
+in the theme picker (`t i`); changing `name` requires picking it again. The
+`checks.<system>.logseq-theme-plugin` check fails when a nightly stops using a
+variable or selector the theme relies on.
 
 ## CLI
 
