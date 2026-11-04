@@ -387,8 +387,8 @@ def unbeaten_redeclarations(app, theme):
         if first and first.group(1) in theme.custom:
             continue
         for selector in dark_selectors(declaration):
-            root = subject_facts(selector) & (ROOT_CONTEXT | BODY_CONTEXT)
-            if not root and "[data-color=" not in selector:
+            root = subject_facts(selector) & ({"html", ":root"} | BODY_CONTEXT)
+            if not root and not accent_scoped(selector):
                 continue
             if not theme.outranks(declaration, selector):
                 yield f"{selector} {{ {declaration.prop}: {declaration.value} }}"
