@@ -259,8 +259,8 @@ pkgs.runCommand "logseq-theme-plugin-check"
     test -s style.css || fail "app.asar has no css/style.css"
     # The app's own bundles; cljs code builds some var() reads as strings.
     mkdir js
-    asar list "${asarPath}" | grep -E '^/js/[^/]+\.m?js$' > js-files
-    test -s js-files || fail "app.asar lists no js/ bundles"
+    asar list "${asarPath}" | grep -E '^/js/[^/]+\.m?js$' > js-files \
+      || fail "app.asar lists no js/ bundles"
     while read -r file; do
       (cd js && asar extract-file "${asarPath}" "''${file#/}")
     done < js-files
@@ -272,21 +272,22 @@ pkgs.runCommand "logseq-theme-plugin-check"
     # (CodeMirror 5 markup, .dark-theme) must still appear in the app's
     # stylesheet, and every attribute it selects on must still style the root.
     sed -z 's|/\*[^*]*\*\+\([^/*][^*]*\*\+\)*/||g; s/{[^}]*}//g' "$theme_css" > selectors
-    grep -oE '\.[A-Za-z_-][A-Za-z0-9_-]*' selectors | sort -u > classes
-    test -s classes || fail "selects no classes"
+    grep -oE '\.[A-Za-z_-][A-Za-z0-9_-]*' selectors | sort -u > classes \
+      || fail "selects no classes"
     while read -r class; do
       grep -qE -- "\\$class([^A-Za-z0-9_-]|\$)" style.css \
         || fail "selector $class is unknown to the pinned app's css/style.css"
     done < classes
-    grep -oE 'html(\[[^]]*\])+' selectors | grep -oE '\[[^]]*\]' | sort -u > attributes
-    test -s attributes || fail "selects no root attributes"
+    grep -oE 'html(\[[^]]*\])+' selectors | grep -oE '\[[^]]*\]' | sort -u > attributes \
+      || fail "selects no root attributes"
     while read -r attribute; do
       case "$attribute" in
         *=*) grep -qF -- "html$attribute" style.css ;;
         *) grep -qE -- "html\\''${attribute%]}[]=]" style.css ;;
       esac || fail "the pinned app's css/style.css no longer styles html$attribute"
     done < attributes
-    grep -oE '\[[A-Za-z_-]+' selectors | sort -u > attribute-names
+    grep -oE '\[[A-Za-z_-]+' selectors | sort -u > attribute-names \
+      || fail "selects no attributes"
     while read -r attribute; do
       grep -qF -- "$attribute" style.css \
         || fail "attribute ''${attribute#[} is unknown to the pinned app's css/style.css"
