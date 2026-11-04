@@ -103,6 +103,7 @@ CAN_BE_ROOT = [
     ("*", False),
     (".x[data-color=yellow]", False),
     ("[data-color=logseq]::before", False),
+    ("[data-color=logseq]:before", False),
     (":is(mark,.ls-highlight):hover", False),
 ]
 for compound, want in CAN_BE_ROOT:
@@ -121,6 +122,24 @@ LIGHT_ONLY = [
 ]
 for selector, want in LIGHT_ONLY:
     expect(f"light_only({selector!r})", cascade.light_only(selector), want)
+
+ANCHORED = [
+    ("html[data-theme=dark][data-color]", set()),
+    ("html[data-theme=dark][data-color=logseq]", {"[data-color=logseq]"}),
+    ("html[data-theme=dark][data-color=logseq] .x", {"[data-color=logseq]"}),
+    ("html[data-theme=dark][data-color] .x .y", None),
+]
+for selector, want in ANCHORED:
+    expect(f"anchored({selector!r})", cascade.anchored(selector), want)
+
+PARSED_SELECTORS = [
+    (".w-\\(a{width:1px}.x{color:red}", [[".w-\\(a"], [".x"]]),
+    (".max-h-\\[min\\(1px\\,2px\\)\\]{x:1}", [[".max-h-\\[min\\(1px\\,2px\\)\\]"]]),
+    (".a\\,b,.c{x:1}", [[".a\\,b", ".c"]]),
+]
+for css, want in PARSED_SELECTORS:
+    got = [d.selectors for d in cascade.parse(css)]
+    expect(f"parse({css!r}) selectors", got, want)
 
 IMPORTANT = [("1px !important", True), ("1px ! IMPORTANT", True), ("1px", False)]
 for value, want in IMPORTANT:
@@ -510,6 +529,56 @@ PIPELINE = [
         None,
         False,
     ),
+    (
+        "legacy :before paint",
+        append(
+            "[data-color=logseq] .cp__right-sidebar-topbar:before{background-color:#002b36}"
+        ),
+        None,
+        True,
+    ),
+    (
+        "accent background colour the theme out-ranks",
+        append(f"{ACCENT} .cp__right-sidebar-topbar{{background:#002b36}}"),
+        None,
+        False,
+    ),
+    (
+        "accent background gradient over a background-color rule",
+        append(
+            f"{ACCENT} .cp__right-sidebar-topbar{{background:linear-gradient(#002b36,#002b36)}}"
+        ),
+        None,
+        True,
+    ),
+    (
+        "accent background-image gradient",
+        append(f"{ACCENT} .cp__foo{{background-image:linear-gradient(teal,teal)}}"),
+        None,
+        True,
+    ),
+    (
+        "fixed colour mixed into a theme variable",
+        append(
+            f"{ACCENT} .cp__foo{{--lx-gray-03:color-mix(in srgb,#002b36 90%,var(--lx-gray-01))}}"
+        ),
+        None,
+        True,
+    ),
+    (
+        "theme variables mixed into a theme variable",
+        append(
+            f"{ACCENT} .cp__foo{{--lx-gray-03:color-mix(in srgb,var(--lx-gray-02) 90%,var(--lx-gray-01))}}"
+        ),
+        None,
+        False,
+    ),
+    (
+        "unbalanced escaped parenthesis before a failing rule",
+        append(".w-\\(a{width:1px}" + f"{ACCENT} .cp__foo{{color:#586e75}}"),
+        None,
+        True,
+    ),
 ]
 for name, style_edit, theme_edit, must_fail in PIPELINE:
     style = style_edit(STYLE) if style_edit else STYLE
@@ -520,5 +589,5 @@ for name, style_edit, theme_edit, must_fail in PIPELINE:
 if failures:
     sys.exit("theme-plugin-cascade tests failed:\n  " + "\n  ".join(failures))
 print(
-    f"theme-plugin-cascade tests: {len(FIXED_COLOUR) + len(CAN_BE_ROOT) + len(LIGHT_ONLY) + len(IMPORTANT) + len(PIPELINE)} cases passed"
+    f"theme-plugin-cascade tests: {len(FIXED_COLOUR) + len(CAN_BE_ROOT) + len(LIGHT_ONLY) + len(ANCHORED) + len(PARSED_SELECTORS) + len(IMPORTANT) + len(PIPELINE)} cases passed"
 )

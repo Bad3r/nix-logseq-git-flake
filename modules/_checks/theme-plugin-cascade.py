@@ -3,18 +3,20 @@
 usage: theme-plugin-cascade.py THEME_CSS STYLE_CSS [JS ...]
 
 Fails when the app redeclares a variable theme.css sets, on the root or in
-an accent-scoped rule, to a value that does not start from a theme variable,
-and theme.css does not out-rank it: that element and its subtree would keep
-the app's colour. Also fails when an accent-scoped app rule paints a
-property on an element theme.css paints that property on, or paints a colour
-property with a fixed colour (fixed_colour_value: one no declared variable
-feeds), and theme.css does not out-rank it. A rule is accent-scoped when it needs [data-color=...] on
-the root element, where theme.cljs sets it: on a first compound that names
-html or :root, or that needs a root attribute (data-theme, data-color,
-data-font, data-font-global) and no class, id, other element name, or
-pseudo-element. [data-color] on any other element (PDF highlights) is not
-an accent, and an attribute-only compound without a root attribute
-([data-highlight]) matches ordinary elements.
+an accent-scoped rule, to a value that does not start from a theme variable
+or that mixes a fixed colour in, and theme.css does not out-rank it: that
+element and its subtree would keep the app's colour. Also fails when an
+accent-scoped app rule paints a property on an element theme.css paints that
+property on, or paints a colour property with a fixed colour
+(fixed_colour_value: one no declared variable feeds), and theme.css does not
+out-rank it; a background-color declaration never out-ranks a background
+shorthand that paints a gradient or image. A rule is accent-scoped when it
+needs [data-color=...] on the root element, where theme.cljs sets it: on a
+first compound that names html or :root, or that needs a root attribute
+(data-theme, data-color, data-font, data-font-global) and no class, id,
+other element name, or pseudo-element. [data-color] on any other element
+(PDF highlights) is not an accent, and an attribute-only compound without a
+root attribute ([data-highlight]) matches ordinary elements.
 
 Also fails when theme.css sets a custom property whose value never reaches
 a painted property in dark mode. A var() read in STYLE_CSS counts unless
@@ -47,6 +49,7 @@ at least as specific (theme.css loads later, unlayered) or the app rule sits
 in a cascade layer.
 """
 
+import functools
 import re
 import sys
 
@@ -67,6 +70,7 @@ BODY_CONTEXT = {"body", ".dark-theme"}
 ACCENT = re.compile(r"^\[data-color=")
 ATTRIBUTE_NAME = re.compile(r"^\[([\w-]+)")
 ROOT_ATTRIBUTES = {"data-theme", "data-color", "data-font", "data-font-global"}
+LEGACY_PSEUDO_ELEMENTS = {":before", ":after", ":first-line", ":first-letter"}
 SIMPLE = re.compile(
     r"::[\w-]+(?:\([^)]*\))?"
     r"|:[\w-]+(?:\((?:[^()]|\([^()]*\))*\))?"
@@ -84,9 +88,15 @@ class Declaration:
 
 
 def split_top(text, separators):
-    """Split at separators outside parentheses and brackets."""
+    """Split at separators outside parentheses and brackets. An escaped
+    character, as in Tailwind's arbitrary-value classes, is plain text."""
     parts, depth, current = [], 0, []
+    escaped = False
     for ch in text:
+        if escaped or ch == "\\":
+            escaped = not escaped
+            current.append(ch)
+            continue
         if ch in "([":
             depth += 1
         elif ch in ")]":
@@ -122,6 +132,12 @@ def parse(css):
 
     while i < n:
         ch = css[i]
+        if ch == "\\":
+            # An escaped quote, brace, or parenthesis in a class name opens
+            # nothing; read as syntax it would swallow the rest of the sheet.
+            text.append(css[i : i + 2])
+            i += 2
+            continue
         if ch in "\"'":
             j = i + 1
             while j < n and css[j] != ch:
@@ -153,10 +169,11 @@ def parse(css):
     return declarations
 
 
+@functools.cache
 def compounds(selector):
     """Compound selectors of a complex selector, root first."""
     spaced = re.sub(r"\s*([>+~])\s*", r" \1 ", selector.strip())
-    return [part for part in split_top(spaced, " ") if part not in (">", "+", "~")]
+    return tuple(part for part in split_top(spaced, " ") if part not in (">", "+", "~"))
 
 
 def property_name(prop):
@@ -180,16 +197,22 @@ def canonical(simple):
         return f"[{name.lower()}{operator}{value}]"
     if simple.startswith(":"):
         name, paren, args = simple.partition("(")
-        return name.lower() + paren + args
+        name = name.lower()
+        # CSS 2 pseudo-elements may still be written with one colon.
+        if name in LEGACY_PSEUDO_ELEMENTS:
+            name = ":" + name
+        return name + paren + args
     if simple[0].isalpha():
         return simple.lower()
     return simple
 
 
+@functools.cache
 def simples(compound):
-    return [canonical(simple) for simple in SIMPLE.findall(compound)]
+    return tuple(canonical(simple) for simple in SIMPLE.findall(compound))
 
 
+@functools.cache
 def specificity(selector):
     total = [0, 0, 0]
     for compound in compounds(selector):
@@ -243,8 +266,9 @@ def can_be_root(facts):
     """Whether a compound with these facts is aimed at the root element: it
     names html or :root, or it needs an attribute theme.cljs sets on the root
     (data-theme, data-color, data-font, data-font-global) and nothing that
-    rules the root out (a class, id, other element name, or pseudo-element). Without a root attribute, an attribute-only compound
-    such as [data-highlight] matches ordinary elements."""
+    rules the root out (a class, id, other element name, or pseudo-element).
+    Without a root attribute, an attribute-only compound such as
+    [data-highlight] matches ordinary elements."""
     if facts & {"html", ":root"}:
         return True
     names = {m.group(1) for m in map(ATTRIBUTE_NAME.match, facts) if m}
@@ -270,6 +294,22 @@ def prop_key(prop):
     return "background-color" if prop == "background" else prop
 
 
+IMAGE = re.compile(
+    r"(gradient|url|image|image-set|cross-fade|element)\(", re.IGNORECASE
+)
+
+
+def beats(theme_prop, declaration):
+    """Whether a theme declaration of theme_prop replaces what the app
+    declaration paints: background-color leaves a background shorthand's
+    gradient or image layer in place."""
+    return not (
+        declaration.prop == "background"
+        and theme_prop != "background"
+        and IMAGE.search(declaration.value)
+    )
+
+
 def root_facts(selector):
     """Simple selectors on the leading compound, when it can be the root."""
     facts = compound_facts(compounds(selector)[0])
@@ -293,7 +333,7 @@ def anchored(selector):
     if len(parts) > 2 or re.search(r"[>+~]", selector):
         return None
     if len(parts) == 1:
-        return set()
+        return {fact for fact in simples(parts[0]) if ACCENT.match(fact)}
     extra = set(simples(parts[0])) - ROOT_CONTEXT
     return extra if all(ACCENT.match(fact) for fact in extra) else None
 
@@ -308,33 +348,42 @@ class Theme:
                 required = anchored(selector)
                 if required is not None:
                     key = prop_key(declaration.prop)
-                    self.rules.setdefault(key, []).append((selector, required))
+                    self.rules.setdefault(key, []).append(
+                        (selector, required, declaration.prop)
+                    )
 
     def targets(self, prop, selector):
         """Theme selectors for `prop` that match what `selector` matches."""
         facts = subject_facts(selector)
         pseudo = {fact for fact in facts if fact.startswith("::")}
-        for theme_selector, required in self.rules.get(prop_key(prop), []):
+        for theme_selector, required, theme_prop in self.rules.get(prop_key(prop), []):
             subject = set(simples(compounds(theme_selector)[-1]))
             if {
                 s for s in subject if s.startswith("::")
             } == pseudo and subject <= facts:
-                yield theme_selector, required
+                yield theme_selector, required, theme_prop
 
     def outranks(self, declaration, selector):
         """Whether theme.css wins `declaration` on what `selector` matches."""
         if declaration.important:
             return False
         root = root_facts(selector)
-        for theme_selector, required in self.targets(declaration.prop, selector):
-            if required <= root and (
-                declaration.layered
-                or specificity(theme_selector) >= specificity(selector)
+        for theme_selector, required, theme_prop in self.targets(
+            declaration.prop, selector
+        ):
+            if (
+                beats(theme_prop, declaration)
+                and required <= root
+                and (
+                    declaration.layered
+                    or specificity(theme_selector) >= specificity(selector)
+                )
             ):
                 return True
         return False
 
 
+@functools.cache
 def light_only(selector):
     """Whether a selector needs light mode on some compound. :is() and
     :where() need it when every argument does; :not() and :has() never
@@ -410,17 +459,23 @@ def unbeaten_redeclarations(app, theme):
     """App rules that pin a theme variable to a value the palette cannot reach.
 
     A redeclaration below the root beats the theme's root value by
-    inheritance, so each one whose value does not start from a theme variable
+    inheritance, so each one whose value does not start from a theme variable,
+    or mixes a fixed colour into one (color-mix(in srgb, teal, var(--x))),
     needs a theme rule that out-ranks it. That covers root and body rules and
     rules scoped to an accent ([data-color=...]); a component rule that
     applies under every accent is a fixed colour the app keeps whatever the
     accent (.primary-green), and the theme keeps it too.
     """
+    declared = theme.custom | {d.prop for d in app if d.prop.startswith("--")}
     for declaration in app:
         if declaration.prop not in theme.custom:
             continue
         first = VAR.search(declaration.value)
-        if first and first.group(1) in theme.custom:
+        if (
+            first
+            and first.group(1) in theme.custom
+            and not fixed_colour_value(declaration.value, declared)
+        ):
             continue
         for selector in dark_selectors(declaration):
             root = subject_facts(selector) & ({"html", ":root"} | BODY_CONTEXT)
@@ -431,9 +486,12 @@ def unbeaten_redeclarations(app, theme):
 
 
 COLOUR_PROPERTY = re.compile(
-    r"^(color|background(-color)?|border(-(top|right|bottom|left))?(-color)?"
-    r"|outline(-color)?|box-shadow|fill|stroke|caret-color"
-    r"|text-decoration(-color)?|accent-color|scrollbar-color)$"
+    r"^(color|background(-color|-image)?"
+    r"|border(-(top|right|bottom|left|block|inline)(-(start|end))?)?(-color)?"
+    r"|outline(-color)?|box-shadow|text-shadow|fill|stroke|caret-color"
+    r"|text-decoration(-color)?|text-emphasis(-color)?|column-rule(-color)?"
+    r"|-webkit-text-fill-color|-webkit-text-stroke(-color)?"
+    r"|accent-color|scrollbar-color)$"
 )
 # The CSS named colours, which minifiers emit for short values (`gray`).
 # transparent, currentcolor, and the CSS-wide keywords carry no colour.
