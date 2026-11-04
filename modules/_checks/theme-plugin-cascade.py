@@ -435,9 +435,12 @@ COLOUR_PROPERTY = re.compile(
     r"|outline(-color)?|box-shadow|fill|stroke|caret-color"
     r"|text-decoration(-color)?|accent-color|scrollbar-color)$"
 )
-COLOUR_LITERAL = re.compile(
-    r"#[0-9a-f]{3,8}\b|\b(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(", re.IGNORECASE
+HEX_COLOUR = re.compile(r"#[0-9a-f]{3,8}\b", re.IGNORECASE)
+COLOUR_FUNCTION = re.compile(
+    r"(?<![\w-])(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\(", re.IGNORECASE
 )
+OPAQUE_CALL = re.compile(r"(?<![\w-])(var|url)\(", re.IGNORECASE)
+VARIABLE = "\x00"
 # The CSS named colours, which minifiers emit for short values (`gray`).
 # transparent, currentcolor, and the CSS-wide keywords carry no colour.
 NAMED_COLOURS = frozenset(
@@ -592,19 +595,49 @@ NAMED_COLOURS = frozenset(
         "yellowgreen",
     ]
 )
-OPAQUE_PARTS = re.compile(
-    r"""\b(?:var|url)\((?:[^()]|\([^()]*\))*\)|"[^"]*"|'[^']*'""", re.IGNORECASE
-)
 IDENTIFIER = re.compile(r"(?<![\w-])[a-z]+(?![\w-])", re.IGNORECASE)
 
 
+def call_end(value, start):
+    """Index just past the parenthesis that closes the call opened before start."""
+    depth = 1
+    while start < len(value) and depth:
+        depth += {"(": 1, ")": -1}.get(value[start], 0)
+        start += 1
+    return start
+
+
+def outside_variables(value):
+    """The value with strings and url() dropped and every var() call, its
+    fallback included, replaced by a marker: a fallback never paints while
+    the variable is defined."""
+    out, i = [], 0
+    while i < len(value):
+        if value[i] in "\"'":
+            end = value.find(value[i], i + 1)
+            i = len(value) if end < 0 else end + 1
+            out.append(" ")
+            continue
+        match = OPAQUE_CALL.match(value, i)
+        if match:
+            i = call_end(value, match.end())
+            out.append(f" {VARIABLE} " if match.group(1).lower() == "var" else " ")
+            continue
+        out.append(value[i])
+        i += 1
+    return "".join(out)
+
+
 def colour_literal(value):
-    """Whether a value spells out a colour: hex, a colour function, or a name
-    outside var(), url(), and strings."""
-    if COLOUR_LITERAL.search(value):
+    """Whether a value spells out a colour outside var(): a hex colour, a
+    named colour, or a colour function none of whose arguments is a var()."""
+    bare = outside_variables(value)
+    if HEX_COLOUR.search(bare):
         return True
-    words = IDENTIFIER.findall(OPAQUE_PARTS.sub(" ", value))
-    return any(word.lower() in NAMED_COLOURS for word in words)
+    for match in COLOUR_FUNCTION.finditer(bare):
+        if VARIABLE not in bare[match.end() : call_end(bare, match.end())]:
+            return True
+    return any(word.lower() in NAMED_COLOURS for word in IDENTIFIER.findall(bare))
 
 
 def fixed_colour(declaration, theme):
