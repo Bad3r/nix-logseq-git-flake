@@ -105,8 +105,8 @@ in
         them sets all twelve. The defaults are VS Code Dark 2026 greys over
         GitHub Dark syntax colours. The accent tones `highlight`,
         `selection`, `link`, and `linkHover` default to null: the shipped
-        `accent` over the shipped `background` keeps tuned tones, and any
-        other pair blends them from `accent`.
+        `accent`, `background`, and `bright` keep tuned tones, and any other
+        combination blends them from `accent`.
       '';
       default = { };
       type = types.submodule {

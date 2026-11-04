@@ -180,7 +180,7 @@ let
     };
   };
 
-  # Accent tones tuned for the shipped accent over the shipped background.
+  # Accent tones tuned for the shipped accent, background, and bright.
   shippedTones = {
     highlight = "#1a3540";
     selection = "#245c73";
@@ -189,15 +189,18 @@ let
     linkHover = "#79c0ff";
   };
 
-  # Fills each unset (null) accent tone. The shipped accent over the shipped
-  # background keeps its tuned tones; any other pair blends the palette's own
-  # accent toward the background or `bright`, so the accent scale, links, and
+  # Fills each unset (null) accent tone. The shipped accent, background, and
+  # bright keep their tuned tones; any other combination blends the palette's
+  # own accent toward the background or `bright`, so the accent scale, links, and
   # selection share one hue. `accentStrong` (accent step 7) has no option:
   # nothing the pinned app renders paints accent steps 6-7.
   withTones =
     colors:
     let
-      shipped = colors.accent == defaultColors.accent && colors.background == defaultColors.background;
+      shipped =
+        colors.accent == defaultColors.accent
+        && colors.background == defaultColors.background
+        && colors.bright == defaultColors.bright;
       fallback =
         if shipped then
           shippedTones

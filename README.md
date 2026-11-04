@@ -116,8 +116,8 @@ Each unset colour keeps its default, a VS Code Dark 2026 palette with GitHub
 Dark syntax colours. The exceptions are the accent tones `highlight`,
 `selection`, `link`, and `linkHover`: unset, they blend from `accent` toward
 `background` or `bright`, so setting `accent` alone recolours the whole
-accent scale. The shipped `accent` over the shipped `background`
-keeps hand-tuned tones instead.
+accent scale. The shipped `accent`, `background`, and `bright` together keep
+hand-tuned tones instead.
 
 The twelve neutral keys, `background` through `text`, form one scale ordered
 from the page background to body text, so a palette that replaces them sets

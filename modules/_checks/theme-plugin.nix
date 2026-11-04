@@ -174,6 +174,11 @@ assert accentHueFollows checkedCss;
 assert alphaStepsComposite "default palette" defaultCss;
 assert accentScaleOrdered "default palette" defaultCss;
 assert lib.assertMsg (
+  (declarations (renderColors {
+    bright = "#404040";
+  }))."--ls-link-text-color" != (declarations defaultCss)."--ls-link-text-color"
+) "theme-plugin: link tones ignore a changed bright";
+assert lib.assertMsg (
   renderColors (lib.mapAttrsRecursive (_: lib.toUpper) theme.defaultColors) == defaultCss
 ) "theme-plugin: the default palette spelled in uppercase renders differently";
 assert alphaStepsComposite "sidebar darker than the background" (renderColors {
