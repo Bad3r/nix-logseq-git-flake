@@ -19,7 +19,9 @@ once that property is itself live, resolved to a fixpoint; reads in ordinary
 properties and any var() in the JS bundles are live; theme.css's own reads
 never count. The numbered steps of a scale (--rx-gray-01-hsl ...
 --rx-gray-12-hsl) pass together once one step is live, so a restyle that
-moves a component to another step stays themed.
+moves a component to another step stays themed. A selector needs light mode
+when a compound has a light simple selector, or an :is() or :where() whose
+every argument needs light mode.
 
 Also fails when theme.css reads a variable the app no longer reads anywhere:
 its component tokens mirror app rules, and such a mirror has gone stale.
@@ -200,9 +202,33 @@ def specificity(selector):
     return tuple(total)
 
 
+FORGIVING = {":is", ":where", ":matches", ":-webkit-any"}
+
+
+def arguments(simple):
+    """Selector list of :is() and its aliases, None for any other simple."""
+    name, paren, args = simple.partition("(")
+    if name not in FORGIVING or not paren:
+        return None
+    return split_top(args[:-1], ",")
+
+
+def compound_facts(compound):
+    """Simple selectors that hold on every element a compound matches,
+    looking through :is() and :where() to what all their arguments share."""
+    facts = set()
+    for simple in simples(compound):
+        args = arguments(simple)
+        if args is None:
+            facts.add(simple)
+        elif args:
+            facts |= set.intersection(*(compound_facts(compounds(a)[-1]) for a in args))
+    return facts
+
+
 def subject_facts(selector):
     """Simple selectors that hold on the element an app selector matches."""
-    facts = set(simples(compounds(selector)[-1]))
+    facts = compound_facts(compounds(selector)[-1])
     facts |= {re.sub(r"=.*\]$", "]", fact) for fact in facts if fact.startswith("[")}
     if "html" in facts or ":root" in facts:
         facts |= ROOT_CONTEXT
@@ -217,7 +243,7 @@ def prop_key(prop):
 
 def root_facts(selector):
     """Simple selectors on the root compound, when the selector starts there."""
-    facts = set(simples(compounds(selector)[0]))
+    facts = compound_facts(compounds(selector)[0])
     return facts if facts & {"html", ":root"} else set()
 
 
@@ -278,8 +304,15 @@ class Theme:
 
 
 def light_only(selector):
-    """Whether a selector needs light mode on some compound."""
-    return any(set(simples(part)) & LIGHT for part in compounds(selector))
+    """Whether a selector needs light mode on some compound. :is() and
+    :where() need it when every argument does; :not() and :has() never
+    make a selector light-only."""
+    for compound in compounds(selector):
+        for simple in simples(compound):
+            args = arguments(simple)
+            if simple in LIGHT or (args and all(light_only(a) for a in args)):
+                return True
+    return False
 
 
 def dark_selectors(declaration):
