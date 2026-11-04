@@ -158,6 +158,33 @@ in
                 };
               };
             };
+            icons = mkOption {
+              description = ''
+                Colours that replace the icon picker's presets wherever an
+                icon is drawn in one, named after the preset's hue. Logseq
+                stores the preset's own hex on the node, so another theme
+                shows the original colour. Icons without a colour follow the
+                text colour.
+              '';
+              default = { };
+              type = types.submodule {
+                options = lib.listToAttrs (
+                  map (
+                    {
+                      name,
+                      hex,
+                      fallback,
+                    }:
+                    lib.nameValuePair name (mkOption {
+                      type = types.nullOr hexColor;
+                      default = null;
+                      defaultText = lib.literalMD "`${lib.concatStringsSep "." fallback}`";
+                      description = "Replaces the ${name} preset (`${hex}`).";
+                    })
+                  ) theme.iconPresets
+                );
+              };
+            };
           };
       };
     };

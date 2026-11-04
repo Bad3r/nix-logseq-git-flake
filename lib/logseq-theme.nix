@@ -8,7 +8,8 @@
 # step 4 edges; right-sidebar cards as outlined content panes; translucent
 # hover and active overlays on sidebar and settings lists; menus with the
 # widget border, shadow, and accent-outlined highlight; the keyboard-selected
-# command palette row in the focus fill; scrollbar thumbs), and CodeMirror
+# command palette row in the focus fill; scrollbar thumbs), the icon picker's
+# colour presets wherever they render, and CodeMirror
 # code blocks (surface, gutters, line numbers, cursor, selection, active line,
 # bracket matching, tokens), so it survives component restyles;
 # checks.<system>.logseq-theme-plugin fails when the pinned app stops
@@ -225,6 +226,74 @@ let
       name: tone: if colors.${name} or null == null then tone else colors.${name}
     ) fallback;
 
+  # The icon picker's colour presets (`color-picker` in icon.cljs), in its
+  # order, each with the palette key an unset (null) override falls back to.
+  # The chosen hex is stored on the node and rendered as an inline style, so
+  # the sheet can only re-colour these exact values.
+  iconPresets = [
+    {
+      name = "gray";
+      hex = "#6e7b8b";
+      fallback = [
+        "syntax"
+        "comment"
+      ];
+    }
+    {
+      name = "indigo";
+      hex = "#5e69d2";
+      fallback = [
+        "syntax"
+        "function"
+      ];
+    }
+    {
+      name = "cyan";
+      hex = "#00b5ed";
+      fallback = [
+        "syntax"
+        "constant"
+      ];
+    }
+    {
+      name = "green";
+      hex = "#00b55b";
+      fallback = [
+        "syntax"
+        "regexp"
+      ];
+    }
+    {
+      name = "yellow";
+      hex = "#f2be00";
+      fallback = [ "mark" ];
+    }
+    {
+      name = "orange";
+      hex = "#e47a00";
+      fallback = [
+        "syntax"
+        "parameter"
+      ];
+    }
+    {
+      name = "pink";
+      hex = "#f38e81";
+      fallback = [
+        "syntax"
+        "invalid"
+      ];
+    }
+    {
+      name = "red";
+      hex = "#fb434c";
+      fallback = [
+        "syntax"
+        "keyword"
+      ];
+    }
+  ];
+
   # One spelling per colour: hex digits are case-insensitive, so lowercase
   # them before the shipped-palette test and before they reach the sheet.
   canonical = lib.mapAttrsRecursive (
@@ -414,6 +483,35 @@ let
       menuSelection = rgbString c.accent "0.15";
       widgetShadow = "rgb(0 0 0 / 0.36) 0 0 8px 2px";
 
+      iconOverrides = palette.icons or { };
+      iconColor =
+        { name, fallback, ... }:
+        if iconOverrides.${name} or null == null then
+          lib.getAttrFromPath fallback c
+        else
+          iconOverrides.${name};
+      # Blink stores a colour set through the CSSOM in the style attribute as
+      # `rgb(r, g, b)` and a custom property as written; match both forms.
+      inlineStyle =
+        hex:
+        let
+          channels = concatStringsSep ", " (map toString (parseHex hex));
+        in
+        ":is([style*=\"rgb(${channels})\"], [style*=\"${hex}\" i])";
+      iconRules = lib.concatMap (
+        preset:
+        let
+          match = inlineStyle preset.hex;
+          color = iconColor preset;
+        in
+        [
+          "${root} :is(.ls-icon-color-wrap, .icon-cp-container)${match},"
+          "${root} .cp__emoji-icon-picker .color-picker > strong${match} { color: ${color} !important; }"
+          "${root} .cp__emoji-icon-picker${match} { --ls-color-icon-preset: ${color} !important; }"
+          "${root} .color-picker-presets .it${match} { background-color: ${color} !important; }"
+        ]
+      ) iconPresets;
+
       codeRules = [
         " { background-color: ${c.sidebar}; color: ${c.text}; text-shadow: none; }"
         " .CodeMirror-gutters { background-color: ${c.sidebar}; border-right: 0; }"
@@ -580,6 +678,13 @@ let
         "${root},"
         "${root} #main-content-container { scrollbar-color: var(--lx-gray-09) transparent; }"
         ""
+        "/* Icon colour presets: node icons, the picker's icon grid, its palette"
+        "   button, and its swatches. Each preset is an inline style, which only"
+        "   !important out-ranks. */"
+      ]
+      ++ iconRules
+      ++ [
+        ""
         "/* Code blocks: CodeMirror 5 theme 'solarized dark' without an accent,"
         "   'lsradix dark' with one (extensions/code.cljs). */"
       ]
@@ -591,5 +696,5 @@ let
     );
 in
 {
-  inherit defaultColors render;
+  inherit defaultColors iconPresets render;
 }

@@ -9,8 +9,9 @@
 # every accent-scoped rule (data-color on the root element) that paints a
 # property it paints or a fixed colour; and every class and attribute its
 # selectors use must still appear in the compiled style.css, attributes on
-# html as root selectors. An upstream change then fails here instead of
-# silently unstyling part of the UI.
+# html as root selectors; the app's icon colour picker must still offer exactly
+# the presets the sheet re-colours. An upstream change then fails here instead
+# of silently unstyling part of the UI.
 {
   appAsar,
   lib,
@@ -150,6 +151,25 @@ let
       failing != [ ]
     ) "theme-plugin: colors.accent = #ff0000 alone left non-red accent tones: ${toString failing}" true;
 
+  # The compiled cljs vector literal of icon.cljs `color-picker`; the
+  # compiler may break the line between elements.
+  iconPresetList =
+    "\\[" + lib.concatMapStrings (preset: "\"${preset.hex}\",\\s*") theme.iconPresets + "null\\]";
+
+  # The rule set an icon preset's colour lands in.
+  iconPresetColor =
+    css: hex:
+    let
+      lines = lib.splitString "\n" css;
+      ruleEnd = lib.findFirst (
+        line: lib.hasInfix "[style*=\"${hex}\" i])" line && lib.hasInfix "{ color:" line
+      ) null lines;
+    in
+    if ruleEnd == null then
+      null
+    else
+      builtins.match ".*\\{ color: (#[0-9a-f]{6}) !important; }" ruleEnd;
+
   checkedCss = theme.render { inherit (cfg) colors extraCss; };
   defaultCss = renderColors { };
 
@@ -173,6 +193,14 @@ assert lib.assertMsg (
     bright = "#404040";
   }))."--ls-link-text-color" != (declarations defaultCss)."--ls-link-text-color"
 ) "theme-plugin: link tones ignore a changed bright";
+assert lib.assertMsg (
+  iconPresetColor checkedCss "#fb434c" == [ "#00ff00" ]
+) "theme-plugin: the red icon preset does not follow colors.syntax.keyword";
+assert lib.assertMsg (
+  iconPresetColor (renderColors {
+    icons.gray = "#123456";
+  }) "#6e7b8b" == [ "#123456" ]
+) "theme-plugin: colors.icons.gray does not re-colour the gray icon preset";
 assert lib.assertMsg (
   renderColors (lib.mapAttrsRecursive (_: lib.toUpper) theme.defaultColors) == defaultCss
 ) "theme-plugin: the default palette spelled in uppercase renders differently";
@@ -280,12 +308,24 @@ pkgs.runCommand "logseq-theme-plugin-check"
         *) grep -qE -- "html\\''${attribute%]}[]=]" style.css ;;
       esac || fail "the pinned app's css/style.css no longer styles html$attribute"
     done < attributes
-    grep -oE '\[[A-Za-z_-]+' selectors | sort -u > attribute-names \
+    # The app's sheet never selects on style; the icon preset rules match it,
+    # and the preset list guard below covers them.
+    grep -oE '\[[A-Za-z_-]+' selectors | grep -vxF '[style' | sort -u > attribute-names \
       || fail "selects no attributes"
     while read -r attribute; do
       grep -qE -- "\\$attribute"'[]=~|^$*]' style.css \
         || fail "attribute ''${attribute#[} is unknown to the pinned app's css/style.css"
     done < attribute-names
+
+    # The icon colour picker must still offer exactly the presets the sheet
+    # re-colours, in order, plus the trailing "no colour" entry.
+    grep -qzE -- '${iconPresetList}' js/* \
+      || fail "the pinned app's icon colour presets are no longer ${
+        toString (map (preset: preset.hex) theme.iconPresets)
+      }"
+    for hex in ${lib.escapeShellArgs (map (preset: preset.hex) theme.iconPresets)}; do
+      grep -qF -- "[style*=\"$hex\" i]" "$theme_css" || fail "no rule re-colours icon preset $hex"
+    done
 
     touch "$out"
   ''
