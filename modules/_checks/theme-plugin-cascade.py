@@ -16,15 +16,19 @@ loaded), it sits in the fallback of var(--x, ...) for an --x the theme sets,
 or its declaration loses to a theme.css declaration of the same property on
 the same element. A read inside a custom property declaration counts only
 once that property is itself live, resolved to a fixpoint; reads in ordinary
-properties and any var() in the JS bundles are live; theme.css's own reads
-never count. The numbered steps of a scale (--rx-gray-01-hsl ...
---rx-gray-12-hsl) pass together once one step is live, so a restyle that
-moves a component to another step stays themed. A selector needs light mode
-when a compound has a light simple selector, or an :is() or :where() whose
-every argument needs light mode.
+properties and any var() in the JS bundles are live. theme.css custom
+properties link chains too (their values reach the screen when the app
+paints them), but theme.css's own painted reads never count. The numbered
+steps of a scale (--rx-gray-01-hsl ... --rx-gray-12-hsl) pass together once
+one step is live, so a restyle that moves a component to another step stays
+themed. A selector needs light mode when a compound has a light simple
+selector, or an :is() or :where() whose every argument needs light mode.
 
-Also fails when theme.css reads a variable the app no longer reads anywhere:
-its component tokens mirror app rules, and such a mirror has gone stale.
+Also fails when theme.css reads a variable no dark-mode app rule or script
+reads, out-ranked or not: its component tokens mirror app rules, and such a
+mirror has gone stale.
+This is what catches a rename the theme's own chains would otherwise keep
+live.
 
 This proves that some app rule or script consumes the value, not that the
 element it selects is ever rendered.
@@ -351,11 +355,15 @@ def live_variables(app, theme, js_reads):
 
     Reads in ordinary properties and in the JS bundles are live. A read in a
     custom property declaration is live only once that property is, so an
-    alias nothing reads keeps its inputs dead. Only the app's declarations
-    count: theme.css reading a variable says nothing about the app.
+    alias nothing reads keeps its inputs dead. theme.css custom property
+    declarations add chain edges, since their value reaches the screen when
+    the app paints that property, but theme.css's own painted reads are not
+    the app consuming anything. A rename the theme's chains would hide is
+    caught by the stale-read check in main().
     """
     painted, chains = set(js_reads), {}
-    for declaration in (d for d in app if applies(d, theme)):
+    own = [d for d in theme.declarations if d.prop.startswith("--")]
+    for declaration in [d for d in app if applies(d, theme)] + own:
         found = reads(declaration.value, theme)
         if declaration.prop.startswith("--"):
             chains.setdefault(declaration.prop, set()).update(found)
@@ -436,17 +444,18 @@ def main():
         with open(path, errors="replace") as handle:
             js_reads.update(VAR.findall(handle.read()))
     # The component tokens mirror app rules the theme out-ranks; each variable
-    # they read must still be one the app reads somewhere, or the mirror is
-    # stale.
-    app_reads = {name for d in app for name in VAR.findall(d.value)} | js_reads
+    # they read must still be one the app reads in a dark-mode rule (out-ranked
+    # or not), or the mirror is stale.
+    app_reads = js_reads | {
+        name for d in app if dark_selectors(d) for name in VAR.findall(d.value)
+    }
     theme_reads = set()
     for declaration in theme.declarations:
         theme_reads |= reads(declaration.value, theme)
     stale = sorted(theme_reads - app_reads)
     if stale:
         sys.exit(
-            "theme.css: reads variables the pinned app no longer reads: "
-            + " ".join(stale)
+            "theme.css: reads variables no dark-mode app rule reads: " + " ".join(stale)
         )
 
     live = live_variables(app, theme, js_reads)
