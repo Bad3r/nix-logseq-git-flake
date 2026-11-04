@@ -354,9 +354,6 @@ let
         color-level-6 = c.strongBorder;
       };
 
-      # .cm-s-dark outranks the app's theme rules, which reach three classes
-      # (`.dark .cm-s-lsradix.cm-s-dark`, `.cm-s-lsradix.cm-s-dark.CodeMirror
-      # ::selection`).
       # Under the logseq accent shui.css pins these components' shadcn tokens
       # to fixed teal, which beats the root values by inheritance. The values
       # mirror the app's own rules for every other accent; components without
@@ -403,6 +400,9 @@ let
         ++ [ "}" ]
       ) componentTokens;
 
+      # .cm-s-dark outranks the app's theme rules, which reach three classes
+      # (`.dark .cm-s-lsradix.cm-s-dark`, `.cm-s-lsradix.cm-s-dark.CodeMirror
+      # ::selection`).
       cm = "html[data-theme=dark] .CodeMirror.cm-s-dark";
       root = "html[data-theme=dark][data-color]";
       logseq = "html[data-theme=dark][data-color=logseq]";
