@@ -514,6 +514,8 @@ let
         "/* VS Code-style layout: the top bar and both sidebars sit on gray step 2"
         "   around step 1 content, with step 4 edges between them. */"
         "${root} .cp__header { background-color: var(--lx-gray-02); box-shadow: 0 1px 0 var(--lx-gray-04); }"
+        "/* The collaborators group (header.cljs) fills itself with step 1. */"
+        "${root} .cp__header .bg-gray-01 { background-color: transparent; }"
         "${root} .left-sidebar-inner.as-container { border-right-color: var(--lx-gray-04); }"
         "${root} .cp__right-sidebar-inner { box-shadow: inset 1px 0 0 var(--lx-gray-04); }"
         "${root} .cp__right-sidebar-inner,"
