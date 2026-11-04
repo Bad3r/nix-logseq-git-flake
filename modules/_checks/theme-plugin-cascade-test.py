@@ -60,6 +60,29 @@ FIXED_COLOUR = [
     ("color-mix(in oklab,hsl(var(--p)) 20%,transparent)", False),
     ("linear-gradient(red,blue)", True),
     ("linear-gradient(var(--declared),transparent)", False),
+    ("rgb(from currentColor r g b / 50%)", False),
+    ("hsl(from currentcolor h s calc(l - 20%))", False),
+    ("oklch(from currentColor l c h / .5)", False),
+    ("color(from currentColor srgb r g b / .5)", False),
+    ("rgb(from Canvas r g b)", False),
+    ("rgb(from transparent r g b)", False),
+    ("rgb(from\tcurrentColor r g b)", False),
+    ("rgb(from var(--undeclared,red) r g b)", True),
+    ("rgb(from var(--declared,red) r g b)", False),
+    ("rgb(from #ff0000 r g b / .5)", True),
+    ("color(srgb\tvar(--declared) 0 0)", False),
+    ("#0000", False),
+    ("#fff0", False),
+    ("#ffffff00", False),
+    ("#ffffff01", True),
+    ("#ffff", True),
+    ("0 0 #0000", False),
+    ("rgba(0,0,0,0)", False),
+    ("rgb(0 0 0 / 0)", False),
+    ("rgb(0 0 0 / 0%)", False),
+    ("rgba(0,0,0,.0)", False),
+    ("hsl(0 0% 0% / 0.0)", False),
+    ("rgb(0 0 0 / .05)", True),
 ]
 for value, want in FIXED_COLOUR:
     expect(
@@ -458,6 +481,34 @@ PIPELINE = [
         append("[data-color=logseq] .ls-block{color:gray}"),
         None,
         True,
+    ),
+    (
+        "relative colour from currentColor",
+        append(
+            f"{ACCENT} .cp__foo{{background-color:rgb(from currentColor r g b / 50%)}}"
+        ),
+        None,
+        False,
+    ),
+    (
+        "relative colour from an undeclared variable's fallback",
+        append(
+            f"{ACCENT} .cp__foo{{background-color:rgb(from var(--ls-foo,red) r g b)}}"
+        ),
+        None,
+        True,
+    ),
+    (
+        "Tailwind zero-alpha shadow reset",
+        append(f"{ACCENT} .cp__foo{{box-shadow:0 0 #0000}}"),
+        None,
+        False,
+    ),
+    (
+        "zero-alpha rgba",
+        append(f"{ACCENT} .cp__foo{{background-color:rgba(0,0,0,0)}}"),
+        None,
+        False,
     ),
 ]
 for name, style_edit, theme_edit, must_fail in PIPELINE:

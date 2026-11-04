@@ -644,12 +644,18 @@ def fixed_colour_value(value, declared):
     keywords, and system colours do not. var(--x) paints whatever --x holds,
     so it is not fixed when anything declares --x, and paints its fallback
     when nothing does. A colour function is fixed when its colour channels
-    are literal (a var() only in the alpha keeps it fixed), color-mix() when
-    any colour it mixes is, and any other function when any argument is.
+    are literal (a var() only in the alpha keeps it fixed); a relative colour
+    (`rgb(from X r g b)`) is fixed exactly when its origin X is, whatever its
+    channel expressions do. color-mix() is fixed when any colour it mixes
+    is, and any other function when any argument is. A literal whose alpha is
+    exactly 0 paints nothing, like transparent.
     """
     for kind, text, args in tokens(value):
         if kind == "hex" and len(text) - 1 in (3, 4, 6, 8):
-            return True
+            digits = text[1:]
+            alpha = digits[3:] if len(digits) == 4 else digits[6:]
+            if not alpha or alpha.strip("0"):
+                return True
         if kind == "ident" and text.lower() in NAMED_COLOURS:
             return True
         if kind != "call" or text == "url":
@@ -659,7 +665,11 @@ def fixed_colour_value(value, declared):
             if name.strip() not in declared and fixed_colour_value(fallback, declared):
                 return True
         elif text in COLOUR_FUNCTIONS:
-            if not VAR.search(colour_channels(text, args)):
+            origin = relative_origin(args)
+            if origin is not None:
+                if fixed_colour_value(origin, declared):
+                    return True
+            elif not VAR.search(colour_channels(text, args)) and not zero_alpha(args):
                 return True
         elif text == "color-mix":
             colours = split_top(args, ",")[1:]
@@ -670,10 +680,27 @@ def fixed_colour_value(value, declared):
     return False
 
 
+def relative_origin(args):
+    """The origin colour of relative colour syntax, `from X ...`, else None."""
+    head, rest = (re.split(r"\s+", args.strip(), maxsplit=1) + [""])[:2]
+    if head.lower() != "from":
+        return None
+    for kind, text, call_args in tokens(rest):
+        return f"{text}({call_args})" if kind == "call" else text
+    return ""
+
+
+def zero_alpha(args):
+    """Whether a colour function's literal alpha is exactly 0."""
+    parts = split_top(args, ",")
+    alpha = parts[3] if len(parts) > 3 else (split_top(args, "/")[1:] or [""])[0]
+    return re.fullmatch(r"0+(\.0*)?%?|0*\.0+%?", alpha.strip()) is not None
+
+
 def colour_channels(function, args):
     """The colour channels of a colour function, without its alpha."""
     if function == "color":
-        args = args.strip().partition(" ")[2]
+        args = (re.split(r"\s+", args.strip(), maxsplit=1) + [""])[1]
     parts = split_top(args, ",")
     if len(parts) > 1:
         return ",".join(parts[:3])
