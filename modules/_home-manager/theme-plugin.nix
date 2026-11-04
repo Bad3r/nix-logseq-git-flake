@@ -117,13 +117,13 @@ in
             popup = "Gray step 3: popovers and menus, block and page properties, right-sidebar items, table headers, the active code line.";
             border = "Gray step 4: borders, input outlines, block guide lines, focused menu items, active and hovered left-sidebar items.";
             activeItem = "Gray step 5: hovered and highlighted menu items, secondary buttons, selected table rows, scrollbar thumbs.";
-            raised = "Gray step 6: inline code background and keyboard-shortcut keys.";
-            strongBorder = "Gray step 7: keyboard-key borders and, outside the logseq accent, classic form-input borders.";
+            raised = "Gray step 6: inline code background, command palette and theme picker highlights, keyboard-shortcut keys.";
+            strongBorder = "Gray step 7: keyboard-key and classic form-input borders.";
             bullet = "Gray step 8: block bullets and the shortcut toolbar text.";
             subtle = "Gray step 9: checkboxes and radio buttons, quote borders, matching-bracket outlines in code.";
             dim = "Gray step 10: code line numbers and the hovered block guide line.";
             muted = "Gray step 11: secondary text, icons, input placeholders.";
-            text = "Gray step 12: body text, including selected text.";
+            text = "Gray step 12: body text, including selected text and inline code.";
             bright = "Accent step 12: marked text, hovered plain links, matching brackets in code.";
             onAccent = "Text on primary, accent, and destructive fills.";
             accent = "Primary buttons and fills, focus rings, accent steps 8-9.";

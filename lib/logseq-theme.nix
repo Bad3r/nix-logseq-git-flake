@@ -1,9 +1,11 @@
 # Renders a dark Logseq theme stylesheet from a semantic palette. Besides the
 # app's CSS variables (on the root, and on the components shui.css re-tints
 # under the logseq accent) it styles only the root background, text selection
-# under the none accent, and CodeMirror code blocks (surface, gutters, line
-# numbers, cursor, selection, active line, tokens), so it survives component
-# restyles;
+# under the none accent, the few component states the logseq accent paints
+# near-invisibly (theme picker rows, ghost button hover, form input borders,
+# faded command palette groups), command palette row highlights, inline code
+# text, and CodeMirror code blocks (surface, gutters, line numbers, cursor,
+# selection, active line, tokens), so it survives component restyles;
 # checks.<system>.logseq-theme-plugin fails when the pinned app stops
 # consuming a variable (or every step of a scale), pins one to a fixed colour
 # or paints one of its properties in a rule the sheet does not out-rank, or
@@ -399,6 +401,8 @@ let
       ) componentTokens;
 
       cm = "html[data-theme=dark] .CodeMirror.cm-s-dark";
+      root = "html[data-theme=dark][data-color]";
+      logseq = "html[data-theme=dark][data-color=logseq]";
 
       codeRules = [
         " { background-color: ${c.sidebar}; color: ${c.text}; text-shadow: none; }"
@@ -482,6 +486,23 @@ let
       ]
       ++ componentLines
       ++ [
+        ""
+        "/* The logseq accent paints these with accent step 1, nearly the page"
+        "   colour here, and fades palette groups; use the app's rules for the"
+        "   other accents. */"
+        "${logseq} .cp__themes-installed .it.is-active,"
+        "${logseq} .cp__themes-installed .it:hover { background-color: var(--lx-gray-06); }"
+        "${logseq} .ui__button.as-ghost:hover { background-color: hsl(var(--secondary) / 0.7); }"
+        "${logseq} .form-input { border-color: var(--lx-gray-07); }"
+        "${logseq} .cp__cmdk .border-gray-06,"
+        "${logseq} .cp__cmdk .border-gray-07 { opacity: 1; }"
+        ""
+        "/* Command palette rows highlight with gray step 3, one step above the"
+        "   panel; inline code sets step 11 text on its step 6 chip. Both are"
+        "   too close in this palette. */"
+        "${root} [data-cmdk-item][data-kb-highlighted],"
+        "${root} [data-cmdk-item][data-hoverable]:hover { background-color: var(--lx-gray-06); }"
+        "${root} :not(pre) > code { color: var(--lx-gray-12); }"
         ""
         "/* Code blocks: CodeMirror 5 theme 'solarized dark' without an accent,"
         "   'lsradix dark' with one (extensions/code.cljs). */"

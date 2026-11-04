@@ -132,10 +132,14 @@ styling components, so it holds across accent colours and most app updates.
 Under the default `logseq` accent the app pins the shadcn tokens of menus,
 popovers, selects, the calendar, and outline buttons to fixed teal; the
 theme redeclares them there with the values the app uses for every other
-accent. Selectors otherwise style only the root background, text selection
-under the `none` accent (which otherwise paints it from the primary colour),
-and CodeMirror code blocks (surface, gutters, line numbers, cursor,
-selection, active line, and token colours).
+accent, and replaces the logseq accent's near-invisible theme picker rows,
+ghost button hover, form input borders, and faded command palette groups
+with the app's rules for the other accents. Selectors otherwise style only
+the root background, text selection under the `none` accent (which otherwise
+paints it from the primary colour), command palette row highlights (gray
+step 6, since step 3 sits one step above the panel), inline code text (step
+12 on the step 6 chip), and CodeMirror code blocks (surface, gutters, line
+numbers, cursor, selection, active line, and token colours).
 
 The `checks.<system>.logseq-theme-plugin` check fails when the pinned app no
 longer reads a variable the theme sets in dark mode, pins one to a fixed
