@@ -15,6 +15,14 @@ let
     inherit payload pkgs;
   };
   inherit (pkgs.stdenv.hostPlatform) isDarwin isLinux system;
+  # The app's sealed sources inside the normalized tree. tree.nix globs the
+  # Darwin bundle as `*.app` and renames it, so an upstream productName change
+  # keeps this path valid.
+  appAsar =
+    if isDarwin then
+      "${logseqTree}/Logseq.app/Contents/Resources/app.asar"
+    else
+      "${logseqTree}/share/logseq/resources/app.asar";
   logseqDesktop =
     if isLinux then
       let
@@ -63,6 +71,7 @@ let
 in
 {
   inherit
+    appAsar
     logseqDesktop
     logseqSrc
     logseqTree

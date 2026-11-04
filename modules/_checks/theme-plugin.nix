@@ -12,8 +12,8 @@
 # html as root selectors. An upstream change then fails here instead of
 # silently unstyling part of the UI.
 {
+  appAsar,
   lib,
-  logseqTree,
   pkgs,
 }:
 let
@@ -162,12 +162,6 @@ let
     lib.throwIfNot (lib.attrNames homeFiles == expectedLinks)
       "theme-plugin: home.file must link exactly ${toString expectedLinks}, got ${toString (lib.attrNames homeFiles)}"
       homeFiles;
-
-  asarPath =
-    if pkgs.stdenv.hostPlatform.isDarwin then
-      "${logseqTree}/Logseq.app/Contents/Resources/app.asar"
-    else
-      "${logseqTree}/share/logseq/resources/app.asar";
 in
 assert alphaStepsComposite "checked palette" checkedCss;
 assert accentScaleOrdered "checked palette" checkedCss;
@@ -255,14 +249,14 @@ pkgs.runCommand "logseq-theme-plugin-check"
     test "$(tail -n 1 "$theme_css")" = "/* extra-css-marker */" || fail "extraCss is not appended last"
     test "$(grep -o '{' "$theme_css" | wc -l)" = "$(grep -o '}' "$theme_css" | wc -l)" || fail "unbalanced braces"
 
-    asar extract-file "${asarPath}" css/style.css
+    asar extract-file "${appAsar}" css/style.css
     test -s style.css || fail "app.asar has no css/style.css"
     # The app's own bundles; cljs code builds some var() reads as strings.
     mkdir js
-    asar list "${asarPath}" | grep -E '^/js/[^/]+\.m?js$' > js-files \
+    asar list "${appAsar}" | grep -E '^/js/[^/]+\.m?js$' > js-files \
       || fail "app.asar lists no js/ bundles"
     while read -r file; do
-      (cd js && asar extract-file "${asarPath}" "''${file#/}")
+      (cd js && asar extract-file "${appAsar}" "''${file#/}")
     done < js-files
     python3 -I -B ${./theme-plugin-cascade.py} "$theme_css" style.css js/* || exit 1
     python3 -I -B ${./theme-plugin-cascade-test.py} ${./theme-plugin-cascade.py} \

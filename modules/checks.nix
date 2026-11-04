@@ -23,16 +23,16 @@
         logseq-desktop-revision = import ./_checks/desktop-revision.nix {
           inherit pkgs;
           inherit (logseqNightly)
+            appAsar
             cli
             logseqNodejs
             logseqRev
-            logseqTree
             ;
         };
 
         logseq-theme-plugin = import ./_checks/theme-plugin.nix {
           inherit lib pkgs;
-          inherit (logseqNightly) logseqTree;
+          inherit (logseqNightly) appAsar;
         };
 
         logseq =
