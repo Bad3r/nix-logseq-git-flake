@@ -141,8 +141,9 @@ The `checks.<system>.logseq-theme-plugin` check fails when the pinned app no
 longer reads a variable the theme sets in dark mode, pins one to a fixed
 colour on the root or under an accent in a rule the theme does not
 out-rank, paints a property the theme paints in an accent-scoped rule the
-theme does not out-rank, or its stylesheet no longer knows a class or root
-attribute the theme selects on. A read counts only where the theme's value
+theme does not out-rank, no longer reads a variable the theme's own rules
+read, or its stylesheet no longer knows a class or root attribute the theme
+selects on. A read counts only where the theme's value
 can reach the screen: not in light-mode rules, not as the fallback of
 another variable the theme sets, since the theme always defines the
 primary, and not in an app declaration that a theme declaration of the same
