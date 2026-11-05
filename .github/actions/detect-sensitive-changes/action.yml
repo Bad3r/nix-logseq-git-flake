@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+
+name: Detect sensitive changes
+description: >-
+  Flag pull request changes to security-sensitive paths (CI workflow files,
+  composite actions, and flake.lock) that need a maintainer security review.
+  Single source of truth for the pattern list shared by the enforcing gate
+  (validate.yml) and the reviewer notification (sensitive-change-review.yml);
+  keep the two consumers in sync by editing the pattern list here only.
+
+outputs:
+  sensitive:
+    description: '"true" when a changed file matches a sensitive path pattern.'
+    value: ${{ steps.detect.outputs.sensitive }}
+  files:
+    description: Newline-separated list of matched sensitive file paths.
+    value: ${{ steps.detect.outputs.files }}
+
+runs:
+  using: composite
+  steps:
+    - name: List changed files and match sensitive patterns
+      id: detect
+      uses: actions/github-script@v9
+      with:
+        script: |
+          const sensitivePatterns = [
+            /^\.github\/workflows\/.*/,
+            /^\.github\/actions\/.*/,
+            /(^|\/)flake\.lock$/
+          ];
+
+          const prNumber = context.payload.pull_request?.number;
+          if (!prNumber) {
+            core.info("No pull request in context; nothing to inspect.");
+            core.setOutput("sensitive", "false");
+            core.setOutput("files", "");
+            return;
+          }
+
+          const files = await github.paginate(github.rest.pulls.listFiles, {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: prNumber,
+            per_page: 100
+          });
+
+          const matched = files
+            .map((f) => f.filename)
+            .filter((filename) =>
+              sensitivePatterns.some((pattern) => pattern.test(filename))
+            );
+
+          core.info(`Sensitive files changed: ${matched.length}`);
+          core.setOutput("sensitive", matched.length > 0 ? "true" : "false");
+          core.setOutput("files", matched.join("\n"));
