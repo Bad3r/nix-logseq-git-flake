@@ -2196,6 +2196,24 @@
         }
       ]
     ],
+    "conflicts": [
+      {
+        "conditions": [
+          {
+            "lhs": {
+              "arg": "3.25",
+              "prefix_relop": "geq"
+            },
+            "logop": "and",
+            "rhs": {
+              "arg": "3.26",
+              "prefix_relop": "lt"
+            }
+          }
+        ],
+        "val": "dune"
+      }
+    ],
     "depends": [
       "ocaml",
       {
