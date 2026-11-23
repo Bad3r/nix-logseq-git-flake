@@ -184,11 +184,11 @@
     ],
     "url": {
       "section": {
-        "checksum": "sha512=cdc338ae2e56a72b7c75dae9564c57cca4e1fbfac454aabbf8303fcb612346284aede5984dfde7e8a7a496cc870bbd57ddf28cab3a38667279b31657f85c15dd",
-        "src": "https://erratique.ch/software/cmdliner/releases/cmdliner-2.1.1.tbz"
+        "checksum": "sha512=6cc3c116d748d3f97f9a0b2f06ee645df9c09d2042b73d8f8114a5cb030ce99a2149acda6cc0886e0a3f7776152b50f49337fdf5603a387acb2b6a85b8c5bccf",
+        "src": "https://erratique.ch/software/cmdliner/releases/cmdliner-2.1.2.tbz"
       }
     },
-    "version": "2.1.1",
+    "version": "2.1.2",
     "x-maintenance-intent": [
       "(latest)"
     ]
